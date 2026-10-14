@@ -40,6 +40,21 @@ Close the console window to stop it.
   `--token` adds a random session token (printed as `VSPWEB_READY <port> <token>`)
   for desktop shells that want it.
 
+## Hosted UI (GitHub Pages)
+
+The UI is also published at **https://mohammadadib.github.io/WebVSP/** by
+`.github/workflows/pages.yml` on every push to `main` that touches `web/frontend`.
+OpenVSP still runs locally: start the engine with `websp-web.cmd`, then open the
+hosted page; it connects to `http://localhost:8765` (until then it shows how to start it).
+
+- The engine only accepts the hosted UI from origins listed in `WEB_ORIGINS`
+  (`web/backend/vspweb/app.py`, default `https://mohammadadib.github.io`), plus any in
+  `TITANVSP_WEB_ORIGINS` (comma separated). Only add sites you control: an allowed site
+  can open and save files on the machine running the engine.
+- Browsers allow an https page to reach `http://localhost`; Chrome asks once for
+  permission to access the local network.
+- Point the page at another port with `?engine=http://localhost:PORT` (remembered).
+
 ## Develop
 
 ```powershell

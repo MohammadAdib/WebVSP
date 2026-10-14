@@ -77,7 +77,7 @@ export function SidePanel({
 export function ViewerOverlay({ fullscreen, onToggle }: { fullscreen: boolean; onToggle: () => void }): ReactNode {
   return (
     <>
-      <img className="viewer-logo" src="/logo.png" alt="" draggable={false} />
+      <img className="viewer-logo" src={`${import.meta.env.BASE_URL}logo.png`} alt="" draggable={false} />
       <button
         className="viewer-fullscreen"
         title={fullscreen ? 'Show panels' : 'Hide panels (fullscreen view)'}

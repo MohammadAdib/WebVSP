@@ -159,3 +159,20 @@ def test_structural_edit_keeps_file_name(client, tmp_path):
     add(client, "POD")  # structural edit writes an undo snapshot to a temp file
     assert client.get("/api/model").json()["fileName"].endswith("keep.vsp3")
 
+
+def test_hosted_ui_origin(session):
+    pages = "https://example-user.github.io"
+    with TestClient(create_app(session, hosted_origins=[pages]), base_url=BASE) as c:
+        pre = c.options("/api/model", headers={
+            "origin": pages,
+            "access-control-request-method": "PUT",
+            "access-control-request-headers": "content-type",
+            "access-control-request-private-network": "true",
+        })
+        assert pre.status_code == 204
+        assert pre.headers["access-control-allow-origin"] == pages
+        assert pre.headers["access-control-allow-private-network"] == "true"
+        r = c.get("/api/model", headers={"origin": pages})
+        assert r.status_code == 200 and r.headers["access-control-allow-origin"] == pages
+        assert c.options("/api/model", headers={"origin": "https://evil.github.io"}).status_code == 403
+        assert c.get("/api/model", headers={"origin": "https://evil.github.io"}).status_code == 403

@@ -6,6 +6,9 @@ import { defineConfig } from 'vite'
 const BACKEND = 'http://localhost:8765'
 
 export default defineConfig({
+  // Relative asset paths: the same build works when served by the engine at / and when
+  // hosted under a sub-path (e.g. https://<user>.github.io/WebVSP/).
+  base: './',
   plugins: [react()],
   server: {
     proxy: {

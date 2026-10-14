@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { connectEvents } from './api/client'
 import type { ServerEvent } from './api/types'
+import { EngineGate } from './EngineGate'
 import { DialogHost } from './mirror/Dialogs'
 import { useMirror } from './mirror/store'
 import type { MDialog, MirrorMsg, MWidget, MWindow } from './mirror/types'
@@ -40,6 +41,7 @@ export default function App() {
   const run = useStore((s) => s.run)
   const tree = useStore((s) => s.tree)
   const windows = useMirror((s) => s.windows)
+  const connected = useStore((s) => s.connected)
   const mainRef = useRef<HTMLDivElement>(null)
   const panelHeight = usePanelHeight(mainRef)
   const [fullscreen, setFullscreen] = useState(false)
@@ -88,7 +90,7 @@ export default function App() {
       <div className="topbar">
         <span className="brand">TitanVSP</span>
         <MirrorMenuBar />
-        {!mirrorEnabled && <span className="hint">GUI mirror unavailable (engine built without the GUI)</span>}
+        {!mirrorEnabled && connected && <span className="hint">GUI mirror unavailable (engine built without the GUI)</span>}
       </div>
       <div className="main" ref={mainRef}>
         <SidePanel side="left" win={browserWin} open={!fullscreen} height={panelHeight} />
@@ -103,6 +105,7 @@ export default function App() {
       </div>
       <StatusBar />
       <DialogHost />
+      <EngineGate />
       <FileDialog />
     </div>
   )

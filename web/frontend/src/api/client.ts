@@ -28,10 +28,42 @@ function readConfig() {
       /* storage unavailable */
     }
   }
-  return { baseUrl: injected.baseUrl ?? '', token }
+  return { baseUrl: injected.baseUrl ?? engineUrl(), token }
 }
 
+/**
+ * Where the TitanVSP engine (the local backend) is. When the engine serves this page
+ * (or the Vite dev proxy does), it's the same origin. A hosted copy of the UI (e.g. GitHub
+ * Pages) talks to the engine running on the user's own machine.
+ */
+function engineUrl(): string {
+  const local = ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname)
+  if (local) return ''
+  const fromQuery = new URLSearchParams(window.location.search).get('engine')
+  if (fromQuery) {
+    try {
+      localStorage.setItem('titanvsp-engine', fromQuery)
+    } catch {
+      /* storage unavailable */
+    }
+    return fromQuery.replace(/\/$/, '')
+  }
+  try {
+    const stored = localStorage.getItem('titanvsp-engine')
+    if (stored) return stored.replace(/\/$/, '')
+  } catch {
+    /* storage unavailable */
+  }
+  return DEFAULT_ENGINE
+}
+
+export const DEFAULT_ENGINE = 'http://localhost:8765'
+
 const config = readConfig()
+
+/** True when this page is a hosted copy of the UI that talks to a local engine. */
+export const isHostedUI = config.baseUrl !== ''
+export const engineAddress = config.baseUrl || window.location.origin
 
 export class ApiError extends Error {
   status: number

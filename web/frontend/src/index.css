@@ -359,3 +359,14 @@ input:focus, select:focus, textarea:focus, button:focus-visible {
   position: absolute; inset: 0; display: grid; place-items: center;
   background: var(--bg-0); border: 1px dashed var(--line-strong); color: var(--fg-3); font-size: 11px;
 }
+
+/* ----------------------------------------------------- hosted UI: engine gate */
+
+.engine-gate .modal { width: min(520px, 92vw); }
+.engine-gate .prompt-msg p { margin: 0 0 10px; }
+.engine-gate ol { margin: 0 0 12px; padding-left: 20px; display: grid; gap: 6px; color: var(--fg-1); }
+.engine-gate a { color: var(--fg-0); }
+.engine-gate code { font-family: var(--mono); font-size: 12px; background: var(--bg-1); border: 1px solid var(--line); border-radius: 3px; padding: 1px 5px; }
+.engine-wait { display: flex; align-items: center; gap: 8px; color: var(--fg-2); }
+.engine-dot { width: 8px; height: 8px; border-radius: 50%; background: #9a9a9a; animation: engine-pulse 1.2s ease-in-out infinite; }
+@keyframes engine-pulse { 0%, 100% { opacity: 0.25; } 50% { opacity: 1; } }

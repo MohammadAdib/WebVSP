@@ -78,6 +78,16 @@ class Export(BaseModel):
 
 LOCAL_HOSTS = {"localhost", "127.0.0.1", "[::1]"}
 
+# Hosted copies of the web UI (e.g. GitHub Pages) allowed to drive this local engine.
+# Only list sites you control: an allowed site can open and save files on this machine.
+# Extra origins can be added with TITANVSP_WEB_ORIGINS (comma separated).
+WEB_ORIGINS = ["https://mohammadadib.github.io"]
+
+
+def web_origins() -> list[str]:
+    extra = [o.strip().rstrip("/") for o in os.environ.get("TITANVSP_WEB_ORIGINS", "").split(",") if o.strip()]
+    return WEB_ORIGINS + extra
+
 
 def _hostname(hostport: str) -> str:
     if hostport.startswith("["):
@@ -90,9 +100,11 @@ def create_app(
     token: str | None = None,
     port: int = 8765,
     extra_origins: list[str] | None = None,
+    hosted_origins: list[str] | None = None,
 ) -> FastAPI:
     """Local-only app. Without a token, it still refuses requests whose Host isn't loopback
-    (blocks DNS rebinding) or whose Origin isn't this server (blocks other websites)."""
+    (blocks DNS rebinding) or whose Origin isn't this server or a trusted hosted copy of the
+    UI (blocks other websites). Hosted origins get CORS + Private Network Access headers."""
     app = FastAPI(title="TitanVSP")
     app.state.session = session or Session()
     app.state.token = token
@@ -112,7 +124,8 @@ def create_app(
     async def _start_watchers() -> None:
         app.state.session.attach(asyncio.get_running_loop())
         mirror.start()
-    allowed_origins = {f"http://{h}:{port}" for h in LOCAL_HOSTS} | set(extra_origins or [])
+    hosted = set(web_origins() if hosted_origins is None else hosted_origins)
+    allowed_origins = {f"http://{h}:{port}" for h in LOCAL_HOSTS} | set(extra_origins or []) | hosted
 
     def s() -> Session:
         return app.state.session
@@ -127,15 +140,38 @@ def create_app(
             return "bad token"
         return None
 
+    def cors_headers(origin: str | None) -> dict[str, str]:
+        if origin not in hosted:
+            return {}
+        return {"Access-Control-Allow-Origin": origin, "Vary": "Origin"}
+
     @app.middleware("http")
     async def guard(request: Request, call_next):
+        origin = request.headers.get("origin")
         if request.url.path.startswith("/api/"):
+            if request.method == "OPTIONS":
+                # CORS preflight from the hosted UI. Chrome also asks before a public site may
+                # reach a local address (Private Network Access).
+                if _hostname(request.headers.get("host", "")) not in LOCAL_HOSTS or origin not in hosted:
+                    return JSONResponse({"detail": "origin not allowed"}, status_code=403)
+                headers = cors_headers(origin)
+                headers.update({
+                    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+                    "Access-Control-Allow-Headers": request.headers.get("access-control-request-headers", "*"),
+                    "Access-Control-Max-Age": "600",
+                })
+                if request.headers.get("access-control-request-private-network") == "true":
+                    headers["Access-Control-Allow-Private-Network"] = "true"
+                return Response(status_code=204, headers=headers)
             why = refused(request.headers, request.headers.get("x-vsp-token"))
             if why:
-                return JSONResponse({"detail": why}, status_code=403 if "allowed" in why else 401)
+                return JSONResponse({"detail": why}, status_code=403 if "allowed" in why else 401,
+                                    headers=cors_headers(origin))
         elif _hostname(request.headers.get("host", "")) not in LOCAL_HOSTS:
             return JSONResponse({"detail": "host not allowed"}, status_code=403)
-        return await call_next(request)
+        response = await call_next(request)
+        response.headers.update(cors_headers(origin))
+        return response
 
     @app.exception_handler(VspError)
     async def vsp_error(_: Request, exc: VspError):
