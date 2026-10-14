@@ -370,3 +370,16 @@ input:focus, select:focus, textarea:focus, button:focus-visible {
 .engine-wait { display: flex; align-items: center; gap: 8px; color: var(--fg-2); }
 .engine-dot { width: 8px; height: 8px; border-radius: 50%; background: #9a9a9a; animation: engine-pulse 1.2s ease-in-out infinite; }
 @keyframes engine-pulse { 0%, 100% { opacity: 0.25; } 50% { opacity: 1; } }
+
+/* ------------------------------------------------------- viewer view tools */
+
+.view-tools {
+  position: absolute; top: 10px; left: 10px; z-index: 3;
+  display: flex; gap: 2px; padding: 2px;
+  background: rgba(38, 38, 38, 0.85); border: 1px solid var(--line-strong); border-radius: 4px;
+  animation: fade-in 180ms ease-out;
+}
+.view-tools button { padding: 3px 9px; font-size: 12px; background: transparent; border-color: transparent; color: var(--fg-1); }
+.view-tools button:hover:not(:disabled) { background: var(--bg-4); color: var(--fg-0); }
+.view-tools .sep { width: 1px; background: var(--line-strong); margin: 3px 3px; }
+.view-tools .proj { min-width: 52px; font-weight: 600; color: var(--fg-0); }

@@ -8,6 +8,8 @@ export const NO_GEOMS: GeomNode[] = []
 export type DisplayMode = 'shaded' | 'wire' | 'both'
 export type ViewName =
   | 'top' | 'front' | 'left' | 'leftiso' | 'bottom' | 'rear' | 'right' | 'rightiso' | 'fit'
+  // relative moves (Blender numpad 2/4/6/8 and 9)
+  | 'orbit-left' | 'orbit-right' | 'orbit-up' | 'orbit-down' | 'flip'
 
 export interface FileDialogRequest {
   mode: 'open' | 'save'
@@ -35,6 +37,8 @@ interface State {
   lastAction: string | null
   displayMode: DisplayMode
   viewRequest: { name: ViewName; n: number }
+  /** Orthographic (true) or perspective camera */
+  ortho: boolean
   fileDialog: FileDialogRequest | null
   /** Bounding sphere of the shown model, set when the view is fitted. */
   bounds: { center: [number, number, number]; size: [number, number, number]; radius: number } | null
@@ -45,6 +49,7 @@ interface State {
   run: <T>(fn: () => Promise<T>) => Promise<T | undefined>
   setDisplayMode: (m: DisplayMode) => void
   requestView: (name: ViewName) => void
+  toggleOrtho: () => void
   setConnected: (c: boolean) => void
   setFileDialog: (d: FileDialogRequest | null) => void
   setBounds: (b: State['bounds']) => void
@@ -64,6 +69,13 @@ export const useStore = create<State>((set, get) => ({
   lastAction: null,
   displayMode: 'both',
   viewRequest: { name: 'fit', n: 0 },
+  ortho: (() => {
+    try {
+      return localStorage.getItem('titanvsp-ortho') === '1'
+    } catch {
+      return false
+    }
+  })(),
   fileDialog: null,
   bounds: null,
 
@@ -120,6 +132,15 @@ export const useStore = create<State>((set, get) => ({
 
   setDisplayMode: (displayMode) => set({ displayMode }),
   requestView: (name) => set({ viewRequest: { name, n: get().viewRequest.n + 1 } }),
+  toggleOrtho: () => {
+    const ortho = !get().ortho
+    try {
+      localStorage.setItem('titanvsp-ortho', ortho ? '1' : '0')
+    } catch {
+      /* storage unavailable */
+    }
+    set({ ortho })
+  },
   setConnected: (connected) => set({ connected }),
   setFileDialog: (fileDialog) => set({ fileDialog }),
   setBounds: (bounds) => set({ bounds }),
