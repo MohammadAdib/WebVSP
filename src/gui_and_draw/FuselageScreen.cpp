@@ -5,6 +5,7 @@
 //
 //////////////////////////////////////////////////////////////////////
 
+#include "VspDialogs.h"
 #include "FuselageScreen.h"
 #include "ScreenMgr.h"
 #include "FuselageGeom.h"
@@ -262,7 +263,7 @@ void FuselageScreen::GuiDeviceCallBack( GuiDevice* gui_device )
 
     if ( gui_device == &m_ConvertToStackButton )
     {
-        switch( fl_choice( "Convert Fuselage to Stack Geom (can not be un-done)?", "Cancel", "Ok", 0 ) )
+        switch( VspChoice( "Convert Fuselage to Stack Geom (can not be un-done)?", "Cancel", "Ok", 0 ) )
         {
             case(0):
                 break;

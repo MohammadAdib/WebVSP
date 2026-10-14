@@ -7,6 +7,9 @@
 //
 //////////////////////////////////////////////////////////////////////
 
+#include "VspDialogs.h"
+#include "WebMirror.h"
+#include <FL/platform.H>
 #include "CloneDeleteDialog.h"
 
 #include "APIDefines.h"
@@ -182,10 +185,20 @@ int AskCloneDelete( Vehicle* veh, const vector< string > & clone_vec, bool cut )
     win->position( sx + ( sw - win_w ) / 2, sy + ( sh - win_h ) / 2 );
 
     s_CloneDeleteChoice = -1;
+    if ( WebMirror::IsEnabled() )
+    {
+        win->position( -32000, -32000 );
+    }
     win->show();
+#ifdef _WIN32
+    if ( WebMirror::IsEnabled() )
+    {
+        ShowWindow( fl_xid( win ), SW_HIDE );
+    }
+#endif
     while ( win->shown() )
     {
-        Fl::wait();
+        VspModalWait();
     }
 
     delete win;

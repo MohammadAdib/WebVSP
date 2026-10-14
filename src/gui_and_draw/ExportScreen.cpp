@@ -5,6 +5,7 @@
 //
 //////////////////////////////////////////////////////////////////////
 
+#include "VspDialogs.h"
 #include "ExportScreen.h"
 #include "ScreenMgr.h"
 #include "STEPOptionsScreen.h"
@@ -323,7 +324,7 @@ void ExportScreen::ExportFile( string &newfile, int write_set, int degen_set, in
                                                                      useMode, modeID );
             if ( !err.empty() )
             {
-                fl_alert( "%s, %s not written", err.c_str(), newfile.c_str() );
+                VspAlert( "%s, %s not written", err.c_str(), newfile.c_str() );
             }
         }
         else

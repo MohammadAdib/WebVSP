@@ -7,6 +7,7 @@
 //
 //////////////////////////////////////////////////////////////////////
 
+#include "VspDialogs.h"
 #include "BEMOptionsScreen.h"
 
 //////////////////////////////////////////////////////////////////////
@@ -97,7 +98,7 @@ bool BEMOptionsScreen::ShowBEMOptionsScreen()
 
     while( m_FLTK_Window->shown() )
     {
-        Fl::wait();
+        VspModalWait();
     }
 
     return m_OkFlag;

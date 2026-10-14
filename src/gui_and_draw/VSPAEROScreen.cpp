@@ -12,6 +12,7 @@
 #define _HAS_STD_BYTE 0
 #endif
 
+#include "VspDialogs.h"
 #include "VSPAEROScreen.h"
 #include "VSPAEROPlotScreen.h"
 #include "FileUtil.h"
@@ -1461,7 +1462,7 @@ void VSPAEROScreen::GuiDeviceCallBack( GuiDevice* device )
                 int status = VSPAEROMgr.ExportResultsToCSV( fileName );
                 if ( status != vsp::VSP_OK )
                 {
-                    fl_alert( "File export failed\nFile: %s", fileName.c_str() );
+                    VspAlert( "File export failed\nFile: %s", fileName.c_str() );
                 }
             }
         }

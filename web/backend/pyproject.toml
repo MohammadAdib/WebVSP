@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vspweb"
+version = "0.1.0"
+description = "Web GUI for OpenVSP: local Python backend serving a TypeScript/Vite frontend"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "numpy",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "httpx"]
+
+[project.scripts]
+vsp-web = "vspweb.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["vspweb*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

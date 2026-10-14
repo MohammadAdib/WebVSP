@@ -19,6 +19,7 @@
 
 #ifdef VSP_USE_FLTK
 #include "ScreenMgr.h"
+#include "WebMirror.h"
 #endif
 
 #include "MainThreadIDMgr.h"
@@ -155,6 +156,53 @@ void GuiInterface::Unlock()
 {
 #ifdef VSP_USE_FLTK
     Fl::unlock();
+#endif
+}
+
+void GuiInterface::MirrorEnable()
+{
+#ifdef VSP_USE_FLTK
+    if ( m_ScreenMgr )
+    {
+        WebMirror::Enable( m_ScreenMgr );
+    }
+#endif
+}
+
+void GuiInterface::MirrorPump( double timeout )
+{
+#ifdef VSP_USE_FLTK
+    WebMirror::Pump( timeout );
+#endif
+}
+
+void GuiInterface::MirrorPostEvent( const std::string & json )
+{
+#ifdef VSP_USE_FLTK
+    WebMirror::PostEvent( json );
+#endif
+}
+
+std::string GuiInterface::MirrorTakeOutput()
+{
+#ifdef VSP_USE_FLTK
+    return WebMirror::TakeOutput();
+#else
+    return std::string( "[]" );
+#endif
+}
+
+void GuiInterface::MirrorRequestFull()
+{
+#ifdef VSP_USE_FLTK
+    WebMirror::RequestFull();
+#endif
+}
+
+void GuiInterface::MirrorPickGeom( const std::string & geom_id )
+{
+#ifdef VSP_USE_FLTK
+    WebMirror::PickGeom( geom_id );
 #endif
 }
 

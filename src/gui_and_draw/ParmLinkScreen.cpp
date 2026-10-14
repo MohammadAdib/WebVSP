@@ -7,6 +7,7 @@
 //
 //////////////////////////////////////////////////////////////////////
 
+#include "VspDialogs.h"
 #include "ParmLinkScreen.h"
 #include "ParmMgr.h"
 #include "LinkMgr.h"
@@ -349,7 +350,7 @@ void ParmLinkScreen::GuiDeviceCallBack( GuiDevice* device )
         bool success = LinkMgr.AddCurrLink();
         if ( !success )
         {
-            fl_alert( "Error: Identical Parms or Already Linked" );
+            VspAlert( "Error: Identical Parms or Already Linked" );
         }
         m_SelectedLinks.clear();
     }
@@ -375,7 +376,7 @@ void ParmLinkScreen::GuiDeviceCallBack( GuiDevice* device )
         bool success = LinkMgr.LinkAllComp();
         if ( !success )
         {
-            fl_alert( "Error: Identical Comps" );
+            VspAlert( "Error: Identical Comps" );
         }
         m_SelectedLinks.clear();
     }
@@ -384,7 +385,7 @@ void ParmLinkScreen::GuiDeviceCallBack( GuiDevice* device )
         bool success = LinkMgr.LinkAllGroup();
         if ( !success )
         {
-            fl_alert( "Error: Identical Group" );
+            VspAlert( "Error: Identical Group" );
         }
         m_SelectedLinks.clear();
     }

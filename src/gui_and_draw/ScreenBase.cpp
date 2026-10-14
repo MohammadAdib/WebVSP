@@ -12,6 +12,7 @@
 #define _HAS_STD_BYTE 0
 #endif
 
+#include "VspDialogs.h"
 #include "ScreenBase.h"
 #include "ScreenMgr.h"
 #include "SubSurfaceMgr.h"
@@ -5804,7 +5805,7 @@ void SkinScreen::GuiDeviceCallBack( GuiDevice* gui_device )
     }
     else if ( gui_device == &m_ClearAllSkinningButton )
     {
-        switch ( fl_choice( "Disable and clear all skinning values from stack?", "Cancel", "Clear Skinning", 0 ) )
+        switch ( VspChoice( "Disable and clear all skinning values from stack?", "Cancel", "Clear Skinning", 0 ) )
         {
             case (0):
             {

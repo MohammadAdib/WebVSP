@@ -7,6 +7,7 @@
 //
 //////////////////////////////////////////////////////////////////////
 
+#include "VspDialogs.h"
 #include "STEPStructureOptionsScreen.h"
 #include "StructureMgr.h"
 
@@ -209,7 +210,7 @@ bool STEPStructureOptionsScreen::ShowSTEPOptionsScreen()
 
     while( m_FLTK_Window->shown() )
     {
-        Fl::wait();
+        VspModalWait();
     }
 
     return m_OkFlag;

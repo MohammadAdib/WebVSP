@@ -3776,6 +3776,61 @@ extern void Unlock( )
 #endif
 }
 
+extern void MirrorEnable()
+{
+#ifdef VSP_USE_FLTK
+    GuiInterface::getInstance().MirrorEnable();
+#endif
+    ErrorMgr.NoError();
+}
+
+extern void MirrorPump( double timeout )
+{
+#ifdef VSP_USE_FLTK
+    GuiInterface::getInstance().MirrorPump( timeout );
+#endif
+    ErrorMgr.NoError();
+}
+
+extern void MirrorPostEvent( const std::string & json )
+{
+#ifdef VSP_USE_FLTK
+    GuiInterface::getInstance().MirrorPostEvent( json );
+#endif
+}
+
+extern std::string MirrorTakeOutput()
+{
+    // Called from any thread: leave the (single-threaded) error state alone.
+#ifdef VSP_USE_FLTK
+    return GuiInterface::getInstance().MirrorTakeOutput();
+#else
+    return std::string( "[]" );
+#endif
+}
+
+extern void MirrorRequestFull()
+{
+#ifdef VSP_USE_FLTK
+    GuiInterface::getInstance().MirrorRequestFull();
+#endif
+}
+
+std::vector<std::string> GetActiveGeoms()
+{
+    Vehicle* veh = GetVehicle();
+    ErrorMgr.NoError();
+    return veh->GetActiveGeomVec();
+}
+
+extern void MirrorPickGeom( const std::string & geom_id )
+{
+#ifdef VSP_USE_FLTK
+    GuiInterface::getInstance().MirrorPickGeom( geom_id );
+#endif
+    ErrorMgr.NoError();
+}
+
 extern bool IsEventLoopRunning( )
 {
 #ifdef VSP_USE_FLTK
@@ -14056,6 +14111,18 @@ std::string GetParmDescript( const std::string & parm_id )
     }
     ErrorMgr.NoError();
     return p->GetDescript();
+}
+
+bool GetParmActiveFlag( const std::string & parm_id )
+{
+    Parm* p = ParmMgr.FindParm( parm_id );
+    if ( !p )
+    {
+        ErrorMgr.AddError( VSP_CANT_FIND_PARM, "GetParmActiveFlag::Can't Find Parm " + parm_id );
+        return false;
+    }
+    ErrorMgr.NoError();
+    return p->GetActiveFlag();
 }
 
 ///  Find a parm id given parm container, name and group

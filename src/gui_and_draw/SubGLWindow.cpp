@@ -9,6 +9,7 @@
 #endif
 
 #include "SubGLWindow.h"
+#include "WebMirror.h"
 #include "VehicleMgr.h"
 #include "Vehicle.h"
 #include "GraphicEngine.h"
@@ -71,8 +72,30 @@ VspSubGlWindow::~VspSubGlWindow()
     delete m_GEngine;
 }
 
+void VspSubGlWindow::show()
+{
+    if ( WebMirror::IsEnabled() )
+    {
+        // Creating a GL window inside a never-mapped parent fails; the web client draws this
+        // view from its DrawObjs instead, and mouse events still reach handle().
+        clear_flag( INVISIBLE );
+        // Size the viewports as the first draw would; picking and zoom math depend on them.
+        if ( w() > 0 && h() > 0 )
+        {
+            m_GEngine->getDisplay()->resize( w(), h() );
+        }
+        return;
+    }
+    Fl_Gl_Window::show();
+}
+
 void VspSubGlWindow::draw()
 {
+    // Mirrored GUI: this GL window is never created, so there is no context to draw into.
+    if ( WebMirror::IsEnabled() && !shown() )
+    {
+        return;
+    }
     // Initialize Glew when context is created.
     _initGLEW();
 
@@ -85,6 +108,11 @@ void VspSubGlWindow::draw()
 
 void VspSubGlWindow::update()
 {
+    // Mirrored GUI: this GL window is never created, so there is no context to draw into.
+    if ( WebMirror::IsEnabled() && !shown() )
+    {
+        return;
+    }
     make_current();
 
     if( this->context_valid() )
@@ -104,6 +132,14 @@ void VspSubGlWindow::update()
         }
 
     }
+}
+
+void VspSubGlWindow::GetMirrorView( float &zoom, float &pan_x, float &pan_y )
+{
+    zoom = m_GEngine->getDisplay()->getRelativeZoomValue();
+    glm::vec2 pan = m_GEngine->getDisplay()->getPanValues();
+    pan_x = pan.x;
+    pan_y = pan.y;
 }
 
 void VspSubGlWindow::LoadAllDrawObjs( vector< DrawObj* > & draw_obj_vec )

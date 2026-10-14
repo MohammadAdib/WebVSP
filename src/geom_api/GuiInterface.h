@@ -66,6 +66,13 @@ public:
 
     void HideScreen( int s );
     void ShowScreen( int s );
+
+    void MirrorEnable();
+    void MirrorPump( double timeout );
+    void MirrorPostEvent( const std::string & json );
+    std::string MirrorTakeOutput();
+    void MirrorRequestFull();
+    void MirrorPickGeom( const std::string & geom_id );
 };
 
 #endif // !defined(GUIINTERFACE__INCLUDED_)

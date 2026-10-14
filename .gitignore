@@ -10,3 +10,7 @@ __pycache__/
 CMakeSettings.json
 *.vs
 examples/scripts/python_scripts/*_files/*
+web/.venv/
+web/frontend/node_modules/
+web/frontend/dist/
+.pytest_cache/

@@ -8,6 +8,7 @@
 // Justin Gravett
 //////////////////////////////////////////////////////////////////////
 
+#include "VspDialogs.h"
 #include "DXFOptionsScreen.h"
 
 //////////////////////////////////////////////////////////////////////
@@ -362,7 +363,7 @@ bool DXFOptionsScreen::ShowDXFOptionsScreen()
 
     while( m_FLTK_Window->shown() )
     {
-        Fl::wait();
+        VspModalWait();
     }
 
     return m_OkFlag;

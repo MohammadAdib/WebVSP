@@ -9,7 +9,9 @@
 //////////////////////////////////////////////////////////////////////
 
 #include <FL/Fl.H>
+#include <FL/platform.H>
 #include "VSPWindow.h"
+#include "WebMirror.h"
 
 bool valid_hotkey( int event_length, int key )
 {
@@ -110,6 +112,32 @@ void VSP_Window::SetParent( VSP_Window* win)
 
 void VSP_Window::show()
 {
+    if ( WebMirror::IsEnabled() )
+    {
+        // Mirrored to a web client: FLTK treats the window as shown (so screens keep
+        // updating) but the native window stays hidden.  It is created off screen so it
+        // never flashes, then put back where VSP placed it (the client mirrors that position).
+        if ( m_GeomScreen )
+        {
+            position( m_x, m_y );
+        }
+        int px = x(), py = y();
+        bool first = !shown();
+        if ( first )
+        {
+            position( -32000, -32000 );
+        }
+        Fl_Double_Window::show();
+#ifdef _WIN32
+        ShowWindow( fl_xid( this ), SW_HIDE );
+#endif
+        if ( first )
+        {
+            position( px, py );
+        }
+        return;
+    }
+
     if ( m_GeomScreen )
     {
         position( m_x, m_y);

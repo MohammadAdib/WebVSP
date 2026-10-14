@@ -5,6 +5,7 @@
 //
 //////////////////////////////////////////////////////////////////////
 
+#include "VspDialogs.h"
 #include "AdvLinkScreen.h"
 #include "AdvLinkVarRenameScreen.h"
 #include "AdvLinkMgr.h"
@@ -676,7 +677,7 @@ void AdvLinkScreen::CallBack( Fl_Widget *w )
                         {
                             string new_name = edit_link->MakeVarNameUnique( name );
 
-                            if ( 0 == fl_choice( "%s is not unique, use %s instead?", "Cancel", "Use Suggestion",  0, name.c_str(), new_name.c_str() ) )
+                            if ( 0 == VspChoice( "%s is not unique, use %s instead?", "Cancel", "Use Suggestion",  0, name.c_str(), new_name.c_str() ) )
                             {
                                 cancel = true;
                             }
@@ -712,7 +713,7 @@ void AdvLinkScreen::CallBack( Fl_Widget *w )
                         {
                             string new_name = edit_link->MakeVarNameUnique( name );
 
-                            if ( 0 == fl_choice( "%s is not unique, use %s instead?", "Cancel", "Use Suggestion",  0, name.c_str(), new_name.c_str() ) )
+                            if ( 0 == VspChoice( "%s is not unique, use %s instead?", "Cancel", "Use Suggestion",  0, name.c_str(), new_name.c_str() ) )
                             {
                                 cancel = true;
                             }
@@ -776,7 +777,7 @@ void AdvLinkScreen::GuiDeviceCallBack( GuiDevice* gui_device )
                     {
                         string new_name = edit_link->MakeVarNameUnique( name );
 
-                        if ( 0 == fl_choice( "%s is not unique, use %s instead?", "Cancel", "Use Suggestion",  0, name.c_str(), new_name.c_str() ) )
+                        if ( 0 == VspChoice( "%s is not unique, use %s instead?", "Cancel", "Use Suggestion",  0, name.c_str(), new_name.c_str() ) )
                         {
                             cancel = true;
                         }
@@ -811,7 +812,7 @@ void AdvLinkScreen::GuiDeviceCallBack( GuiDevice* gui_device )
                     {
                         string new_name = edit_link->MakeVarNameUnique( name );
 
-                        if ( 0 == fl_choice( "%s is not unique, use %s instead?", "Cancel", "Use Suggestion",  0, name.c_str(), new_name.c_str() ) )
+                        if ( 0 == VspChoice( "%s is not unique, use %s instead?", "Cancel", "Use Suggestion",  0, name.c_str(), new_name.c_str() ) )
                         {
                             cancel = true;
                         }

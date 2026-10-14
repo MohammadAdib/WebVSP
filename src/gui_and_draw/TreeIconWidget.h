@@ -147,6 +147,22 @@ class TreeIconItem : public Fl_Tree_Item
             return m_CroppedLabelW;
         }
 
+        // Icon hit boxes (x, y, w, h), valid after the tree has been laid out.
+        const int* GetShowIconXy() const
+        {
+            return m_ShowIconXy;
+        }
+        const int* GetSurfIconXy() const
+        {
+            return m_SurfIconXy;
+        }
+
+        // Mark this item as the source of a show (1) or surface (2) icon click.
+        void SetIconEvent( int type )
+        {
+            m_EventType = type;
+        }
+
     protected:
         int draw_item_content( int render );
         void draw_horizontal_connector( int x1, int x2, int y, const Fl_Tree_Prefs &prefs );
@@ -190,6 +206,9 @@ class TreeWithIcons : public Fl_Tree
 
         TreeIconItem* GetItemByRefId( const string & ref_id );
         void GetSelectedItems( vector < TreeIconItem* > *item_vec );
+
+        // Run the same callback a mouse click on an item's show (1) / surface (2) icon would.
+        void MirrorIconEvent( TreeIconItem* item, int icon_type );
 
         void SetEventItemID( const string & item_id )
         {

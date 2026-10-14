@@ -47,6 +47,8 @@ public:
     * Draw 2D Scene.
     */
     virtual void draw();
+    // Mirrored GUI: never create the native GL window (see WebMirror); just mark it visible.
+    virtual void show();
 
 public:
     /*
@@ -54,6 +56,13 @@ public:
     */
     virtual void update();
     virtual void LoadAllDrawObjs( vector< DrawObj* > & draw_obj_vec );
+
+    // For the web mirror: which DrawObjs this window shows, and its 2D camera.
+    DrawObj::ScreenEnum GetLinkedScreen() const
+    {
+        return m_LinkedScreen;
+    }
+    void GetMirrorView( float &zoom, float &pan_x, float &pan_y );
 
 public:
     /*!

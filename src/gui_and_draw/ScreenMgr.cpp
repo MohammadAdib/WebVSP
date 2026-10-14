@@ -12,6 +12,8 @@
 #define _HAS_STD_BYTE 0
 #endif
 
+#include "WebMirror.h"
+#include "VspDialogs.h"
 #include "FileUtil.h"
 
 #include "AdvLinkScreen.h"
@@ -267,8 +269,7 @@ void ScreenMgr::MessageCallback( const MessageBase* from, const MessageData& dat
             message.append( data.m_StringVec[i] );
         }
 
-        const char* msg = message.c_str();
-        fl_message( "%s", ( char* )msg );
+        VspMessage( "%s", message.c_str() );
     }
     else if ( data.m_String == string( "CheckCollisionKey" ) )
     {
@@ -1177,6 +1178,16 @@ void ScreenMgr::HelpSystemDefaultBrowser( const string &file )
 
 string ScreenMgr::FileChooser( const string &title, const string &filter, int mode, const string &preset_fname, const string &dir)
 {
+    if ( WebMirror::IsEnabled() )
+    {
+        string fname = WebMirror::FileChooser( title, filter, mode, preset_fname, dir );
+        if ( !fname.empty() && mode != vsp::OPEN && filter.find( ',' ) == string::npos )
+        {
+            ::EnforceFilter( fname, filter );
+        }
+        return fname;
+    }
+
     Fl_Preferences prefs( Fl_Preferences::USER, "openvsp.org", "VSP" );
     Fl_Preferences app( prefs, "Application" );
 
@@ -1257,7 +1268,7 @@ string ScreenMgr::NativeFileChooser( const string &title, const string &filter, 
 //==== Create Message Pop-Up ====//
 void MessageBox( void * data )
 {
-    fl_message( "%s", (char*)data );
+    VspMessage( "%s", (char*)data );
     ((char*)data)[0] = '\0';
     delete[] (char*)data;
 }

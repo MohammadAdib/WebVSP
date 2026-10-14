@@ -7,6 +7,7 @@
 //
 //////////////////////////////////////////////////////////////////////
 
+#include "VspDialogs.h"
 #include "SplitStitchOptionsScreen.h"
 
 SplitStitchOptionsScreen::SplitStitchOptionsScreen( ScreenMgr* mgr ) : BasicScreen( mgr, 300, 400, "Split and Stitch Options" )
@@ -221,7 +222,7 @@ bool SplitStitchOptionsScreen::ShowSplitStitchOptionsScreen( bool step_flag )
 
     while ( m_FLTK_Window->shown() )
     {
-        Fl::wait();
+        VspModalWait();
     }
 
     return m_OkFlag;

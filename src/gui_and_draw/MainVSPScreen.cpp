@@ -14,6 +14,7 @@
 #define _HAS_STD_BYTE 0
 #endif
 
+#include "VspDialogs.h"
 #include <cmath>
 
 #include "main.h"
@@ -371,7 +372,7 @@ void MainVSPScreen::SetFileLabel( const string &fname )
 
 void MainVSPScreen::NewModel()
 {
-    switch( fl_choice("New will lose any changes.  Do you want to proceed (discarding changes) or save?", "Cancel", "Discard", "Save") )
+    switch( VspChoice("New will lose any changes.  Do you want to proceed (discarding changes) or save?", "Cancel", "Discard", "Save") )
     {
         case(0):  // Cancel
             return;
@@ -401,7 +402,7 @@ void MainVSPScreen::NewModel()
 
 void MainVSPScreen::ExitVSP()
 {
-    switch( fl_choice("VSP is exiting. Save or discard your changes.", "Cancel", "Discard", "Save") )
+    switch( VspChoice("VSP is exiting. Save or discard your changes.", "Cancel", "Discard", "Save") )
     {
         case(0):
             return;

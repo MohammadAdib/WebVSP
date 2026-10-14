@@ -122,6 +122,10 @@ VehNotesScreen.cpp
 VSPAEROPlotScreen.cpp
 VSPAEROScreen.cpp
 VSPWindow.cpp
+VspDialogs.cpp
+CrashTrace.cpp
+MirrorGL.cpp
+WebMirror.cpp
 WaveDragScreen.cpp
 WingScreen.cpp
 WireScreen.cpp

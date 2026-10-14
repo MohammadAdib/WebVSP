@@ -11,6 +11,7 @@
 #include <cmath>
 
 #include "MainGLWindow.h"
+#include "WebMirror.h"
 
 #include "Background3DMgr.h"
 #include "BORGeom.h"
@@ -149,6 +150,14 @@ float VspGlWindow::getRelativeZoomValue()
     return m_GEngine->getDisplay()->getRelativeZoomValue();
 }
 
+void VspGlWindow::GetMirrorView( float &zoom, float &pan_x, float &pan_y )
+{
+    zoom = getRelativeZoomValue();
+    glm::vec2 pan = getPanValues();
+    pan_x = pan.x;
+    pan_y = pan.y;
+}
+
 void VspGlWindow::rotateSphere( float angleX, float angleY, float angleZ )
 {
     m_GEngine->getDisplay()->rotateSphere( angleX, angleY, angleZ );
@@ -159,8 +168,30 @@ glm::vec3 VspGlWindow::getRotationEulerAngles()
     return m_GEngine->getDisplay()->getRotationEulerAngles();
 }
 
+void VspGlWindow::show()
+{
+    if ( WebMirror::IsEnabled() )
+    {
+        // Creating a GL window inside a never-mapped parent fails; the web client draws this
+        // view from its DrawObjs instead, and mouse events still reach handle().
+        clear_flag( INVISIBLE );
+        // Size the viewports as the first draw would; picking and zoom math depend on them.
+        if ( w() > 0 && h() > 0 )
+        {
+            m_GEngine->getDisplay()->resize( w(), h() );
+        }
+        return;
+    }
+    Fl_Gl_Window::show();
+}
+
 void VspGlWindow::draw()
 {
+    // Mirrored GUI: this GL window is never created, so there is no context to draw into.
+    if ( WebMirror::IsEnabled() && !shown() )
+    {
+        return;
+    }
     // Initialize Glew when context is created.
     _initGLEW();
 
@@ -248,6 +279,11 @@ int VspGlWindow::handle( int fl_event )
 
 void VspGlWindow::update()
 {
+    // Mirrored GUI: this GL window is never created, so there is no context to draw into.
+    if ( WebMirror::IsEnabled() && !shown() )
+    {
+        return;
+    }
     Vehicle* vPtr = VehicleMgr.GetVehicle();
 
     if ( vPtr && m_initialized )
@@ -3112,6 +3148,11 @@ EditXSecWindow::EditXSecWindow( int x, int y, int w, int h, ScreenMgr* mgr )
 
 void EditXSecWindow::update()
 {
+    // Mirrored GUI: this GL window is never created, so there is no context to draw into.
+    if ( WebMirror::IsEnabled() && !shown() )
+    {
+        return;
+    }
     Vehicle* vPtr = VehicleMgr.GetVehicle();
 
     if ( vPtr )
@@ -3133,6 +3174,43 @@ void EditXSecWindow::update()
         // Load Objects to Renderer.
         _update( drawObjs ); // VspGlWindow
     }
+}
+
+void EditXSecWindow::LoadAllDrawObjs( vector< DrawObj* > & drawObjs )
+{
+    // Same objects update() draws.
+    Vehicle* vPtr = VehicleMgr.GetVehicle();
+    if ( vPtr )
+    {
+        vPtr->LoadDrawObjs( drawObjs );
+    }
+    CurveEditScreen* curve_editor = dynamic_cast <CurveEditScreen*>
+        ( m_ScreenMgr->GetScreen( vsp::VSP_CURVE_EDIT_SCREEN ) );
+    if ( curve_editor )
+    {
+        curve_editor->LoadDrawObjs( drawObjs );
+    }
+}
+
+int EditXSecWindow::GetMirrorViewPlane()
+{
+    CurveEditScreen* curve_editor = dynamic_cast <CurveEditScreen*>
+        ( m_ScreenMgr->GetScreen( vsp::VSP_CURVE_EDIT_SCREEN ) );
+    XSecCurve* xsc = curve_editor ? curve_editor->GetXSecCurve() : nullptr;
+    EditCurveXSec* edit_curve_xs = xsc && xsc->GetType() == vsp::XS_EDIT_CURVE ? dynamic_cast<EditCurveXSec*>( xsc ) : nullptr;
+    if ( !edit_curve_xs )
+    {
+        return 0;
+    }
+    if ( edit_curve_xs->m_View() == vsp::VIEW_TOP )
+    {
+        return 1;
+    }
+    if ( edit_curve_xs->m_View() == vsp::VIEW_LEFT )
+    {
+        return 2;
+    }
+    return 0;
 }
 
 int EditXSecWindow::handle( int fl_event )

@@ -11,6 +11,7 @@
 #define _HAS_STD_BYTE 0
 #endif
 
+#include <cmath>
 #include "CurveEditScreen.h"
 #include "BORGeom.h"
 #include "WingGeom.h"
@@ -1154,6 +1155,16 @@ void CurveEditScreen::UpdateAxisLimits()
     {
         scale_w = edit_curve_xs->GetWidth();
         scale_h = edit_curve_xs->GetHeight();
+    }
+
+    double xmin = ( -0.5 * gl_w * zoom - pan.x ) / scale_w;
+    double xmax = ( 0.5 * gl_w * zoom - pan.x ) / scale_w;
+    double ymin = ( -0.5 * gl_h * zoom - pan.y ) / scale_h;
+    double ymax = ( 0.5 * gl_h * zoom - pan.y ) / scale_h;
+    if ( !std::isfinite( xmin ) || !std::isfinite( xmax ) || !std::isfinite( ymin ) || !std::isfinite( ymax ) ||
+         xmax <= xmin || ymax <= ymin )
+    {
+        return; // degenerate view (e.g. no GL window yet): tick generation below would never end
     }
 
     m_XAxis->minimum( ( -0.5 * gl_w * zoom - pan.x ) / scale_w );

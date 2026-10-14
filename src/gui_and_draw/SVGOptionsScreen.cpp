@@ -8,6 +8,7 @@
 // Justin Gravett
 //////////////////////////////////////////////////////////////////////
 
+#include "VspDialogs.h"
 #include "SVGOptionsScreen.h"
 #include "VspUtil.h"
 
@@ -317,7 +318,7 @@ bool SVGOptionsScreen::ShowSVGOptionsScreen( )
 
     while( m_FLTK_Window->shown() )
     {
-        Fl::wait();
+        VspModalWait();
     }
 
     return m_OkFlag;

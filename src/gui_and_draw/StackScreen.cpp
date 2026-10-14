@@ -5,6 +5,7 @@
 //
 //////////////////////////////////////////////////////////////////////
 
+#include "VspDialogs.h"
 #include "StackScreen.h"
 #include "ScreenMgr.h"
 #include "StackGeom.h"
@@ -343,7 +344,7 @@ void StackScreen::GuiDeviceCallBack( GuiDevice* gui_device )
     }
     else if ( gui_device == &m_InitStackPreset )
     {
-        switch( fl_choice( "Clear all XSECs and init to preset?", "Cancel", "Ok", 0 ) )
+        switch( VspChoice( "Clear all XSECs and init to preset?", "Cancel", "Ok", 0 ) )
         {
             case(0):
                 break;

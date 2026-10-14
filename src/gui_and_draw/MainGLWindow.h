@@ -126,6 +126,8 @@ public:
 // Override Fl_Gl_Window Functions.
 public:
     virtual void draw();
+    // Mirrored GUI: never create the native GL window (see WebMirror); just mark it visible.
+    virtual void show();
     virtual int  handle( int fl_event );
 
 // Util Functions.
@@ -133,6 +135,14 @@ public:
     virtual void update();
 
     virtual void LoadAllDrawObjs( vector< DrawObj* > & draw_obj_vec );
+
+    // For the web mirror: which DrawObjs this window shows, and its 2D camera.
+    DrawObj::ScreenEnum GetLinkedScreen() const
+    {
+        return m_LinkedScreen;
+    }
+    void GetMirrorView( float &zoom, float &pan_x, float &pan_y );
+    virtual int GetMirrorViewPlane()        { return 0; } // 0: X,Y  1: X,Z  2: Z,Y
 
     virtual void ResetDrawObjsGeomChangedFlags( vector< DrawObj* > & drawObjs, bool flag = false );
 
@@ -250,6 +260,9 @@ public:
     virtual int handle( int fl_event );
 
     virtual void update();
+
+    virtual void LoadAllDrawObjs( vector< DrawObj* > & draw_obj_vec );
+    virtual int GetMirrorViewPlane();
 
     void InitZoom(); // centers pan values and resets scale for zoom
 

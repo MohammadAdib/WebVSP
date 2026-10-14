@@ -7,6 +7,7 @@
 //
 //////////////////////////////////////////////////////////////////////
 
+#include "VspDialogs.h"
 #include "AdvLinkVarRenameScreen.h"
 #include "AdvLinkMgr.h"
 
@@ -108,7 +109,7 @@ void AdvLinkVarRenameScreen::GuiDeviceCallBack( GuiDevice* device )
             {
                 string new_name = edit_link->MakeVarNameUnique( name );
 
-                if ( 0 == fl_choice( "%s is not unique, use %s instead?", "Cancel", "Use Suggestion",  0, name.c_str(), new_name.c_str() ) )
+                if ( 0 == VspChoice( "%s is not unique, use %s instead?", "Cancel", "Use Suggestion",  0, name.c_str(), new_name.c_str() ) )
                 {
                     cancel = true;
                 }
@@ -143,7 +144,7 @@ void AdvLinkVarRenameScreen::GuiDeviceCallBack( GuiDevice* device )
             {
                 string new_name = edit_link->MakeVarNameUnique( name );
 
-                if ( 0 == fl_choice( "%s is not unique, use %s instead?", "Cancel", "Use Suggestion",  0, name.c_str(), new_name.c_str() ) )
+                if ( 0 == VspChoice( "%s is not unique, use %s instead?", "Cancel", "Use Suggestion",  0, name.c_str(), new_name.c_str() ) )
                 {
                     cancel = true;
                 }

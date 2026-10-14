@@ -1010,3 +1010,15 @@ void TreeWithIcons::draw()
         m_PopupInput->deactivate();
     }
 }
+void TreeWithIcons::MirrorIconEvent( TreeIconItem* item, int icon_type )
+{
+    if ( !item || ( icon_type != 1 && icon_type != 2 ) )
+    {
+        return;
+    }
+    ClearEventItemID();
+    item->SetIconEvent( icon_type );
+    Fl::event_clicks( 0 );
+    SetEventItemID( item->GetRefID() );
+    do_callback_for_item( item, FL_TREE_REASON_NONE );
+}
