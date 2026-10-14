@@ -44,8 +44,17 @@ Close the console window to stop it.
 
 The UI is also published at **https://mohammadadib.github.io/WebVSP/** by
 `.github/workflows/pages.yml` on every push to `main` that touches `web/frontend`.
-OpenVSP still runs locally: start the engine with `websp-web.cmd`, then open the
-hosted page; it connects to `http://localhost:8765` (until then it shows how to start it).
+OpenVSP still runs locally; the page connects to the engine at `http://localhost:8765`.
+
+**Users (no build tools needed):** download the portable engine,
+[TitanVSP-Engine-win64.zip](https://github.com/MohammadAdib/WebVSP/releases/latest/download/TitanVSP-Engine-win64.zip),
+unzip it, double-click `TitanVSP Engine.cmd`. The hosted page links to it until it connects.
+
+The zip is built and published by `.github/workflows/engine.yml` (rolling `engine-latest`
+release) on every push to `main` that touches the engine, the UI or `src/`. Build it locally
+with `web\scripts\package_engine.ps1` after `build_vsp.ps1`.
+
+Developers can also run the engine from a source build with `websp-web.cmd`.
 
 - The engine only accepts the hosted UI from origins listed in `WEB_ORIGINS`
   (`web/backend/vspweb/app.py`, default `https://mohammadadib.github.io`), plus any in

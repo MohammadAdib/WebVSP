@@ -38,6 +38,9 @@ def _load():
         import openvsp_config
 
         openvsp_config.LOAD_GRAPHICS = want_gui
+        # Skip openvsp's optional helper modules (degen_geom, utilities): they pull in
+        # matplotlib/scipy/pandas, which the engine never uses.
+        openvsp_config._IGNORE_IMPORTS = True
     except ImportError:
         want_gui = False
     import openvsp

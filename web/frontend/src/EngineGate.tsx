@@ -2,11 +2,12 @@ import { useEffect, useState } from 'react'
 import { engineAddress, isHostedUI } from './api/client'
 import { useStore } from './store'
 
-const REPO = 'https://github.com/MohammadAdib/WebVSP'
+const DOWNLOAD = 'https://github.com/MohammadAdib/WebVSP/releases/latest/download/TitanVSP-Engine-win64.zip'
 
 /**
  * On a hosted copy of the UI (GitHub Pages), OpenVSP itself runs on the user's machine.
- * While that engine can't be reached, explain how to start it; the socket keeps retrying.
+ * While that engine can't be reached, offer the download; the socket keeps retrying, so the
+ * page connects on its own as soon as the engine starts.
  */
 export function EngineGate() {
   const connected = useStore((s) => s.connected)
@@ -21,19 +22,19 @@ export function EngineGate() {
       <div className="modal prompt">
         <div className="modal-head">Start the TitanVSP engine</div>
         <div className="prompt-msg">
-          <p>This page is the TitanVSP interface. OpenVSP itself runs on your computer.</p>
+          <p>TitanVSP runs OpenVSP on your computer. Start the engine once and this page connects by itself.</p>
+          <a className="engine-download" href={DOWNLOAD}>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6">
+              <path d="M8 2v8M4.5 7 8 10.5 11.5 7M3 13.5h10" />
+            </svg>
+            Download TitanVSP Engine for Windows
+          </a>
           <ol>
-            <li>
-              Get <a href={REPO} target="_blank" rel="noreferrer">WebVSP</a> and build it once with{' '}
-              <code>web\scripts\build_vsp.ps1</code>.
-            </li>
-            <li>
-              Double-click <code>web\vsp-web.cmd</code> and leave its window open.
-            </li>
-            <li>If your browser asks to allow access to devices on your local network, allow it.</li>
+            <li>Unzip it and double-click <code>TitanVSP Engine</code>. Keep its window open.</li>
+            <li>If the browser asks to allow access to your local network, choose Allow.</li>
           </ol>
           <p className="engine-wait">
-            <span className="engine-dot" /> Looking for the engine at <code>{engineAddress}</code>…
+            <span className="engine-dot" /> Waiting for the engine at <code>{engineAddress}</code>
           </p>
         </div>
       </div>

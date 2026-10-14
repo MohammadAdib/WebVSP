@@ -47,6 +47,7 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--dev", action="store_true", help="dev mode: no browser, allow the Vite dev server origin")
     ap.add_argument("--no-browser", action="store_true", help="don't open a browser")
     ap.add_argument("--token", action="store_true", help="also require a random session token (for desktop shells)")
+    ap.add_argument("--open", metavar="URL", help="page to open instead of the local UI (e.g. the hosted UI)")
     args = ap.parse_args(argv)
 
     port = args.port
@@ -58,7 +59,7 @@ def main(argv: list[str] | None = None) -> None:
             _open_in_running(port, path)
         print(f"TitanVSP already running: {url}", flush=True)
         if not args.no_browser:
-            webbrowser.open(url)
+            webbrowser.open(args.open or url)
         return
 
     import uvicorn
@@ -74,7 +75,7 @@ def main(argv: list[str] | None = None) -> None:
 
     extra_origins = ["http://localhost:5173", "http://127.0.0.1:5173"] if args.dev else []
     app = create_app(session, token, port=port, extra_origins=extra_origins)
-    open_url = url + (f"#token={token}" if token else "")
+    open_url = args.open or url + (f"#token={token}" if token else "")
 
     @app.on_event("startup")
     async def _ready():
