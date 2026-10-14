@@ -2,7 +2,7 @@
 # tools needed on the user's machine. Unzip and double-click "WebVSP Engine.cmd".
 #
 # Layout of the zip:
-#   WebVSP Engine.cmd        launcher (starts the engine, opens the hosted UI)
+#   WebVSP Engine.cmd        launcher (starts the engine; opens the hosted UI unless a tab is already open)
 #   python\                    embedded CPython + site-packages (fastapi, uvicorn, numpy, openvsp)
 #   app\backend\vspweb\        the engine
 #   app\frontend\dist\         the UI, also served locally (works offline)
@@ -88,8 +88,8 @@ WebVSP Engine
 Runs OpenVSP on this computer for the WebVSP web app ($HostedUrl).
 
 1. Double-click "WebVSP Engine.cmd". Leave its window open while you work.
-2. Your browser opens WebVSP. If it asks to allow access to devices on your local
-   network, choose Allow.
+2. An open WebVSP tab connects by itself; if none is open, your browser opens one.
+   If the browser asks to allow access to devices on your local network, choose Allow.
 
 Windows may warn that the file came from the internet: choose "More info" > "Run anyway".
 No installation is needed; delete this folder to remove it.

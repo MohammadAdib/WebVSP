@@ -107,7 +107,7 @@ jobs:
 
           1. Download **WebVSP-Engine-win64.zip** and unzip it.
           2. Double-click **WebVSP Engine.cmd** and leave its window open.
-          3. WebVSP opens in your browser: https://mohammadadib.github.io/WebVSP/
+          3. An open WebVSP tab connects by itself; otherwise one opens: https://mohammadadib.github.io/WebVSP/
 
           No installation needed. If Windows warns the file came from the internet, choose More info > Run anyway.
           "@

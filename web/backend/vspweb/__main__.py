@@ -21,12 +21,19 @@ import webbrowser
 DEFAULT_PORT = 8765
 
 
-def _running_server(port: int) -> bool:
+# A page that is already open retries its connection at least this often (api/client.ts),
+# so after this long without a client, no WebVSP tab is open.
+CLIENT_GRACE_S = 6.5
+
+
+def _ping(port: int) -> dict | None:
+    """The running engine's status, or None if there is none on this port."""
     try:
         with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/ping", timeout=1) as r:
-            return json.load(r).get("app") == "vspweb"
+            info = json.load(r)
+            return info if info.get("app") == "vspweb" else None
     except Exception:
-        return False
+        return None
 
 
 def _open_in_running(port: int, path: str) -> None:
@@ -54,11 +61,12 @@ def main(argv: list[str] | None = None) -> None:
     url = f"http://localhost:{port}/"
     path = os.path.abspath(args.file) if args.file else None
 
-    if _running_server(port):
+    running = _ping(port)
+    if running:
         if path:
             _open_in_running(port, path)
         print(f"WebVSP already running: {url}", flush=True)
-        if not args.no_browser:
+        if not args.no_browser and not running.get("clients"):
             webbrowser.open(args.open or url)
         return
 
@@ -81,7 +89,17 @@ def main(argv: list[str] | None = None) -> None:
     async def _ready():
         print(f"VSPWEB_READY {port} {token or '-'}", flush=True)
         print(f"WebVSP: {url}", flush=True)
-        if not args.dev and not args.no_browser:
+        if args.dev or args.no_browser:
+            return
+        if args.open:
+            # The hosted page may already be open and waiting for the engine: give it time
+            # to reconnect, and only open a tab if it doesn't.
+            def _open_if_no_tab() -> None:
+                if not app.state.has_clients():
+                    webbrowser.open(open_url)
+
+            threading.Timer(CLIENT_GRACE_S, _open_if_no_tab).start()
+        else:
             threading.Timer(0.3, webbrowser.open, args=(open_url,)).start()
 
     uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")

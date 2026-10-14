@@ -119,6 +119,7 @@ def create_app(
 
     mirror = Mirror(broadcast, lambda: bool(sockets))
     app.state.mirror = mirror
+    app.state.has_clients = lambda: bool(sockets)
 
     @app.on_event("startup")
     async def _start_watchers() -> None:
@@ -181,7 +182,7 @@ def create_app(
 
     @app.get("/api/ping")
     async def ping():
-        return {"app": "vspweb"}
+        return {"app": "vspweb", "clients": len(sockets)}
 
     @app.get("/api/model")
     async def model():
