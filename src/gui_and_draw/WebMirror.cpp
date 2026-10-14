@@ -57,6 +57,7 @@
 #include <FL/Fl_Check_Browser.H>
 #include <FL/Fl_Text_Editor.H>
 #include <FL/Fl_Text_Display.H>
+#include <FL/Fl_Terminal.H>
 #include <FL/Fl_Table.H>
 #include <FL/Fl_Menu_Bar.H>
 #include <FL/Fl_Menu_Button.H>
@@ -338,9 +339,17 @@ const char *KindOf( Fl_Widget *w );
 
 const Capture *CaptureWidget( Fl_Widget *w )
 {
-    if ( w->as_window() || w->w() <= 0 || w->h() <= 0 || !w->visible_r() )
+    if ( w->as_window() || w->w() <= 0 || w->h() <= 0 )
     {
         return nullptr;
+    }
+    // Not visible_r(): that includes the native window, which stays hidden in mirror mode.
+    for ( Fl_Widget *p = w; p && !p->as_window(); p = p->parent() )
+    {
+        if ( !p->visible() )
+        {
+            return nullptr;
+        }
     }
     auto now = std::chrono::steady_clock::now();
     Capture &cap = Captures()[w];
@@ -604,6 +613,7 @@ const char *KindOf( Fl_Widget *w )
     if ( dynamic_cast< Fl_Tree* >( w ) ) return "tree";
     if ( dynamic_cast< Fl_Check_Browser* >( w ) ) return "check_browser";
     if ( dynamic_cast< Fl_Browser* >( w ) ) return "browser";
+    if ( dynamic_cast< Fl_Terminal* >( w ) ) return "terminal";
     if ( dynamic_cast< Fl_Text_Editor* >( w ) ) return "text_editor";
     if ( dynamic_cast< Fl_Text_Display* >( w ) ) return "text_display";
     if ( dynamic_cast< Fl_Table* >( w ) ) return "table";
@@ -634,7 +644,7 @@ const char *KindOf( Fl_Widget *w )
 // Composite widgets whose children are serialized as part of the parent instead.
 bool IsLeafComposite( Fl_Widget *w )
 {
-    return dynamic_cast< Fl_Browser_* >( w ) || dynamic_cast< Fl_Text_Display* >( w ) ||
+    return dynamic_cast< Fl_Browser_* >( w ) || dynamic_cast< Fl_Text_Display* >( w ) || dynamic_cast< Fl_Terminal* >( w ) ||
            dynamic_cast< Fl_Input_Choice* >( w ) || dynamic_cast< Fl_Table* >( w );
 }
 
@@ -812,6 +822,23 @@ string SerializeWidget( Fl_Widget *w, int win_id, int parent_id, int order, int 
     else if ( k == "tree" )
     {
         SerializeTree( o, static_cast< Fl_Tree* >( w ) );
+    }
+    else if ( k == "terminal" )
+    {
+        // Solver consoles (VSPAERO, CFD Mesh, ...). text() returns a malloc'd copy.
+        Fl_Terminal *term = static_cast< Fl_Terminal* >( w );
+        const char *txt = term->text();
+        string t = txt ? txt : "";
+        free( ( void* ) txt );
+        while ( !t.empty() && ( t.back() == '\n' || t.back() == ' ' ) )
+        {
+            t.pop_back();
+        }
+        if ( t.size() > 200000 )
+        {
+            t = t.substr( t.size() - 200000 );
+        }
+        o.Str( "v", t ).Int( "ts", term->textsize() );
     }
     else if ( k == "text_editor" || k == "text_display" )
     {

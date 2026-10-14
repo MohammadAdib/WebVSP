@@ -167,6 +167,7 @@ function Body({ w }: { w: MWidget }) {
       return <TreeBody w={w} />
     case 'text_display':
     case 'text_editor':
+    case 'terminal':
       return <TextBody w={w} />
     case 'progress':
       return <ProgressBody w={w} />

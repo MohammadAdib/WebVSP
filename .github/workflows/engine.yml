@@ -21,7 +21,8 @@ permissions:
 
 concurrency:
   group: engine-release
-  cancel-in-progress: true
+  # Queue rather than cancel: a cancelled run would lose its third-party library build.
+  cancel-in-progress: false
 
 jobs:
   engine:
@@ -62,13 +63,13 @@ jobs:
           cmake -A x64 -S Libraries -B build/libs-gui -DCMAKE_BUILD_TYPE=Release
           cmake --build build/libs-gui --config Release --parallel
 
-      - name: Build OpenVSP Python module (with GUI)
+      - name: Build OpenVSP Python module (with GUI) and VSPAERO
         run: |
           $py = (Get-Command python).Source
           cmake -A x64 -S src -B build/vsp-gui -DCMAKE_BUILD_TYPE=Release `
             "-DVSP_LIBRARY_PATH=${{ github.workspace }}/build/libs-gui" `
             -DVSP_NO_PYDOC=ON -DVSP_NO_HELP=ON -DVSP_NO_DOC=ON "-DPython3_EXECUTABLE=$py"
-          cmake --build build/vsp-gui --config Release --parallel --target pyvsp_g
+          cmake --build build/vsp-gui --config Release --parallel --target pyvsp_g vspaero vsploads vspviewer
           cmake --build build/vsp-gui --config Release --target copy_package
 
       - name: Build UI
@@ -84,6 +85,9 @@ jobs:
         run: |
           Expand-Archive dist-engine/TitanVSP-Engine-win64.zip -DestinationPath smoke
           $dir = Resolve-Path smoke/TitanVSP-Engine
+          foreach ($exe in 'vspaero.exe', 'vsploads.exe', 'vspviewer.exe') {
+            if (-not (Test-Path "$dir/python/Lib/site-packages/openvsp/$exe")) { throw "$exe is missing from the package" }
+          }
           $p = Start-Process -FilePath "$dir/python/python.exe" -ArgumentList '-m', 'vspweb', '--no-browser', '--port', '8790' `
             -WorkingDirectory $dir -PassThru -RedirectStandardError smoke/engine.err
           $r = $null

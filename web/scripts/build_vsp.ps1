@@ -22,7 +22,7 @@ cmake --build build/libs-gui --config Release --parallel
 cmake -A x64 -S src -B build/vsp-gui -DCMAKE_BUILD_TYPE=Release "-DVSP_LIBRARY_PATH=$root/build/libs-gui" `
     -DVSP_NO_PYDOC=ON -DVSP_NO_HELP=ON -DVSP_NO_DOC=ON `
     "-DSWIG_EXECUTABLE=$swig" "-DPython3_EXECUTABLE=$py"
-cmake --build build/vsp-gui --config Release --parallel --target pyvsp_g pyvsp
+cmake --build build/vsp-gui --config Release --parallel --target pyvsp_g pyvsp vspaero vsploads vspviewer
 cmake --build build/vsp-gui --config Release --target copy_package
 
 $pp = "$root\build\vsp-gui\python_pseudo"

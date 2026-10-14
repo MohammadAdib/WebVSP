@@ -54,7 +54,7 @@ export interface BrowserLine {
 }
 
 export type Kind =
-  | 'gl' | 'subwindow' | 'tabs' | 'scroll' | 'tree' | 'check_browser' | 'browser' | 'text_editor'
+  | 'gl' | 'subwindow' | 'tabs' | 'scroll' | 'tree' | 'check_browser' | 'browser' | 'text_editor' | 'terminal'
   | 'text_display' | 'table' | 'canvas' | 'input_choice' | 'menubar' | 'choice' | 'menubutton' | 'counter'
   | 'value_slider' | 'scrollbar' | 'slider' | 'roller' | 'dial' | 'progress' | 'output' | 'input' | 'check'
   | 'round' | 'light' | 'repeat' | 'button' | 'box' | 'group' | 'widget'
