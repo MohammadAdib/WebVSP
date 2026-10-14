@@ -17,24 +17,62 @@ export function boxStyle(box: number): 'none' | 'frame' | 'fill' {
   return 'fill'
 }
 
+// FLTK symbol labels ("@<", "@2>>", "@-2->"...). Glyphs are for the symbol pointing right
+// (keypad direction 6); a direction digit rotates it (see parseSymbol).
 const SYMBOLS: Record<string, string> = {
-  '<': '◀', '>': '▶', '<<': '«', '>>': '»', '->': '→', '<-': '←', '|<': '⏮', '>|': '⏭',
-  '||': '⏸', '[]': '■', 'circle': '●', 'square': '■', 'line': '—', 'menu': '☰', 'search': '⌕',
-  '+': '+', 'UpArrow': '▲', 'DnArrow': '▼', '2>': '▼', '8>': '▲', '4>': '◀', '6>': '▶',
-  '2<': '▲', '8<': '▼', '2->': '↓', '8->': '↑', 'reload': '↻', 'undo': '↶', 'redo': '↷',
+  '>': '\u25B6', '<': '\u25C0', '>>': '\u25B6\u25B6', '<<': '\u25C0\u25C0', '->': '\u2192', '<-': '\u2190',
+  '|>': '\u25B6|', '<|': '|\u25C0', '>|': '\u25B6|', '|<': '|\u25C0', '||': '\u2016', '[]': '\u25A0',
+  'circle': '\u25CF', 'square': '\u25A0', 'line': '\u2014', 'menu': '\u2630', 'search': '\u2315',
+  '+': '+', 'UpArrow': '\u25B2', 'DnArrow': '\u25BC', 'reload': '\u21BB', 'undo': '\u21B6', 'redo': '\u21B7',
+  'returnarrow': '\u21B5', 'arrow': '\u2192', 'filenew': '\u2610', 'fileopen': '\u25A1', 'filesave': '\u25A3',
 }
 
-/** Render an FLTK label: '&' shortcut markers removed, '@' symbol labels mapped to glyphs. */
+// Keypad direction digit -> counter-clockwise rotation in degrees (6 = no rotation).
+const DIRECTION: Record<string, number> = { '6': 0, '9': 45, '8': 90, '7': 135, '4': 180, '1': 225, '2': 270, '3': 315, '5': 0 }
+
+export interface FltkSymbol {
+  glyph: string
+  /** clockwise degrees, for CSS rotate() */
+  rotate: number
+  flipX: boolean
+  flipY: boolean
+}
+
+/**
+ * Parse an FLTK symbol label: "@" [#] [+|-digit size] [direction digit | 0nnn angle] [$ %] name.
+ * Returns null for ordinary text labels.
+ */
+export function parseSymbol(raw: string | undefined): FltkSymbol | null {
+  if (!raw || !raw.startsWith('@') || raw.startsWith('@@')) return null
+  let s = raw.slice(1)
+  if (s.startsWith('#')) s = s.slice(1)
+  if (/^[+-]\d/.test(s)) s = s.slice(2)
+  let ccw = 0
+  const angle = /^0(\d{3})/.exec(s)
+  if (angle) {
+    ccw = Number(angle[1])
+    s = s.slice(4)
+  } else if (/^\d(?=\D)/.test(s)) {
+    ccw = DIRECTION[s[0]] ?? 0
+    s = s.slice(1)
+  }
+  let flipX = false
+  let flipY = false
+  while (s[0] === '$' || s[0] === '%') {
+    if (s[0] === '$') flipX = true
+    else flipY = true
+    s = s.slice(1)
+  }
+  const glyph = SYMBOLS[s]
+  if (!glyph) return null
+  return { glyph, rotate: -ccw, flipX, flipY }
+}
+
+/** Render an FLTK label as text: '&' shortcut markers removed, symbols as their glyph. */
 export function labelText(raw: string | undefined): string {
   if (!raw) return ''
-  if (raw.startsWith('@') && !raw.startsWith('@@')) {
-    let sym = raw.slice(1).replace(/^[#+-]?\d?(?=\D)/, '')
-    if (SYMBOLS[sym]) return SYMBOLS[sym]
-    sym = sym.replace(/^\d/, (d) => d) // orientation digit kept for lookups like "8>"
-    if (SYMBOLS[sym]) return SYMBOLS[sym]
-    const bare = sym.replace(/^\d/, '')
-    return SYMBOLS[bare] ?? bare
-  }
+  const sym = parseSymbol(raw)
+  if (sym) return sym.glyph
   return raw.replace(/&&/g, '\u0000').replace(/&(?=.)/g, '').replace(/\u0000/g, '&').replace(/@@/g, '@')
 }
 

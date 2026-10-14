@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
-import { ALIGN, BUTTON_TYPE, boxStyle, browserCell, isGray, labelText, modsOf } from './fltk'
+import { ALIGN, BUTTON_TYPE, boxStyle, browserCell, isGray, labelText, modsOf, parseSymbol } from './fltk'
 import { GlBody, ImageBody } from './Custom'
 import { childKey, sendMirror, useMirror } from './store'
 import type { MenuItem, MWidget, TreeItem } from './types'
@@ -87,6 +87,18 @@ function insideLabel(w: MWidget) {
   return (w.align & ALIGN.INSIDE) !== 0 || (w.align & 15) === 0
 }
 
+/** A label's content: text, or an FLTK symbol drawn rotated/flipped like FLTK does. */
+function LabelContent({ label }: { label?: string }) {
+  const sym = parseSymbol(label)
+  if (!sym) return <>{labelText(label)}</>
+  const scale = `${sym.flipX ? -1 : 1}, ${sym.flipY ? -1 : 1}`
+  return (
+    <span className="m-sym" style={{ transform: `rotate(${sym.rotate}deg) scale(${scale})` }}>
+      {sym.glyph}
+    </span>
+  )
+}
+
 /** Inline label for widgets that draw their label inside (buttons, boxes). */
 function InnerLabel({ w, children }: { w: MWidget; children?: ReactNode }) {
   const a = w.align
@@ -97,7 +109,7 @@ function InnerLabel({ w, children }: { w: MWidget; children?: ReactNode }) {
       className="m-inner"
       style={{ justifyContent: justify, alignItems, whiteSpace: a & ALIGN.WRAP ? 'normal' : 'nowrap', ...fontStyle(w) }}
     >
-      {children ?? labelText(w.label)}
+      {children ?? <LabelContent label={w.label} />}
     </span>
   )
 }

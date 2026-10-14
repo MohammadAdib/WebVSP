@@ -388,6 +388,28 @@ const VIEW_BUTTONS: { view: ViewName; label: string; key: string }[] = [
   { view: 'leftiso', label: 'Iso', key: '' },
 ]
 
+/** Box whose back face shrinks into the distance: perspective projection. */
+function PerspIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round">
+      <rect x="1.5" y="6.5" width="10" height="10" />
+      <rect x="10.5" y="1.5" width="5" height="5" strokeOpacity="0.7" />
+      <path d="M1.5 6.5 L10.5 1.5 M11.5 6.5 L15.5 1.5 M11.5 16.5 L15.5 6.5" strokeOpacity="0.7" />
+    </svg>
+  )
+}
+
+/** Box with equal front and back faces and parallel edges: orthographic projection. */
+function OrthoIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round">
+      <rect x="1.5" y="6.5" width="10" height="10" />
+      <rect x="6.5" y="1.5" width="10" height="10" strokeOpacity="0.7" />
+      <path d="M1.5 6.5 L6.5 1.5 M11.5 6.5 L16.5 1.5 M11.5 16.5 L16.5 11.5 M1.5 16.5 L6.5 11.5" strokeOpacity="0.7" />
+    </svg>
+  )
+}
+
 function ViewTools() {
   const requestView = useStore((s) => s.requestView)
   const ortho = useStore((s) => s.ortho)
@@ -403,8 +425,13 @@ function ViewTools() {
         Fit
       </button>
       <span className="sep" />
-      <button className="proj" onClick={toggleOrtho} title="Switch orthographic / perspective (5)">
-        {ortho ? 'Ortho' : 'Persp'}
+      <button
+        className="proj"
+        onClick={toggleOrtho}
+        title={ortho ? 'Orthographic — click for perspective (5)' : 'Perspective — click for orthographic (5)'}
+        aria-label={ortho ? 'Orthographic view' : 'Perspective view'}
+      >
+        {ortho ? <OrthoIcon /> : <PerspIcon />}
       </button>
     </div>
   )
