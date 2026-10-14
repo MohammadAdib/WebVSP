@@ -1,4 +1,4 @@
-# One-click launcher for TitanVSP (the OpenVSP web GUI).
+# One-click launcher for WebVSP (the OpenVSP web GUI).
 #   1. Kills anything holding the GUI ports (old vsp-web servers, Vite dev servers).
 #   2. Rebuilds the frontend if any source file is newer than the last build.
 #   3. Starts the server in this window and opens a browser tab at http://localhost:8765.
@@ -11,7 +11,7 @@ $ErrorActionPreference = 'Stop'
 $web = $PSScriptRoot
 $port = 8765
 $url = "http://localhost:$port/"
-$Host.UI.RawUI.WindowTitle = "TitanVSP - $url"
+$Host.UI.RawUI.WindowTitle = "WebVSP - $url"
 
 function Stop-PortOwners([int[]]$ports) {
     foreach ($p in $ports) {
@@ -76,7 +76,7 @@ if ($stale) {
     Write-Host '   up to date'
 }
 
-Write-Host "== Starting TitanVSP at $url"
+Write-Host "== Starting WebVSP at $url"
 $exe = Join-Path $web '.venv\Scripts\vsp-web.exe'
 if (-not (Test-Path $exe)) { throw "Backend not installed. Run web\scripts\build_vsp.ps1 first." }
 $vspArgs = @('--port', $port)

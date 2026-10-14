@@ -71,7 +71,7 @@ export const useStore = create<State>((set, get) => ({
   viewRequest: { name: 'fit', n: 0 },
   ortho: (() => {
     try {
-      return localStorage.getItem('titanvsp-ortho') === '1'
+      return localStorage.getItem('webvsp-ortho') === '1'
     } catch {
       return false
     }
@@ -135,7 +135,7 @@ export const useStore = create<State>((set, get) => ({
   toggleOrtho: () => {
     const ortho = !get().ortho
     try {
-      localStorage.setItem('titanvsp-ortho', ortho ? '1' : '0')
+      localStorage.setItem('webvsp-ortho', ortho ? '1' : '0')
     } catch {
       /* storage unavailable */
     }

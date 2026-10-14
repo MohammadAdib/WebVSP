@@ -80,12 +80,12 @@ LOCAL_HOSTS = {"localhost", "127.0.0.1", "[::1]"}
 
 # Hosted copies of the web UI (e.g. GitHub Pages) allowed to drive this local engine.
 # Only list sites you control: an allowed site can open and save files on this machine.
-# Extra origins can be added with TITANVSP_WEB_ORIGINS (comma separated).
+# Extra origins can be added with WEBVSP_WEB_ORIGINS (comma separated).
 WEB_ORIGINS = ["https://mohammadadib.github.io"]
 
 
 def web_origins() -> list[str]:
-    extra = [o.strip().rstrip("/") for o in os.environ.get("TITANVSP_WEB_ORIGINS", "").split(",") if o.strip()]
+    extra = [o.strip().rstrip("/") for o in os.environ.get("WEBVSP_WEB_ORIGINS", "").split(",") if o.strip()]
     return WEB_ORIGINS + extra
 
 
@@ -105,7 +105,7 @@ def create_app(
     """Local-only app. Without a token, it still refuses requests whose Host isn't loopback
     (blocks DNS rebinding) or whose Origin isn't this server or a trusted hosted copy of the
     UI (blocks other websites). Hosted origins get CORS + Private Network Access headers."""
-    app = FastAPI(title="TitanVSP")
+    app = FastAPI(title="WebVSP")
     app.state.session = session or Session()
     app.state.token = token
     sockets: set[WebSocket] = set()

@@ -1,5 +1,5 @@
-# Builds the TitanVSP web UI (web/frontend) and deploys it to GitHub Pages.
-# The hosted UI connects to the TitanVSP engine running on the user's machine
+# Builds the WebVSP web UI (web/frontend) and deploys it to GitHub Pages.
+# The hosted UI connects to the WebVSP engine running on the user's machine
 # (web/vsp-web.cmd, http://localhost:8765). The engine only accepts requests from
 # trusted UI origins; see WEB_ORIGINS in web/backend/vspweb/app.py.
 name: Deploy web UI to GitHub Pages

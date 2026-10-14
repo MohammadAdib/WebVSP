@@ -32,7 +32,7 @@ function readConfig() {
 }
 
 /**
- * Where the TitanVSP engine (the local backend) is. When the engine serves this page
+ * Where the WebVSP engine (the local backend) is. When the engine serves this page
  * (or the Vite dev proxy does), it's the same origin. A hosted copy of the UI (e.g. GitHub
  * Pages) talks to the engine running on the user's own machine.
  */
@@ -42,14 +42,14 @@ function engineUrl(): string {
   const fromQuery = new URLSearchParams(window.location.search).get('engine')
   if (fromQuery) {
     try {
-      localStorage.setItem('titanvsp-engine', fromQuery)
+      localStorage.setItem('webvsp-engine', fromQuery)
     } catch {
       /* storage unavailable */
     }
     return fromQuery.replace(/\/$/, '')
   }
   try {
-    const stored = localStorage.getItem('titanvsp-engine')
+    const stored = localStorage.getItem('webvsp-engine')
     if (stored) return stored.replace(/\/$/, '')
   } catch {
     /* storage unavailable */

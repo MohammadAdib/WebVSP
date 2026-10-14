@@ -1,8 +1,8 @@
-# Packages the TitanVSP engine as a portable Windows zip: no install, no Python, no build
-# tools needed on the user's machine. Unzip and double-click "TitanVSP Engine.cmd".
+# Packages the WebVSP engine as a portable Windows zip: no install, no Python, no build
+# tools needed on the user's machine. Unzip and double-click "WebVSP Engine.cmd".
 #
 # Layout of the zip:
-#   TitanVSP Engine.cmd        launcher (starts the engine, opens the hosted UI)
+#   WebVSP Engine.cmd        launcher (starts the engine, opens the hosted UI)
 #   python\                    embedded CPython + site-packages (fastapi, uvicorn, numpy, openvsp)
 #   app\backend\vspweb\        the engine
 #   app\frontend\dist\         the UI, also served locally (works offline)
@@ -21,7 +21,7 @@ $web = Resolve-Path "$PSScriptRoot\.."
 $pseudo = Join-Path (Resolve-Path $BuildDir) 'python_pseudo'
 if (-not (Test-Path "$pseudo\openvsp\openvsp\_vsp_g.pyd")) { throw "No GUI build of the OpenVSP module in $pseudo" }
 
-$stage = Join-Path $OutDir 'TitanVSP-Engine'
+$stage = Join-Path $OutDir 'WebVSP-Engine'
 if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
 New-Item -ItemType Directory -Force $stage | Out-Null
 $py = Join-Path $stage 'python'
@@ -73,22 +73,22 @@ Copy-Item -Recurse $dist "$app\frontend\dist"
 Write-Host '== Launcher'
 @"
 @echo off
-rem TitanVSP engine: runs OpenVSP on this computer for the TitanVSP web app.
-rem Leave this window open while you use TitanVSP; close it to stop the engine.
-title TitanVSP Engine
+rem WebVSP engine: runs OpenVSP on this computer for the WebVSP web app.
+rem Leave this window open while you use WebVSP; close it to stop the engine.
+title WebVSP Engine
 cd /d "%~dp0"
 "%~dp0python\python.exe" -m vspweb --open $HostedUrl %*
 if errorlevel 1 pause
-"@ | Set-Content -Encoding ascii (Join-Path $stage 'TitanVSP Engine.cmd')
+"@ | Set-Content -Encoding ascii (Join-Path $stage 'WebVSP Engine.cmd')
 
 @"
-TitanVSP Engine
+WebVSP Engine
 ===============
 
-Runs OpenVSP on this computer for the TitanVSP web app ($HostedUrl).
+Runs OpenVSP on this computer for the WebVSP web app ($HostedUrl).
 
-1. Double-click "TitanVSP Engine.cmd". Leave its window open while you work.
-2. Your browser opens TitanVSP. If it asks to allow access to devices on your local
+1. Double-click "WebVSP Engine.cmd". Leave its window open while you work.
+2. Your browser opens WebVSP. If it asks to allow access to devices on your local
    network, choose Allow.
 
 Windows may warn that the file came from the internet: choose "More info" > "Run anyway".
@@ -97,7 +97,7 @@ The UI also works offline at http://localhost:8765 while the engine runs.
 "@ | Set-Content -Encoding ascii (Join-Path $stage 'README.txt')
 
 Write-Host '== Zip'
-$zip = Join-Path $OutDir 'TitanVSP-Engine-win64.zip'
+$zip = Join-Path $OutDir 'WebVSP-Engine-win64.zip'
 if (Test-Path $zip) { Remove-Item $zip -Force }
 Compress-Archive -Path $stage -DestinationPath $zip -CompressionLevel Optimal
 '{0} ({1:N0} MB)' -f $zip, ((Get-Item $zip).Length / 1MB)

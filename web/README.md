@@ -1,4 +1,4 @@
-# TitanVSP
+# WebVSP
 
 A browser-based GUI for OpenVSP. `vsp-web` starts a local Python backend (FastAPI) that
 runs OpenVSP's own FLTK GUI off screen and mirrors it to the browser: every screen, tab,
@@ -47,8 +47,8 @@ The UI is also published at **https://mohammadadib.github.io/WebVSP/** by
 OpenVSP still runs locally; the page connects to the engine at `http://localhost:8765`.
 
 **Users (no build tools needed):** download the portable engine,
-[TitanVSP-Engine-win64.zip](https://github.com/MohammadAdib/WebVSP/releases/latest/download/TitanVSP-Engine-win64.zip),
-unzip it, double-click `TitanVSP Engine.cmd`. The hosted page links to it until it connects.
+[WebVSP-Engine-win64.zip](https://github.com/MohammadAdib/WebVSP/releases/latest/download/WebVSP-Engine-win64.zip),
+unzip it, double-click `WebVSP Engine.cmd`. The hosted page links to it until it connects.
 
 The zip is built and published by `.github/workflows/engine.yml` (rolling `engine-latest`
 release) on every push to `main` that touches the engine, the UI or `src/`. Build it locally
@@ -58,7 +58,7 @@ Developers can also run the engine from a source build with `websp-web.cmd`.
 
 - The engine only accepts the hosted UI from origins listed in `WEB_ORIGINS`
   (`web/backend/vspweb/app.py`, default `https://mohammadadib.github.io`), plus any in
-  `TITANVSP_WEB_ORIGINS` (comma separated). Only add sites you control: an allowed site
+  `WEBVSP_WEB_ORIGINS` (comma separated). Only add sites you control: an allowed site
   can open and save files on the machine running the engine.
 - Browsers allow an https page to reach `http://localhost`; Chrome asks once for
   permission to access the local network.

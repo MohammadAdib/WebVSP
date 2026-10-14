@@ -89,8 +89,6 @@ input:focus, select:focus, textarea:focus, button:focus-visible {
 .topbar .brand { font-weight: 600; color: var(--fg-1); padding: 0 10px 0 4px; letter-spacing: 0.02em; }
 .topbar .hint { color: var(--fg-3); margin-left: 12px; }
 .topbar .spacer { flex: 1; }
-/* Same inset from the right edge as the title has from the left (6px bar padding + 4px). */
-.topbar .logo { height: 16px; width: auto; padding-right: 4px; user-select: none; }
 
 .main { position: relative; display: flex; min-height: 0; overflow: hidden; }
 .viewer { position: relative; flex: 1; min-width: 0; display: flex; }
@@ -110,10 +108,6 @@ input:focus, select:focus, textarea:focus, button:focus-visible {
 .side-panel.right .side-panel-inner { left: 0; }
 .dock-fade { animation: fade-in 180ms ease-out; }
 
-.viewer-logo {
-  position: absolute; left: 16px; bottom: 14px; height: 24px; width: auto;
-  opacity: 0.85; pointer-events: none; user-select: none; z-index: 2;
-}
 .viewer-fullscreen {
   position: absolute; top: 10px; right: 10px; z-index: 3;
   width: 30px; height: 30px; padding: 0; display: grid; place-items: center;

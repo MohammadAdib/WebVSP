@@ -41,7 +41,7 @@ def _open_in_running(port: int, path: str) -> None:
 
 
 def main(argv: list[str] | None = None) -> None:
-    ap = argparse.ArgumentParser(prog="vsp-web", description="TitanVSP web GUI")
+    ap = argparse.ArgumentParser(prog="vsp-web", description="WebVSP web GUI")
     ap.add_argument("file", nargs="?", help=".vsp3 file to open")
     ap.add_argument("--port", type=int, default=DEFAULT_PORT, help=f"port (default {DEFAULT_PORT})")
     ap.add_argument("--dev", action="store_true", help="dev mode: no browser, allow the Vite dev server origin")
@@ -57,7 +57,7 @@ def main(argv: list[str] | None = None) -> None:
     if _running_server(port):
         if path:
             _open_in_running(port, path)
-        print(f"TitanVSP already running: {url}", flush=True)
+        print(f"WebVSP already running: {url}", flush=True)
         if not args.no_browser:
             webbrowser.open(args.open or url)
         return
@@ -80,7 +80,7 @@ def main(argv: list[str] | None = None) -> None:
     @app.on_event("startup")
     async def _ready():
         print(f"VSPWEB_READY {port} {token or '-'}", flush=True)
-        print(f"TitanVSP: {url}", flush=True)
+        print(f"WebVSP: {url}", flush=True)
         if not args.dev and not args.no_browser:
             threading.Timer(0.3, webbrowser.open, args=(open_url,)).start()
 

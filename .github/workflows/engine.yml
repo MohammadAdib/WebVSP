@@ -1,7 +1,7 @@
-# Builds the TitanVSP engine (OpenVSP + its GUI mirror + the web backend) for Windows and
+# Builds the WebVSP engine (OpenVSP + its GUI mirror + the web backend) for Windows and
 # publishes it as a portable zip on a rolling release, so users can download and run it
 # without any build tools:
-#   https://github.com/MohammadAdib/WebVSP/releases/latest/download/TitanVSP-Engine-win64.zip
+#   https://github.com/MohammadAdib/WebVSP/releases/latest/download/WebVSP-Engine-win64.zip
 name: Build engine release
 
 on:
@@ -83,8 +83,8 @@ jobs:
 
       - name: Smoke test the package
         run: |
-          Expand-Archive dist-engine/TitanVSP-Engine-win64.zip -DestinationPath smoke
-          $dir = Resolve-Path smoke/TitanVSP-Engine
+          Expand-Archive dist-engine/WebVSP-Engine-win64.zip -DestinationPath smoke
+          $dir = Resolve-Path smoke/WebVSP-Engine
           foreach ($exe in 'vspaero.exe', 'vsploads.exe', 'vspviewer.exe') {
             if (-not (Test-Path "$dir/python/Lib/site-packages/openvsp/$exe")) { throw "$exe is missing from the package" }
           }
@@ -103,15 +103,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $notes = @"
-          Portable TitanVSP engine for Windows (64-bit), built from ${{ github.sha }}.
+          Portable WebVSP engine for Windows (64-bit), built from ${{ github.sha }}.
 
-          1. Download **TitanVSP-Engine-win64.zip** and unzip it.
-          2. Double-click **TitanVSP Engine.cmd** and leave its window open.
-          3. TitanVSP opens in your browser: https://mohammadadib.github.io/WebVSP/
+          1. Download **WebVSP-Engine-win64.zip** and unzip it.
+          2. Double-click **WebVSP Engine.cmd** and leave its window open.
+          3. WebVSP opens in your browser: https://mohammadadib.github.io/WebVSP/
 
           No installation needed. If Windows warns the file came from the internet, choose More info > Run anyway.
           "@
           gh release delete engine-latest --cleanup-tag --yes 2>$null
           $global:LASTEXITCODE = 0
-          gh release create engine-latest dist-engine/TitanVSP-Engine-win64.zip `
-            --title 'TitanVSP Engine (Windows)' --notes $notes --latest --target ${{ github.sha }}
+          gh release create engine-latest dist-engine/WebVSP-Engine-win64.zip `
+            --title 'WebVSP Engine (Windows)' --notes $notes --latest --target ${{ github.sha }}

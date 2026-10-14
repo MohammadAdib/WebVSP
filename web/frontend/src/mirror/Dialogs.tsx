@@ -24,7 +24,7 @@ export function DialogHost() {
   return (
     <div className="modal-backdrop">
       <div className="modal prompt" role="dialog">
-        <div className="modal-head">{dialog.kind === 'alert' ? 'Alert' : dialog.kind === 'message' ? 'Message' : 'TitanVSP'}</div>
+        <div className="modal-head">{dialog.kind === 'alert' ? 'Alert' : dialog.kind === 'message' ? 'Message' : 'WebVSP'}</div>
         <div className="prompt-msg">{dialog.msg}</div>
         <div className="modal-foot">
           <span style={{ flex: 1 }} />

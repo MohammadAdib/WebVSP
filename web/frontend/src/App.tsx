@@ -27,7 +27,7 @@ function StatusBar() {
         </span>
       )}
       <span className="spacer" />
-      <span>TitanVSP · {tree?.version?.replace(/^OpenVSP\s*/, 'VSP ')}</span>
+      <span>WebVSP · {tree?.version?.replace(/^OpenVSP\s*/, 'VSP ')}</span>
     </div>
   )
 }
@@ -76,7 +76,7 @@ export default function App() {
 
   useEffect(() => {
     const file = tree?.fileName?.split(/[\\/]/).pop() || 'Unnamed.vsp3'
-    setWindowTitle(`${file} — TitanVSP`)
+    setWindowTitle(`${file} — WebVSP`)
   }, [tree?.fileName])
 
   const all = Object.values(windows).sort((a, b) => a.id - b.id)
@@ -88,7 +88,7 @@ export default function App() {
   return (
     <div className="app">
       <div className="topbar">
-        <span className="brand">TitanVSP</span>
+        <span className="brand">WebVSP</span>
         <MirrorMenuBar />
         {!mirrorEnabled && connected && <span className="hint">GUI mirror unavailable (engine built without the GUI)</span>}
       </div>
