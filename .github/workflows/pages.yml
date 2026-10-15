@@ -46,7 +46,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p web/frontend/public/wasm
-          gh release download wasm-latest -R ${{ github.repository }} -p 'vsp.*' -D web/frontend/public/wasm --clobber             || echo "::warning::No wasm-latest release: the site has no in-browser engine"
+          gh release download wasm-latest -R ${{ github.repository }} -p 'vsp*.js' -p 'vsp*.wasm' -D web/frontend/public/wasm --clobber             || echo "::warning::No wasm-latest release: the site has no in-browser engine"
 
       - name: Build
         working-directory: web/frontend
