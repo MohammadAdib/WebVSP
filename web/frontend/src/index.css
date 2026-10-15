@@ -157,6 +157,7 @@ input:focus, select:focus, textarea:focus, button:focus-visible {
 }
 .statusbar .err { color: var(--danger); overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
 .statusbar .spacer { flex: 1; }
+.statusbar a { color: var(--fg-0); }
 
 /* ------------------------------------------------------------------ menus */
 

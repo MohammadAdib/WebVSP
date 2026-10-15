@@ -14,7 +14,7 @@ param(
     [string]$PythonExe = "$PSScriptRoot\..\.venv\Scripts\python.exe",
     [string]$EmbedVersion = '3.11.9',
     [string]$OutDir = "$PSScriptRoot\..\dist-engine",
-    [string]$HostedUrl = 'https://mohammadadib.github.io/WebVSP/'
+    [string]$HostedUrl = 'https://mohammadadib.github.io/WebVSP/?engine=local'
 )
 $ErrorActionPreference = 'Stop'
 $web = Resolve-Path "$PSScriptRoot\.."

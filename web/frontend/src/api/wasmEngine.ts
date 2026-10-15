@@ -31,7 +31,50 @@ interface VspModule {
   }
 }
 
-export const isWasmEngine = new URLSearchParams(window.location.search).get('engine') === 'wasm'
+const MODE_KEY = 'webvsp-engine-mode'
+
+/**
+ * Which engine this page uses:
+ *   - served by an engine (localhost): that engine, unless ?engine=wasm;
+ *   - hosted (e.g. GitHub Pages): the in-browser engine by default; ?engine=local uses the
+ *     engine on this computer instead, and the choice is remembered (?engine=wasm switches back);
+ *   - ?engine=http://localhost:PORT: that engine, for this tab only (File > New Window).
+ */
+function chooseWasm(): boolean {
+  const q = new URLSearchParams(window.location.search).get('engine')
+  const remember = (mode: string) => {
+    try {
+      localStorage.setItem(MODE_KEY, mode)
+    } catch {
+      /* storage unavailable */
+    }
+  }
+  if (q === 'wasm') {
+    remember('wasm')
+    return true
+  }
+  if (q === 'local') {
+    remember('local')
+    return false
+  }
+  if (q) return false // a specific engine address
+  if (['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname)) return false
+  try {
+    return localStorage.getItem(MODE_KEY) !== 'local'
+  } catch {
+    return true
+  }
+}
+
+export const isWasmEngine = chooseWasm()
+
+/** This page using the other engine (the switch in the status bar). */
+export function otherEngineUrl(): string {
+  const url = new URL(window.location.href)
+  url.searchParams.set('engine', isWasmEngine ? 'local' : 'wasm')
+  url.hash = ''
+  return url.toString()
+}
 
 export class WasmEngineError extends Error {
   status: number

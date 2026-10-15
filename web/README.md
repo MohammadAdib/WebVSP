@@ -44,11 +44,16 @@ Close the console window to stop it.
 
 The UI is also published at **https://mohammadadib.github.io/WebVSP/** by
 `.github/workflows/pages.yml` on every push to `main` that touches `web/frontend`.
-OpenVSP still runs locally; the page connects to the engine at `http://localhost:8765`.
+By default OpenVSP runs in the browser tab (the in-browser engine, below). With the local
+engine instead, **https://mohammadadib.github.io/WebVSP/?engine=local**, OpenVSP runs on the
+user's computer and adds VSPAERO and STEP export; the page connects to it at
+`http://localhost:8765`. The choice is remembered (`?engine=wasm` switches back), and the
+status bar links to the other one.
 
-**Users (no build tools needed):** download the portable engine,
+**Local engine (no build tools needed):** download the portable engine,
 [WebVSP-Engine-win64.zip](https://github.com/MohammadAdib/WebVSP/releases/latest/download/WebVSP-Engine-win64.zip),
-unzip it, double-click `WebVSP Engine.cmd`. The hosted page links to it until it connects.
+unzip it, double-click `WebVSP Engine.cmd` (it opens the `?engine=local` page). The page
+links to the download until the engine connects.
 
 The zip is built and published by `.github/workflows/engine.yml` (rolling `engine-latest`
 release) on every push to `main` that touches the engine, the UI or `src/`. Build it locally
@@ -64,11 +69,12 @@ Developers can also run the engine from a source build with `websp-web.cmd`.
   permission to access the local network.
 - Point the page at another port with `?engine=http://localhost:PORT` (for that tab).
 
-## In-browser engine (experimental)
+## In-browser engine
 
-`?engine=wasm` runs OpenVSP itself in the browser tab (compiled to WebAssembly), with no engine
-to install; no VSPAERO or STEP export there. See [wasm/README.md](wasm/README.md) to build and
-try it locally.
+The hosted page's default: OpenVSP itself runs in the browser tab (compiled to WebAssembly),
+with no engine to install; no VSPAERO or STEP export there. Pages served by an engine
+(`localhost:8765`) use that engine unless opened with `?engine=wasm`. See
+[wasm/README.md](wasm/README.md) to build and try it locally.
 
 ## Develop
 

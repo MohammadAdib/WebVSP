@@ -46,8 +46,9 @@ function engineUrl(): string {
   } catch {
     /* storage unavailable */
   }
+  // ?engine=local / wasm pick the kind of engine (see wasmEngine.ts); anything else is an address.
   const fromQuery = new URLSearchParams(window.location.search).get('engine')
-  return fromQuery ? fromQuery.replace(/\/$/, '') : DEFAULT_ENGINE
+  return fromQuery && /^https?:/.test(fromQuery) ? fromQuery.replace(/\/$/, '') : DEFAULT_ENGINE
 }
 
 export const DEFAULT_ENGINE = 'http://localhost:8765'

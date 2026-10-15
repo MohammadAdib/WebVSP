@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { connectEvents } from './api/client'
-import { isWasmEngine } from './api/wasmEngine'
+import { connectEvents, isHostedUI } from './api/client'
+import { isWasmEngine, otherEngineUrl } from './api/wasmEngine'
 import type { ServerEvent } from './api/types'
 import { EngineGate } from './EngineGate'
 import { DialogHost } from './mirror/Dialogs'
@@ -29,8 +29,26 @@ function StatusBar() {
         </span>
       )}
       <span className="spacer" />
+      <EngineSwitch />
       <span>WebVSP · {tree?.version?.replace(/^OpenVSP\s*/, 'VSP ')}</span>
     </div>
+  )
+}
+
+/** Which engine runs OpenVSP, and a link to the other one (where there's a choice). */
+function EngineSwitch() {
+  if (isWasmEngine) {
+    return (
+      <span title="OpenVSP runs in this browser tab. The local engine adds VSPAERO and STEP export.">
+        In-browser engine · <a href={otherEngineUrl()}>Use local engine</a>
+      </span>
+    )
+  }
+  if (!isHostedUI) return null
+  return (
+    <span title="OpenVSP runs on this computer (the downloaded WebVSP engine).">
+      Local engine · <a href={otherEngineUrl()}>Run in browser instead</a>
+    </span>
   )
 }
 
