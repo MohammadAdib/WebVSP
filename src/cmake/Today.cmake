@@ -1,12 +1,5 @@
 MACRO (TODAY RESULT)
-    IF (WIN32)
-        EXECUTE_PROCESS(COMMAND "cmd" " /C date /T" OUTPUT_VARIABLE ${RESULT})
-        string(REGEX REPLACE "(..)/(..)/..(..).*" "\\2/\\1/\\3" ${RESULT} ${${RESULT}})
-    ELSEIF(UNIX)
-        EXECUTE_PROCESS(COMMAND "date" "+%d/%m/%Y" OUTPUT_VARIABLE ${RESULT})
-        string(REGEX REPLACE "(..)/(..)/..(..).*" "\\2/\\1/\\3" ${RESULT} ${${RESULT}})
-    ELSE (WIN32)
-        MESSAGE(SEND_ERROR "date not implemented")
-        SET(${RESULT} 000000)
-    ENDIF (WIN32)
+    # Build date as mm/dd/yy. Built into CMake, so it also works when cross-compiling
+    # (e.g. for WebAssembly), where the host's date command may not match the target.
+    string(TIMESTAMP ${RESULT} "%m/%d/%y")
 ENDMACRO (TODAY)

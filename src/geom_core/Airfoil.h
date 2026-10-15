@@ -239,7 +239,9 @@ public:
 //==== Fortran Common Block For 6-Series Airfoils =====//
 extern "C"
 {
-    void sixseries_( const int* ser, const float* t, const float* cli, const float* a );
+    // Returns int, as defined (f2c Subroutine): the return type must match where calls are
+    // type-checked at link time (WebAssembly traps on the mismatch).
+    int sixseries_( const int* ser, const float* t, const float* cli, const float* a );
 }
 
 extern "C"

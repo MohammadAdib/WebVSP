@@ -17,6 +17,8 @@
 #pragma warning( disable : 4018 )
 #pragma warning( disable : 4800 )
 
+// VSP_NO_STEP builds without STEPcode (e.g. WebAssembly): STEP export is unavailable.
+#ifndef VSP_NO_STEP
 #include <STEPfile.h>
 #include <sdai.h>
 #include <STEPattribute.h>
@@ -27,6 +29,12 @@
 #include <SdaiHeaderSchema.h>
 #include <schema.h>
 #include "SdaiCONFIG_CONTROL_DESIGN.h"
+#else
+// The STEPcode headers bring these in; code including this header relies on them.
+#include <algorithm>
+#include <vector>
+using namespace std;
+#endif
 #include <memory>
 #include <string>
 
@@ -50,6 +58,7 @@ typedef eli::geom::surface::piecewise<eli::geom::surface::bezier, double, 3> pie
 
 class VspSurf;
 
+#ifndef VSP_NO_STEP
 class STEPutil
 {
 
@@ -138,6 +147,7 @@ protected:
 
 
 };
+#endif // VSP_NO_STEP
 
 class IGESutil
 {

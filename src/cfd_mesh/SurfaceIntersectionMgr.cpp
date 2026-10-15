@@ -1995,6 +1995,9 @@ void SurfaceIntersectionSingleton::WriteSTEPFile( const string& filename, int le
                                                   bool merge_pnts, bool label_id, bool label_surf_num, bool label_split_num,
                                                   bool label_name, const string &label_delim, int representation )
 {
+#ifdef VSP_NO_STEP
+    printf( "ERROR: STEP export is not available in this build\n" );
+#else
     STEPutil step( len_unit, tol );
 
     BuildNURBSSurfMap();
@@ -2140,6 +2143,7 @@ void SurfaceIntersectionSingleton::WriteSTEPFile( const string& filename, int le
     }
 
     step.WriteFile( filename );
+#endif // VSP_NO_STEP
 }
 
 void SurfaceIntersectionSingleton::BuildNURBSSurfMap()

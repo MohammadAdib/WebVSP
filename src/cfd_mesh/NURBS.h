@@ -54,9 +54,11 @@ public:
     // Run the CAD curve the other way
     void ReverseCAD();
 
+#ifndef VSP_NO_STEP
     // Write the NURBS curve as a SdaiEdge_curve running between the given vertices
     SdaiEdge_curve* WriteSTEPEdge( STEPutil* step, SdaiVertex_point* start_vert, SdaiVertex_point* end_vert,
                                    const string& label = "", bool mergepnts = false ) const;
+#endif
 
     // Defines m_IGES_Edge by as an IGES type 126 entity
     void WriteIGESEdge( IGESutil* iges, const string& label = "" );
@@ -178,12 +180,14 @@ public:
     void WriteIGESCutout( IGESutil* iges, DLL_IGES_ENTITY_128& parent_surf, DLL_IGES_ENTITY_144& trimmed_surf, int surf_id,
                           const piecewise_surface_type &surf, bool flip_flag, const string& label = "" );
 
+#ifndef VSP_NO_STEP
     // Write the NURBS loop to STEP, taking its edges from the file's topology
     SdaiEdge_loop* WriteSTEPLoop( STEPutil* step, STEP_Topology* topo, bool mergepts = false );
 
     // Write the NURBS loop to STEP as a bound of a face on the given surface
     SdaiFace_bound* WriteSTEPBound( STEPutil* step, STEP_Topology* topo, int surf_id, bool cutout_flag,
                                     bool flip_flag, bool mergepts = false );
+#endif
 
     // Based on all control points for theloop, get the bounding box
     BndBox GetBndBox();
@@ -260,6 +264,7 @@ public:
     // in the process. 
     void WriteIGESLoops( IGESutil* iges, DLL_IGES_ENTITY_128& parent_surf, const string& label = "" );
 
+#ifndef VSP_NO_STEP
     // Write the NURBS surface to STEP and optionally merge points that are close together
     SdaiSurface* WriteSTEPSurf( STEPutil* step, const string& label = "", bool mergepts = false );
 
@@ -268,6 +273,7 @@ public:
     // Write the faces of this surface, and in face_ids the number topo gave each
     vector < SdaiAdvanced_face* > WriteSTEPLoops( STEPutil* step, STEP_Topology* topo, SdaiSurface* surf, vector < int > &face_ids,
                                                   const string& label = "", bool mergepts = false );
+#endif
 
     // Identifies the internal and external NURBS curves on the surface, organizes
     // them into connected chains, and forms loops.  
@@ -326,6 +332,7 @@ protected:
 
 };
 
+#ifndef VSP_NO_STEP
 // The vertices and edges of a trimmed STEP file.  Each curve is written once, as one edge,
 // however many faces it bounds.  Curve ends that some loop walks straight between share a
 // vertex, so the faces meet in the file as they do in the model, whatever small gap the
@@ -406,5 +413,6 @@ protected:
 
     double m_MaxEndGap;
 };
+#endif // VSP_NO_STEP
 
 #endif

@@ -303,11 +303,13 @@ public:
     void TrimV( double v, bool before );
     void TrimClosedV( double vstart, double vend );
 
+#ifndef VSP_NO_STEP
     void ToSTEP_BSpline_Quilt( STEPutil *step, vector < SdaiB_spline_surface_with_knots * > &surfs,
                                const string &labelprefix, bool splitsurf, bool mergepts, bool tocubic, double tol,
                                bool trimte, bool mergeLETE, const vector < double > &USplit,
                                const vector < double > &WSplit, bool labelSplitNo, bool labelAirfoilPart,
                                const string &delim ) const;
+#endif
 
     void ToIGES( IGESutil *iges, bool splitsurf, bool tocubic, double tol, bool trimTE, bool mergeLETE,
                  const vector < double > &USplit, const vector < double > &WSplit, const string &labelprefix,

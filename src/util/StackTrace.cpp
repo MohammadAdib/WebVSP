@@ -91,6 +91,26 @@ string GetStackTrace( int skip )
 }
 
 // =============================================================================
+// WebAssembly (Emscripten) — no execinfo; the runtime can report the JS/wasm stack.
+// =============================================================================
+#elif defined( __EMSCRIPTEN__ )
+
+#include <emscripten.h>
+#include <vector>
+
+string GetStackTrace( int skip )
+{
+    int len = emscripten_get_callstack( EM_LOG_C_STACK, nullptr, 0 );
+    if ( len <= 0 )
+    {
+        return string();
+    }
+    std::vector< char > buf( len );
+    emscripten_get_callstack( EM_LOG_C_STACK, buf.data(), len );
+    return string( buf.data() );
+}
+
+// =============================================================================
 // POSIX — macOS (Clang, Intel + ARM64) and Linux (GCC)
 // =============================================================================
 #else

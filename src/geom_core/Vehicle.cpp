@@ -5416,6 +5416,9 @@ void Vehicle::WriteSTEPFile( const string & file_name, int write_set, bool useMo
 void Vehicle::WriteSTEPFile( const string & file_name, int write_set, bool labelID,
                              bool labelName, bool labelSurfNo, bool labelSplitNo, bool labelAirfoilPart, int delimType )
 {
+#ifdef VSP_NO_STEP
+    printf( "ERROR: STEP export is not available in this build\n" );
+#else
     string delim = StringUtil::get_delim( delimType );
 
     STEPutil step( m_STEPLenUnit(), m_STEPTol() );
@@ -5500,10 +5503,14 @@ void Vehicle::WriteSTEPFile( const string & file_name, int write_set, bool label
     }
 
     step.WriteFile( file_name );
+#endif // VSP_NO_STEP
 }
 
 void Vehicle::WriteStructureSTEPFile( const string & file_name )
 {
+#ifdef VSP_NO_STEP
+    printf( "ERROR: STEP export is not available in this build\n" );
+#else
     FeaStructure* fea_struct = StructureMgr.GetFeaStruct( m_STEPStructureExportIndex() );
     if ( !fea_struct )
     {
@@ -5568,6 +5575,7 @@ void Vehicle::WriteStructureSTEPFile( const string & file_name )
     }
 
     step.WriteFile( file_name );
+#endif // VSP_NO_STEP
 }
 
 void Vehicle::WriteIGESFile( const string & file_name, int write_set, bool useMode, const string &modeID )
