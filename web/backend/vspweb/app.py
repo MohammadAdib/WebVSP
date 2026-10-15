@@ -13,6 +13,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from .instances import Instances
 from .mirror import Mirror
 from .session import Session
 from .vsp_worker import VspError
@@ -120,6 +121,7 @@ def create_app(
     mirror = Mirror(broadcast, lambda: bool(sockets))
     app.state.mirror = mirror
     app.state.has_clients = lambda: bool(sockets)
+    instances = Instances()
 
     @app.on_event("startup")
     async def _start_watchers() -> None:
@@ -183,6 +185,16 @@ def create_app(
     @app.get("/api/ping")
     async def ping():
         return {"app": "vspweb", "clients": len(sockets)}
+
+    # -------------------------------------------------------------- windows
+
+    @app.post("/api/instances")
+    async def new_instance():
+        """Start another engine (a separate model) for a new window; returns its port."""
+        try:
+            return {"port": await instances.spawn()}
+        except RuntimeError as exc:
+            raise HTTPException(500, str(exc)) from exc
 
     @app.get("/api/model")
     async def model():

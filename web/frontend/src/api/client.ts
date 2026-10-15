@@ -39,22 +39,14 @@ function readConfig() {
 function engineUrl(): string {
   const local = ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname)
   if (local) return ''
-  const fromQuery = new URLSearchParams(window.location.search).get('engine')
-  if (fromQuery) {
-    try {
-      localStorage.setItem('webvsp-engine', fromQuery)
-    } catch {
-      /* storage unavailable */
-    }
-    return fromQuery.replace(/\/$/, '')
-  }
+  // Per tab, not remembered: each window (File > New Window) has an engine of its own.
   try {
-    const stored = localStorage.getItem('webvsp-engine')
-    if (stored) return stored.replace(/\/$/, '')
+    localStorage.removeItem('webvsp-engine') // older versions remembered it for every tab
   } catch {
     /* storage unavailable */
   }
-  return DEFAULT_ENGINE
+  const fromQuery = new URLSearchParams(window.location.search).get('engine')
+  return fromQuery ? fromQuery.replace(/\/$/, '') : DEFAULT_ENGINE
 }
 
 export const DEFAULT_ENGINE = 'http://localhost:8765'
@@ -133,6 +125,7 @@ export const api = {
   insertFile: (path: string, parent?: string | null) => request('POST', '/file/insert', { path, parent: parent ?? null }),
   saveFile: (path?: string) => request<{ path: string }>('POST', '/file/save', { path: path ?? null }),
   pick: (id: string) => request('POST', '/pick', { id }),
+  newInstance: () => request<{ port: number }>('POST', '/instances'),
   listDir: (path?: string) => request<DirListing>('GET', '/fs' + (path ? `?path=${enc(path)}` : '')),
 }
 

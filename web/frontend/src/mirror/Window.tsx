@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { openNewWindow } from '../newWindow'
 import { useStore, type ViewName } from '../store'
 import { MENU, labelText, shortcutOf, shortcutText } from './fltk'
 import { sendMirror, useMirror } from './store'
@@ -94,8 +95,13 @@ function buildMenu(items: MenuItem[]): MenuNode[] {
     stack.length = item.d + 1
     if (item.flags & MENU.SUBMENU) stack.push(node.children)
   }
+  // Ours, not OpenVSP's: another window with a model of its own (a separate engine).
+  const file = root.find((n) => labelText(n.item.label) === 'File')
+  file?.children.unshift({ item: { i: NEW_WINDOW, label: 'New Window', d: 1, flags: MENU.DIVIDER, sc: 0 }, children: [] })
   return root
 }
+
+const NEW_WINDOW = -1
 
 // The 3D view is ours, so camera items in the View menu drive our viewport.
 const VIEW_ITEMS: Record<string, ViewName> = {
@@ -106,6 +112,10 @@ const VIEW_ITEMS: Record<string, ViewName> = {
 
 function activate(bar: MWidget, node: MenuNode, path: string[]) {
   const label = labelText(node.item.label)
+  if (node.item.i === NEW_WINDOW) {
+    void openNewWindow()
+    return
+  }
   if (path[0] === 'View' && VIEW_ITEMS[label]) {
     useStore.getState().requestView(VIEW_ITEMS[label])
     return

@@ -10,11 +10,13 @@ Prints one machine-readable line once listening, for wrappers (e.g. a Tauri shel
 from __future__ import annotations
 
 import argparse
+import asyncio
 import json
 import os
 import secrets
 import sys
 import threading
+import time
 import urllib.request
 import webbrowser
 
@@ -55,6 +57,8 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--no-browser", action="store_true", help="don't open a browser")
     ap.add_argument("--token", action="store_true", help="also require a random session token (for desktop shells)")
     ap.add_argument("--open", metavar="URL", help="page to open instead of the local UI (e.g. the hosted UI)")
+    ap.add_argument("--exit-when-idle", type=float, metavar="SECONDS",
+                    help="exit once no tab has been connected for this long (engines for extra windows)")
     args = ap.parse_args(argv)
 
     port = args.port
@@ -89,6 +93,8 @@ def main(argv: list[str] | None = None) -> None:
     async def _ready():
         print(f"VSPWEB_READY {port} {token or '-'}", flush=True)
         print(f"WebVSP: {url}", flush=True)
+        if args.exit_when_idle:
+            asyncio.create_task(_exit_when_idle(app.state.has_clients, args.exit_when_idle))
         if args.dev or args.no_browser:
             return
         if args.open:
@@ -103,6 +109,20 @@ def main(argv: list[str] | None = None) -> None:
             threading.Timer(0.3, webbrowser.open, args=(open_url,)).start()
 
     uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
+
+
+async def _exit_when_idle(has_clients, idle_s: float) -> None:
+    # Before the first tab connects, allow extra time for it to load.
+    last_seen = time.monotonic() + max(idle_s, 60.0)
+    while True:
+        await asyncio.sleep(2.0)
+        now = time.monotonic()
+        if has_clients():
+            last_seen = now
+        elif now - last_seen > idle_s:
+            print("WebVSP: no tab connected; this window's engine is exiting", flush=True)
+            # The OpenVSP thread can't be stopped cleanly; nothing else is left to do.
+            os._exit(0)
 
 
 def _open(path: str) -> None:
