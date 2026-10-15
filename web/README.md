@@ -44,15 +44,15 @@ Close the console window to stop it.
 
 The UI is also published at **https://mohammadadib.github.io/WebVSP/** by
 `.github/workflows/pages.yml` on every push to `main` that touches `web/frontend`.
-By default OpenVSP runs in the browser tab (the in-browser engine, below). With the local
-engine instead, **https://mohammadadib.github.io/WebVSP/?engine=local**, OpenVSP runs on the
-user's computer and adds VSPAERO and STEP export; the page connects to it at
-`http://localhost:8765`. The choice is remembered (`?engine=wasm` switches back), and the
-status bar links to the other one.
+There, OpenVSP runs in the browser tab (the in-browser engine, below). At
+**https://mohammadadib.github.io/WebVSP/local/** it uses the local engine instead: OpenVSP
+runs on the user's computer, with VSPAERO and STEP export, and the page connects to it at
+`http://localhost:8765`. The address alone decides (nothing is remembered); the status bar
+links to the other one. (The build writes `local/index.html`, see `vite.config.ts`.)
 
 **Local engine (no build tools needed):** download the portable engine,
 [WebVSP-Engine-win64.zip](https://github.com/MohammadAdib/WebVSP/releases/latest/download/WebVSP-Engine-win64.zip),
-unzip it, double-click `WebVSP Engine.cmd` (it opens the `?engine=local` page). The page
+unzip it, double-click `WebVSP Engine.cmd` (it opens the `/local/` page). The page
 links to the download until the engine connects.
 
 The zip is built and published by `.github/workflows/engine.yml` (rolling `engine-latest`

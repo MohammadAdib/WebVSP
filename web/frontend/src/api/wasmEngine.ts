@@ -31,48 +31,38 @@ interface VspModule {
   }
 }
 
-const MODE_KEY = 'webvsp-engine-mode'
+/** The page's address under /local/ (the local-engine copy of the page, see vite.config.ts). */
+const LOCAL_PATH = /\/local\/?$/
 
 /**
- * Which engine this page uses:
+ * Which engine this page uses, from its address alone:
+ *   - hosted (e.g. GitHub Pages): the in-browser engine; under /local/ (or with ?engine=local)
+ *     the engine on this computer instead;
  *   - served by an engine (localhost): that engine, unless ?engine=wasm;
- *   - hosted (e.g. GitHub Pages): the in-browser engine by default; ?engine=local uses the
- *     engine on this computer instead, and the choice is remembered (?engine=wasm switches back);
- *   - ?engine=http://localhost:PORT: that engine, for this tab only (File > New Window).
+ *   - ?engine=http://localhost:PORT: that engine (File > New Window).
  */
 function chooseWasm(): boolean {
-  const q = new URLSearchParams(window.location.search).get('engine')
-  const remember = (mode: string) => {
-    try {
-      localStorage.setItem(MODE_KEY, mode)
-    } catch {
-      /* storage unavailable */
-    }
-  }
-  if (q === 'wasm') {
-    remember('wasm')
-    return true
-  }
-  if (q === 'local') {
-    remember('local')
-    return false
-  }
-  if (q) return false // a specific engine address
-  if (['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname)) return false
   try {
-    return localStorage.getItem(MODE_KEY) !== 'local'
+    localStorage.removeItem('webvsp-engine-mode') // an earlier version remembered the choice
   } catch {
-    return true
+    /* storage unavailable */
   }
+  const q = new URLSearchParams(window.location.search).get('engine')
+  if (q === 'wasm') return true
+  if (q) return false // ?engine=local, or a specific engine address
+  if (LOCAL_PATH.test(window.location.pathname)) return false
+  return !['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname)
 }
 
 export const isWasmEngine = chooseWasm()
 
-/** This page using the other engine (the switch in the status bar). */
+/** This page with the other engine (the switch in the status bar): / <-> /local/. */
 export function otherEngineUrl(): string {
   const url = new URL(window.location.href)
-  url.searchParams.set('engine', isWasmEngine ? 'local' : 'wasm')
+  url.searchParams.delete('engine')
   url.hash = ''
+  const base = url.pathname.replace(LOCAL_PATH, '/').replace(/[^/]*$/, '')
+  url.pathname = isWasmEngine ? base + 'local/' : base
   return url.toString()
 }
 
