@@ -7,7 +7,8 @@
 //
 // Output messages (JSON objects, batched into an array by TakeOutput):
 //   {"t":"diff","full":b,"windows":[win...],"closed":[wid...],"widgets":[w...],"removed":[id...]}
-//     win:  {"id","role","screen","title","w","h"}        role: main|browser|geom|screen|dialog
+//     win:  {"id","role","screen","title","w","h","dw","dh"}  role: main|browser|geom|screen|dialog
+//           dw/dh: the size the window was designed at (before any client resized it)
 //     w:    {"id","win","p","o","k",...}                   p: parent id (0 = window), o: child index,
 //           k: kind, plus kind-specific fields (see SerializeWidget).
 //   {"t":"dialog","seq":n,"kind":"choice|alert|message|file",...}
@@ -1000,10 +1001,13 @@ void Diff()
         }
         wr.seen = true;
         WinInfo wi = InfoFor( win );
+        // Windows outlive clients and keep a client's resize, so remember the designed size.
+        static std::map< Fl_Window*, std::pair< int, int > > design;
+        auto ds = design.emplace( win, std::make_pair( win->w(), win->h() ) ).first->second;
         Obj o;
         o.Int( "id", wr.id ).Str( "role", wi.role ).Str( "screen", wi.screen ).Int( "si", wi.screen_index )
          .Str( "title", win->label() ? win->label() : "" ).Int( "w", win->w() ).Int( "h", win->h() )
-         .Int( "x", win->x() ).Int( "y", win->y() )
+         .Int( "x", win->x() ).Int( "y", win->y() ).Int( "dw", ds.first ).Int( "dh", ds.second )
          .Bool( "modal", win->modal() != 0 );
         string json = o.Done();
         if ( wr.json != json || s.want_full )

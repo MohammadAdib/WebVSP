@@ -13,6 +13,9 @@ export interface MWindow {
   /** Where VSP placed the window (screen coordinates) */
   x: number
   y: number
+  /** The size the window was designed at (before any client resized it) */
+  dw?: number
+  dh?: number
   modal: boolean
   /** Set by the client while the window animates out after the GUI closed it */
   closing?: boolean

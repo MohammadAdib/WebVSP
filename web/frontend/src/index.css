@@ -107,6 +107,16 @@ input:focus, select:focus, textarea:focus, button:focus-visible {
 .side-panel.left .side-panel-inner { right: 0; }
 .side-panel.right .side-panel-inner { left: 0; }
 .dock-fade { animation: fade-in 180ms ease-out; }
+/* Drag the inner edge to resize; no slide animation while dragging. */
+.side-panel.resizing { transition: none; }
+.side-panel-handle {
+  position: absolute; top: 0; bottom: 0; width: 6px; z-index: 4;
+  cursor: col-resize; touch-action: none; transition: background 120ms;
+}
+.side-panel.left .side-panel-handle { right: -1px; }
+.side-panel.right .side-panel-handle { left: -1px; }
+.side-panel-handle:hover, .side-panel.resizing .side-panel-handle { background: var(--line-strong); }
+.side-panel.resizing, .side-panel.resizing * { user-select: none; }
 
 .viewer-fullscreen {
   position: absolute; top: 10px; right: 10px; z-index: 3;
