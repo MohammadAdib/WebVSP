@@ -7,7 +7,8 @@ Binary mesh format (little-endian, all fields 4-byte aligned):
     char[4]  magic "VSPM"
     uint32   number of surfaces
     per surface:
-        uint32  nu, nw            grid dimensions (vertex k = i*nw + j)
+        uint32  nu, nw            grid dimensions (vertex k = i*nw + j); nw = 0 means a plain
+                                  triangle list of nu vertices (Mesh Geoms have no u/w grid)
         uint32  nidx              number of triangle indices
         float32 positions[nu*nw*3]
         float32 normals[nu*nw*3]
@@ -58,10 +59,29 @@ def surface_mesh(geom_id: str, surf: int):
     return nu, nw, pts.astype(np.float32), nrm.astype(np.float32), tris.astype(np.uint32).ravel()
 
 
+def triangle_mesh(geom_id: str):
+    """A Mesh Geom's triangles as drawn, with flat (per-triangle) normals."""
+    flat = vsp.GetMeshGeomTriPnts(geom_id)
+    if len(flat) < 9:
+        return None
+    pts = np.asarray(flat, dtype=np.float64).reshape(-1, 3)
+    p0, p1, p2 = pts[0::3], pts[1::3], pts[2::3]
+    n = np.cross(p1 - p0, p2 - p0)
+    length = np.linalg.norm(n, axis=1, keepdims=True)
+    n = np.divide(n, length, out=np.zeros_like(n), where=length > 0)
+    nrm = np.repeat(n, 3, axis=0)
+    idx = np.arange(len(pts), dtype=np.uint32)
+    return len(pts), 0, pts.astype(np.float32), nrm.astype(np.float32), idx
+
+
 def geom_mesh_bytes(geom_id: str) -> bytes:
     surfaces = []
     for s in range(vsp.GetTotalNumSurfs(geom_id)):
         m = surface_mesh(geom_id, s)
+        if m is not None:
+            surfaces.append(m)
+    if not surfaces and hasattr(vsp, "GetMeshGeomTriPnts") and vsp.GetGeomTypeName(geom_id) == "Mesh":
+        m = triangle_mesh(geom_id)
         if m is not None:
             surfaces.append(m)
     parts = [b"VSPM", struct.pack("<I", len(surfaces))]

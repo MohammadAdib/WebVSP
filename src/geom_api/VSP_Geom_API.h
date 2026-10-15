@@ -15126,6 +15126,17 @@ extern int GetTotalNumSurfs( const std::string& geom_id );
     \ingroup Geom
 */
 /*!
+    Get the triangles a Mesh Geom draws (it has no parametric surfaces to tessellate).
+    \param [in] geom_id string Mesh Geom ID
+    \return vector<double> x, y, z of each triangle corner, three corners per triangle; empty if the mesh is hidden
+*/
+
+extern std::vector < double > GetMeshGeomTriPnts( const std::string& geom_id );
+
+/*!
+    \ingroup Geom
+*/
+/*!
     Get the VSP surface type of the specified Geom
     \forcpponly
     \code{.cpp}

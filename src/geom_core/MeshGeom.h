@@ -227,6 +227,10 @@ public:
         return m_SingleTagMap;
     }
 
+    // The triangles as drawn (empty when the mesh is hidden): x, y, z of each corner, three
+    // corners per triangle, placed by the Geom's transform.
+    vector< double > GetDrawTriPnts();
+
 protected:
 
     virtual void UpdateSurf()

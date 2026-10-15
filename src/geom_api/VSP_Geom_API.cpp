@@ -5153,6 +5153,20 @@ int GetTotalNumSurfs( const std::string& geom_id )
     return geom_ptr->GetNumTotalSurfs();
 }
 
+std::vector < double > GetMeshGeomTriPnts( const std::string& geom_id )
+{
+    Vehicle* veh = GetVehicle();
+    MeshGeom* mesh_ptr = dynamic_cast< MeshGeom* >( veh->FindGeom( geom_id ) );
+    if ( !mesh_ptr )
+    {
+        ErrorMgr.AddError( VSP_INVALID_GEOM_ID, "GetMeshGeomTriPnts::Can't Find Mesh Geom " + geom_id );
+        return std::vector < double >();
+    }
+
+    ErrorMgr.NoError();
+    return mesh_ptr->GetDrawTriPnts();
+}
+
 // Get the maximum bounding box point for the Geom in absolute or body axes
 vec3d GetGeomBBoxMax( const std::string& geom_id, int main_surf_ind, bool ref_frame_is_absolute )
 {

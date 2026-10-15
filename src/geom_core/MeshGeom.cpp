@@ -1186,6 +1186,31 @@ void TMeshRole::BuildTMeshDrawObjs( const vector< TMesh* > &tmesh_vec, bool byta
     }
 }
 
+vector< double > MeshGeom::GetDrawTriPnts()
+{
+    vector< double > pnts;
+    if ( !m_ViewMeshFlag.Get() )
+    {
+        return pnts;
+    }
+    Matrix4d trans = GetTotalTransMat();
+    for ( TMesh *tm : m_TMeshVec )
+    {
+        pnts.reserve( pnts.size() + tm->m_TVec.size() * 9 );
+        for ( TTri *tri : tm->m_TVec )
+        {
+            for ( TNode *n : { tri->m_N0, tri->m_N1, tri->m_N2 } )
+            {
+                vec3d p = trans.xform( n->m_Pnt );
+                pnts.push_back( p.x() );
+                pnts.push_back( p.y() );
+                pnts.push_back( p.z() );
+            }
+        }
+    }
+    return pnts;
+}
+
 void MeshGeom::UpdateDrawObj()
 {
     // Add in SubSurfaces to TMeshVec if m_DrawSubSurfs is true

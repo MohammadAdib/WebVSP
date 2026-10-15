@@ -11,6 +11,8 @@ import hashlib
 import struct
 from typing import Awaitable, Callable
 
+import numpy as np
+
 from .runtime import vsp
 
 from . import parms, runtime, tess
@@ -224,10 +226,19 @@ class Session:
             for gid in vsp.FindGeoms():
                 if not vsp.GetSetFlag(gid, vsp.SET_SHOWN):
                     continue
+                boxes = []
                 for s in range(vsp.GetTotalNumSurfs(gid)):
                     a = vsp.GetGeomBBoxMin(gid, s, True)
                     b = vsp.GetGeomBBoxMax(gid, s, True)
-                    for k, (x, y) in enumerate(zip((a.x(), a.y(), a.z()), (b.x(), b.y(), b.z()))):
+                    boxes.append(((a.x(), a.y(), a.z()), (b.x(), b.y(), b.z())))
+                if not boxes and hasattr(vsp, "GetMeshGeomTriPnts") and vsp.GetGeomTypeName(gid) == "Mesh":
+                    # Mesh Geoms have no surfaces: bound the triangles they draw.
+                    pts = vsp.GetMeshGeomTriPnts(gid)
+                    if pts:
+                        p = np.asarray(pts).reshape(-1, 3)
+                        boxes.append((p.min(axis=0).tolist(), p.max(axis=0).tolist()))
+                for a, b in boxes:
+                    for k, (x, y) in enumerate(zip(a, b)):
                         lo[k] = min(lo[k], x)
                         hi[k] = max(hi[k], y)
                     any_ = True
