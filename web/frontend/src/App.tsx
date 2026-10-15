@@ -39,7 +39,7 @@ function StatusBar() {
 function EngineSwitch() {
   if (isWasmEngine) {
     return (
-      <span title="OpenVSP runs in this browser tab. The local engine adds VSPAERO and STEP export.">
+      <span title="OpenVSP runs in this browser tab. The local engine runs VSPAERO faster (multi-threaded) and adds STEP export and the VSPAERO viewer.">
         In-browser engine · <a href={otherEngineUrl()}>Use local engine</a>
       </span>
     )

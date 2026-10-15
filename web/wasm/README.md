@@ -36,8 +36,10 @@ The first full build takes a while; later ones are incremental.
 
 ## Not available in the browser (yet)
 
-- **VSPAERO** and other external solvers: they're separate programs, which a page can't run
-  (the VSPAERO screen opens, but Launch Solver stays disabled).
+- **VSPAERO's viewer** (`vspviewer`, a desktop OpenGL program). VSPAERO itself runs: `vspaero` and
+  `vsploads` are compiled to WebAssembly too and run in workers (`src/util/WebProcess.h`,
+  `public/program.worker.js`), single-threaded. CalculiX (structural analysis) isn't part of
+  OpenVSP and isn't available either.
 - **STEP export**: STEPcode's build runs a code generator, which can't run when
   cross-compiling (`VSP_NO_STEP`).
 - Files: opened and saved through the browser. Chrome and Edge save back to the chosen file

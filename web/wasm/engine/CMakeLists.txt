@@ -11,6 +11,22 @@ TARGET_LINK_LIBRARIES( vsp_wasm_smoke Eigen3::Eigen ${VSP_LIBRARIES_API_FIRST} )
 TARGET_INCLUDE_DIRECTORIES( vsp_wasm_smoke PRIVATE ${VSP_WASM_INCLUDES} )
 TARGET_LINK_OPTIONS( vsp_wasm_smoke PRIVATE -sALLOW_MEMORY_GROWTH=1 -sSTACK_SIZE=8MB )
 
+# VSPAERO's programs, run by the page in workers when OpenVSP "starts" them (WebProcess.h):
+# each an ES module exporting a factory; every run gets a fresh instance (like a process).
+#   const p = await createProgram({ noInitialRun: true, print, printErr }); p.FS...; p.callMain(args)
+FOREACH( prog vspaero vsploads )
+    IF( TARGET ${prog} )
+        SET_TARGET_PROPERTIES( ${prog} PROPERTIES SUFFIX .js )
+        SET_PROPERTY( TARGET ${prog} APPEND PROPERTY LINK_OPTIONS
+            -sMODULARIZE=1 -sEXPORT_ES6=1 -sEXPORT_NAME=createProgram
+            -sENVIRONMENT=worker -sINVOKE_RUN=0 -sEXIT_RUNTIME=1 -sFORCE_FILESYSTEM=1
+            -O3 -sASSERTIONS=0
+            # VSPAERO has large static arrays (~70 MB).
+            -sINITIAL_MEMORY=128MB -sALLOW_MEMORY_GROWTH=1 -sMAXIMUM_MEMORY=4GB -sSTACK_SIZE=16MB
+            -sEXPORTED_RUNTIME_METHODS=FS,callMain )
+    ENDIF()
+ENDFOREACH()
+
 # The engine module the web UI loads (vsp.js + vsp.wasm), an ES module exporting a factory:
 #   const vsp = await createVspModule(); vsp.call(...); vsp.take(); vsp.FS.writeFile(...)
 # OpenVSP runs main() on its own thread (PROXY_TO_PTHREAD); the page calls in from the

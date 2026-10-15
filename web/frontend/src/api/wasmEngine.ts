@@ -22,12 +22,16 @@ interface VspModule {
   take(): string
   takeBinary(id: number): Uint8Array | null
   requestFull(): void
+  processOutput(id: number, text: string): void
+  processExit(id: number, code: number): void
   FS: {
     writeFile(path: string, data: Uint8Array): void
     readFile(path: string): Uint8Array
-    stat(path: string): { mtime: Date; size: number }
+    stat(path: string): { mtime: Date; size: number; mode: number }
     mkdirTree(path: string): void
     analyzePath(path: string): { exists: boolean }
+    readdir(path: string): string[]
+    isFile(mode: number): boolean
   }
 }
 
@@ -36,8 +40,8 @@ const LOCAL_PATH = /\/local\/?$/
 
 /**
  * Which engine this page uses, from its address alone:
- *   - hosted (e.g. GitHub Pages): the in-browser engine; under /local/ (or with ?engine=local)
- *     the engine on this computer instead;
+ *   - hosted (e.g. GitHub Pages), or the Vite dev server: the in-browser engine; under /local/
+ *     (or with ?engine=local) the engine on this computer instead;
  *   - served by an engine (localhost): that engine, unless ?engine=wasm;
  *   - ?engine=http://localhost:PORT: that engine (File > New Window).
  */
@@ -51,6 +55,8 @@ function chooseWasm(): boolean {
   if (q === 'wasm') return true
   if (q) return false // ?engine=local, or a specific engine address
   if (LOCAL_PATH.test(window.location.pathname)) return false
+  // The Vite dev server isn't an engine: like the hosted page (its /local/ proxies to one).
+  if (import.meta.env.DEV) return true
   return !['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname)
 }
 
@@ -108,7 +114,15 @@ function load(): Promise<VspModule> {
 }
 
 function drain(vsp: VspModule) {
-  const { out, mirror } = JSON.parse(vsp.take()) as { out: Record<string, unknown>[]; mirror: Record<string, unknown>[] }
+  const { out, mirror, proc } = JSON.parse(vsp.take()) as {
+    out: Record<string, unknown>[]
+    mirror: Record<string, unknown>[]
+    proc: ProcRequest[]
+  }
+  for (const r of proc) {
+    if (r.t === 'spawn') runProgram(vsp, r)
+    else if (r.t === 'kill') killProgram(vsp, r.id)
+  }
   for (const m of out) {
     if (m.t === 'result') {
       const p = pending.get(m.id as number)
@@ -249,11 +263,13 @@ async function answerFileDialog(vsp: VspModule, d: MDialog) {
   try {
     vsp.FS.mkdirTree(HOME)
     if (!d.mode) {
-      const file = await pickFile(exts, types)
-      if (!file) return answer('')
-      const path = `${HOME}/${file.name}`
-      vsp.FS.writeFile(path, new Uint8Array(await file.arrayBuffer()))
-      return answer(path)
+      // Several files can be picked: all are copied in (e.g. a model with its VSPAERO results,
+      // for Load Previous Results), and OpenVSP gets the one its filter asks for.
+      const picked = await pickFiles(exts, types)
+      if (!picked.length) return answer('')
+      for (const f of picked) vsp.FS.writeFile(`${HOME}/${f.name}`, new Uint8Array(await f.arrayBuffer()))
+      const main = picked.find((f) => exts.some((e) => f.name.toLowerCase().endsWith('.' + e.toLowerCase()))) ?? picked[0]
+      return answer(`${HOME}/${main.name}`)
     }
     const suggested = (d.preset || '').split(/[\\/]/).pop() || (exts[0] ? `Unnamed.${exts[0]}` : 'Unnamed')
     const w = window as unknown as { showSaveFilePicker?: (o: unknown) => Promise<FileSystemFileHandle> }
@@ -277,20 +293,21 @@ async function answerFileDialog(vsp: VspModule, d: MDialog) {
   }
 }
 
-function pickFile(exts: string[], types: unknown): Promise<File | null> {
+function pickFiles(exts: string[], types: unknown): Promise<File[]> {
   const w = window as unknown as { showOpenFilePicker?: (o: unknown) => Promise<FileSystemFileHandle[]> }
   if (w.showOpenFilePicker) {
     return w
-      .showOpenFilePicker({ id: 'webvsp', types, excludeAcceptAllOption: false })
-      .then((h) => h[0].getFile())
-      .catch(() => null)
+      .showOpenFilePicker({ id: 'webvsp', types, excludeAcceptAllOption: false, multiple: true })
+      .then((handles) => Promise.all(handles.map((h) => h.getFile())))
+      .catch(() => [])
   }
   return new Promise((resolve) => {
     const input = document.createElement('input')
     input.type = 'file'
+    input.multiple = true
     if (exts.length) input.accept = exts.map((e) => '.' + e).join(',')
-    input.onchange = () => resolve(input.files?.[0] ?? null)
-    input.oncancel = () => resolve(null)
+    input.onchange = () => resolve([...(input.files ?? [])])
+    input.oncancel = () => resolve([])
     input.click()
   })
 }
@@ -329,4 +346,78 @@ async function deliver(s: SaveTarget, bytes: Uint8Array<ArrayBuffer>) {
   a.download = s.name
   a.click()
   setTimeout(() => URL.revokeObjectURL(a.href), 10000)
+}
+
+// ------------------------------------------------------------------ programs
+
+/**
+ * OpenVSP "starting" one of VSPAERO's programs (src/util/WebProcess.h): each run is a worker
+ * (public/program.worker.js) with a fresh instance of the program, compiled to WebAssembly.
+ * It gets copies of the files in the working folders, its output is fed back as it runs, and
+ * the files it wrote are copied back before OpenVSP is told it has exited.
+ */
+interface ProcRequest {
+  t: 'spawn' | 'kill'
+  id: number
+  cmd?: string
+  args?: string[]
+  cwd?: string
+}
+
+const programs = new Map<number, Worker>()
+
+function dirname(path: string) {
+  const i = path.lastIndexOf('/')
+  return i <= 0 ? '/' : path.slice(0, i)
+}
+
+function runProgram(vsp: VspModule, r: ProcRequest) {
+  const cmd = (r.cmd ?? '').split('/').pop()!.replace(/\.exe$/i, '')
+  const args = r.args ?? []
+  const cwd = r.cwd || '/'
+  // The folders the program reads and writes: the user's files, the working folder, and the
+  // folders of any paths among its arguments (VSPAERO gets the model's path).
+  const dirs = [...new Set([HOME, cwd, ...args.filter((a) => a.startsWith('/')).map(dirname)])]
+  const files: { path: string; data: Uint8Array }[] = []
+  for (const dir of dirs) {
+    if (!vsp.FS.analyzePath(dir).exists) continue
+    for (const name of vsp.FS.readdir(dir)) {
+      const path = (dir === '/' ? '' : dir) + '/' + name
+      if (name === '.' || name === '..' || !vsp.FS.isFile(vsp.FS.stat(path).mode)) continue
+      files.push({ path, data: new Uint8Array(vsp.FS.readFile(path)) }) // ordinary (not shared) copies
+    }
+  }
+
+  const worker = new Worker(new URL(`${import.meta.env.BASE_URL}program.worker.js`, window.location.href), { type: 'module' })
+  programs.set(r.id, worker)
+  const finish = (code: number) => {
+    if (!programs.has(r.id)) return
+    programs.delete(r.id)
+    worker.terminate()
+    vsp.processExit(r.id, code)
+  }
+  worker.onmessage = ({ data }) => {
+    if (data.type === 'out') vsp.processOutput(r.id, data.text)
+    else if (data.type === 'exit') {
+      for (const f of data.files as { path: string; data: Uint8Array }[]) {
+        vsp.FS.mkdirTree(dirname(f.path))
+        vsp.FS.writeFile(f.path, f.data)
+      }
+      finish(data.code)
+    }
+  }
+  worker.onerror = (e) => {
+    vsp.processOutput(r.id, `${cmd}: ${e.message || 'failed to start'}\n`)
+    finish(127)
+  }
+  worker.postMessage({ cmd, args, cwd, dirs, files }, files.map((f) => f.data.buffer))
+}
+
+function killProgram(vsp: VspModule, id: number) {
+  const worker = programs.get(id)
+  if (!worker) return
+  programs.delete(id)
+  worker.terminate()
+  vsp.processOutput(id, 'Stopped.\n')
+  vsp.processExit(id, 143)
 }

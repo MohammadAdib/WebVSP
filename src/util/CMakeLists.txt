@@ -81,6 +81,11 @@ XferSurf.h
 
 target_link_libraries( util Eigen3::Eigen )
 
+IF( EMSCRIPTEN )
+    # External programs are run by the web page (see WebProcess.h).
+    target_sources( util PRIVATE WebProcess.cpp WebProcess.h )
+ENDIF()
+
 IF( WIN32 )
     # DbgHelp is a standard Windows SDK component; provides symbol + line info.
     target_link_libraries( util dbghelp )

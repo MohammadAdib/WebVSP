@@ -37,7 +37,7 @@ export function EngineGate() {
             <span className="engine-dot" /> Waiting for the engine at <code>{engineAddress}</code>
           </p>
           <p className="engine-alt">
-            Or <a href={otherEngineUrl()}>run OpenVSP in this browser tab</a> instead (no download; no VSPAERO or STEP export).
+            Or <a href={otherEngineUrl()}>run OpenVSP in this browser tab</a> instead (no download; no STEP export or VSPAERO viewer, and VSPAERO runs single-threaded).
           </p>
         </div>
       </div>

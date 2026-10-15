@@ -6,6 +6,9 @@
 #include "ProcessUtil.h"
 #include "MessageMgr.h"
 #include "StringUtil.h"
+#ifdef __EMSCRIPTEN__
+#include "WebProcess.h"
+#endif
 
 #include <ctime>
 
@@ -100,6 +103,12 @@ int cppexecvp( const string &cmd, const vector< string > &options )
 
 int ProcessUtil::SystemCmd( const string &path, const string &cmd, const vector<string> &opts )
 {
+#ifdef __EMSCRIPTEN__
+    // Started in the background, as with "cmd &" below.
+    (void)path;
+    WebProcess::Start( cmd, opts );
+    return 0;
+#endif
 #ifdef WIN32
     string command = string( "start " );
     if ( !path.empty() )
@@ -182,6 +191,15 @@ string ProcessUtil::QuoteString( const string &str )
 
 int ProcessUtil::ForkCmd( const string &path, const string &cmd, const vector<string> &opts )
 {
+#ifdef __EMSCRIPTEN__
+    // Run by the web page (WebProcess.h). The id stands in for the pid, and the read end of
+    // the stdout "pipe" keeps it so output can still be drained after the program exits.
+    (void)path;
+    childPid = WebProcess::Start( cmd, opts );
+    m_StdoutPipe[PIPE_READ] = childPid;
+    return 0;
+#endif
+
     clock_t tstart = clock();
 
 #ifdef WIN32
@@ -341,6 +359,15 @@ void ProcessUtil::WaitCmd( void *(*updatefun)( void *data ), void *data )
 
             waitFlag = 0;
         }
+#elif defined( __EMSCRIPTEN__ )
+        if ( !IsRunning() )
+        {
+            waitFlag = 0;
+        }
+        else
+        {
+            usleep( 100000 ); // (microseconds)
+        }
 #else
         int status;
         pid_t retpid = waitpid( childPid, &status, WNOHANG );
@@ -369,6 +396,8 @@ void ProcessUtil::Kill()
     {
 #ifdef WIN32
         TerminateProcess( pi.hProcess, 0 );
+#elif defined( __EMSCRIPTEN__ )
+        WebProcess::Kill( childPid );
 #else
         kill( childPid, SIGTERM );
 #endif
@@ -395,6 +424,16 @@ bool ProcessUtil::IsRunning()
 
             return false;
         }
+    }
+#elif defined( __EMSCRIPTEN__ )
+    if( childPid == -1 )
+    {
+        return false;
+    }
+    if ( !WebProcess::Running( childPid ) )
+    {
+        childPid = -1;
+        return false;
     }
 #else
     if( childPid == -1 )
@@ -449,6 +488,8 @@ void ProcessUtil::ReadStdoutPipe(char * bufptr, int bufsize, BUF_READ_TYPE * nre
     bufptr[0] = 0;
 #ifdef WIN32
     ReadFile( m_StdoutPipe[PIPE_READ], bufptr, bufsize, nreadptr, nullptr);
+#elif defined( __EMSCRIPTEN__ )
+    *nreadptr = m_StdoutPipe[PIPE_READ] > 0 ? WebProcess::Read( m_StdoutPipe[PIPE_READ], bufptr, bufsize ) : 0;
 #else
     *nreadptr = read( m_StdoutPipe[PIPE_READ], bufptr, bufsize );
 #endif

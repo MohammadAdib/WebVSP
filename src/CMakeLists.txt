@@ -176,10 +176,6 @@ SET( VSP_G_LIBRARIES_CORE_FIRST
 
 ADD_SUBDIRECTORY( vsp )
 
-# Experimental in-browser engine (web/wasm): only when building with Emscripten.
-IF( EMSCRIPTEN )
-    ADD_SUBDIRECTORY( ${PROJECT_SOURCE_DIR}/../web/wasm/engine ${CMAKE_BINARY_DIR}/wasm_engine )
-ENDIF()
 
 set(IS_NUMPY_FOUND FALSE)
 
@@ -335,6 +331,12 @@ ENDIF()
 
 IF( NOT VSP_NO_VSPAERO )
     ADD_SUBDIRECTORY( vsp_aero )
+ENDIF()
+
+# In-browser engine (web/wasm): only when building with Emscripten. After vsp_aero, whose
+# programs it builds for the page to run.
+IF( EMSCRIPTEN )
+    ADD_SUBDIRECTORY( ${PROJECT_SOURCE_DIR}/../web/wasm/engine ${CMAKE_BINARY_DIR}/wasm_engine )
 ENDIF()
 
 IF( NOT VSP_NO_HELP )

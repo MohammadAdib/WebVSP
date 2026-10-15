@@ -14,7 +14,7 @@ param(
     [string]$BuildDir = "$PSScriptRoot\..\..\build\libs-wasm",
     [string]$VspBuildDir = "$PSScriptRoot\..\..\build\vsp-wasm",
     # Targets of the OpenVSP build (default: the engine module the web UI loads).
-    [string[]]$Targets = @('vsp_wasm'),
+    [string[]]$Targets = @('vsp_wasm', 'vspaero', 'vsploads'),
     # Where the web UI serves the engine module from.
     [string]$PublicDir = "$PSScriptRoot\..\frontend\public\wasm"
 )
@@ -66,7 +66,8 @@ if ($Stage -in 'vsp', 'all') {
     $libs = (Resolve-Path $BuildDir).Path -replace '\\', '/'
     cmake -S "$root\src" -B $VspBuildDir -G Ninja -DCMAKE_BUILD_TYPE=Release "-DVSP_LIBRARY_PATH=$libs" `
         -DVSP_NO_GRAPHICS=OFF "-DFLTK_INSTALL_DIR=$libs/FLTK-prefix" `
-        -DVSP_NO_API_WRAPPERS=ON -DVSP_NO_VSPAERO=ON -DVSP_NO_HELP=ON -DVSP_NO_DOC=ON
+        -DVSP_NO_API_WRAPPERS=ON -DVSP_NO_VSPAERO=OFF -DVSP_NO_VSPAERO_OPT=ON -DVSP_NO_HELP=ON -DVSP_NO_DOC=ON `
+        -DCMAKE_DISABLE_FIND_PACKAGE_OpenMP=ON # VSPAERO single-threaded (Emscripten's OpenMP pulls in debug libraries)
     if ($LASTEXITCODE -ne 0) { throw 'OpenVSP: configure failed' }
     cmake --build $VspBuildDir --target @Targets -- -k 0
     if ($LASTEXITCODE -ne 0) { throw 'OpenVSP: build failed' }
@@ -74,5 +75,15 @@ if ($Stage -in 'vsp', 'all') {
         New-Item -ItemType Directory -Force $PublicDir | Out-Null
         Copy-Item "$VspBuildDir\wasm_engine\vsp.js", "$VspBuildDir\wasm_engine\vsp.wasm" $PublicDir -Force
         "engine module copied to $(Resolve-Path $PublicDir)"
+    }
+    # VSPAERO's programs (run by the page in workers, see src/util/WebProcess.h).
+    $programs = @{ vspaero = 'vsp_aero\Solver'; vsploads = 'vsp_aero\Adb2Load' }
+    foreach ($name in $programs.Keys) {
+        if ($Targets -contains $name) {
+            New-Item -ItemType Directory -Force $PublicDir | Out-Null
+            $dir = Join-Path $VspBuildDir $programs[$name]
+            Copy-Item "$dir\$name.js", "$dir\$name.wasm" $PublicDir -Force
+            "$name copied to $(Resolve-Path $PublicDir)"
+        }
     }
 }

@@ -46,7 +46,7 @@ The UI is also published at **https://mohammadadib.github.io/WebVSP/** by
 `.github/workflows/pages.yml` on every push to `main` that touches `web/frontend`.
 There, OpenVSP runs in the browser tab (the in-browser engine, below). At
 **https://mohammadadib.github.io/WebVSP/local/** it uses the local engine instead: OpenVSP
-runs on the user's computer, with VSPAERO and STEP export, and the page connects to it at
+runs on the user's computer, with multi-threaded VSPAERO, STEP export and the VSPAERO viewer, and the page connects to it at
 `http://localhost:8765`. The address alone decides (nothing is remembered); the status bar
 links to the other one. (The build writes `local/index.html`, see `vite.config.ts`.)
 
@@ -72,7 +72,8 @@ Developers can also run the engine from a source build with `websp-web.cmd`.
 ## In-browser engine
 
 The hosted page's default: OpenVSP itself runs in the browser tab (compiled to WebAssembly),
-with no engine to install; no VSPAERO or STEP export there. Pages served by an engine
+with no engine to install. VSPAERO runs there too (single-threaded); not available: STEP export
+and the VSPAERO viewer. Pages served by an engine
 (`localhost:8765`) use that engine unless opened with `?engine=wasm`. See
 [wasm/README.md](wasm/README.md) to build and try it locally.
 

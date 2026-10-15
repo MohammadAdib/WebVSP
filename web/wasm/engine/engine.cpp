@@ -25,6 +25,9 @@
 #include "VSP_Geom_API.h"
 #include "APIErrorMgr.h"
 #include "Vec3d.h"
+#include "WebProcess.h"
+
+#include <sys/stat.h>
 
 #include <emscripten.h>
 #include <emscripten/bind.h>
@@ -626,6 +629,18 @@ int main()
     vsp::VSPCheckSetup();
     // Errors are collected per request (TakeErrors) and returned to the page, not printed.
     vsp::ErrorMgrSingleton::getInstance().SilenceErrors();
+    // VSPAERO's programs, compiled to WebAssembly, are run by the page (WebProcess.h):
+    // OpenVSP only checks that they exist, so give it a folder with placeholders.
+    mkdir( "/bin", 0755 );
+    for ( const char *exe : { "/bin/vspaero", "/bin/vsploads" } )
+    {
+        if ( FILE *f = fopen( exe, "w" ) )
+        {
+            fputs( "run by the web page\n", f );
+            fclose( f );
+        }
+    }
+    vsp::SetVSPAEROPath( "/bin" );
 #ifdef VSP_WASM_GUI
     vsp::InitGUI();
     vsp::MirrorEnable();
@@ -701,8 +716,19 @@ string Take()
         }
         g_Out.clear();
     }
-    out += "],\"mirror\":" + vsp::MirrorTakeOutput() + "}";
+    out += "],\"mirror\":" + vsp::MirrorTakeOutput() + ",\"proc\":" + WebProcess::TakeRequests() + "}";
     return out;
+}
+
+// A program's output and exit, from the page (see WebProcess.h).
+void ProcessOutput( int id, const string &text )
+{
+    WebProcess::Output( id, text );
+}
+
+void ProcessExit( int id, int code )
+{
+    WebProcess::Exit( id, code );
 }
 
 emscripten::val TakeBinary( int id )
@@ -736,4 +762,6 @@ EMSCRIPTEN_BINDINGS( openvsp )
     emscripten::function( "take", &Take );
     emscripten::function( "takeBinary", &TakeBinary );
     emscripten::function( "requestFull", &RequestFull );
+    emscripten::function( "processOutput", &ProcessOutput );
+    emscripten::function( "processExit", &ProcessExit );
 }

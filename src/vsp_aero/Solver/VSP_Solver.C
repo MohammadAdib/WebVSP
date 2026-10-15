@@ -252,8 +252,10 @@ void VSP_SOLVER::init(void)
        
     }
 
+#ifdef VSPAERO_OPENMP
     int NumberOfThreads = omp_get_max_threads();
-    
+#endif
+
     NoADBFile_ = 0;
     
     UserSpecifiedCutOffFactor_ = -1.;
