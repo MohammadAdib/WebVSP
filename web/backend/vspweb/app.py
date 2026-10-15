@@ -69,6 +69,12 @@ class FilePath(BaseModel):
 
 class Pick(BaseModel):
     id: str
+    toggle: bool = False
+
+
+class Move(BaseModel):
+    ids: list[str]
+    delta: list[float]
 
 
 class Export(BaseModel):
@@ -202,7 +208,16 @@ def create_app(
 
     @app.post("/api/pick")
     async def pick(body: Pick):
-        await s().pick(body.id)
+        await s().pick(body.id, body.toggle)
+        return {"ok": True}
+
+    @app.get("/api/geoms/{gid}/origin")
+    async def geom_origin(gid: str):
+        return await s().geom_origin(gid)
+
+    @app.post("/api/geoms/move")
+    async def move_geoms(body: Move):
+        await s().move_geoms(body.ids, body.delta)
         return {"ok": True}
 
     @app.get("/api/geom-types")

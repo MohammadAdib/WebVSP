@@ -97,6 +97,7 @@ public:
     * Set current geom to geom with specific ID.
     */
     void Set( const std::string &geomID);
+    void Toggle( const std::string &geomID ); // add to the selection, or take out of it
 
     /*!
     * Push Pick button once.

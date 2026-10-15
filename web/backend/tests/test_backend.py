@@ -38,6 +38,10 @@ def parse_mesh(data: bytes):
         idx = np.frombuffer(data, np.uint32, nidx, off).reshape(-1, 3)
         off += nidx * 4
         surfs.append((pos, nrm, idx))
+    # The outline (feature lines): a count of points, then x,y,z floats, in pairs.
+    (nf,) = struct.unpack_from("<I", data, off)
+    off += 4 + nf * 12
+    assert nf % 2 == 0
     assert off == len(data)
     return surfs
 

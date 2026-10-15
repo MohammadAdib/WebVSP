@@ -182,7 +182,9 @@ export async function wasmRequest(method: string, path: string, body?: unknown):
   if (route === 'POST /geoms/delete') return call('deleteGeoms', (b.ids as string[]).join(','))
   if ((m = route.match(/^PUT \/parms\/([^/]+)$/))) return call('setParm', decodeURIComponent(m[1]), '', Number(b.value))
   if (route === 'POST /file/new') return call('newModel')
-  if (route === 'POST /pick') return call('pick', String(b.id ?? ''))
+  if (route === 'POST /pick') return call('pick', String(b.id ?? ''), b.toggle ? '1' : '')
+  if ((m = route.match(/^GET \/geoms\/([^/]+)\/origin$/))) return call('origin', decodeURIComponent(m[1]))
+  if (route === 'POST /geoms/move') return call('move', (b.ids as string[]).join(','), (b.delta as number[]).join(','))
   throw new WasmEngineError(501, `Not available in the in-browser engine: ${method} ${path}`)
 }
 

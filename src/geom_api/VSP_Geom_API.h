@@ -11551,11 +11551,48 @@ extern void MirrorRequestFull();
     \ingroup Visualization
 */
 /*!
-    Select a Geom as if it were picked in the 3D view.
+    Select a Geom as if it were picked in the 3D view (an empty ID deselects everything).
     \param [in] geom_id string Geom ID
+    \param [in] toggle bool Add it to the selection, or take it out (a shift click)
 */
 
-extern void MirrorPickGeom( const std::string & geom_id );
+extern void MirrorPickGeom( const std::string & geom_id, bool toggle = false );
+
+/*!
+    \ingroup Visualization
+*/
+/*!
+    The origin of a Geom in the 3D view (its model matrix translation).
+    \param [in] geom_id string Geom ID
+    eturn vec3d origin
+*/
+
+extern vec3d MirrorGeomOrigin( const std::string & geom_id );
+
+/*!
+    \ingroup Visualization
+*/
+/*!
+    The feature lines the 3D view draws for a Geom (its outline), as line segment end points.
+    Empty when the Geom doesn't show them.
+    \param [in] geom_id string Geom ID
+    eturn vector<vec3d> Pairs of points, one per segment
+*/
+
+extern std::vector< vec3d > MirrorFeatureLines( const std::string & geom_id );
+
+/*!
+    \ingroup Visualization
+*/
+/*!
+    Move Geoms by an offset in the 3D view, as dragging them would: sets each one's absolute or
+    relative location, whichever it uses, as one step of Edit > Undo. A Geom attached to a
+    selected ancestor moves with it.
+    \param [in] geom_ids vector<string> Geom IDs
+    \param [in] delta vec3d How far to move them
+*/
+
+extern void MirrorMoveGeoms( const std::vector< std::string > & geom_ids, const vec3d & delta );
 
 /*!
     \ingroup Visualization

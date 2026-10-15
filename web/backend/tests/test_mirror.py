@@ -45,6 +45,8 @@ class MirrorClient:
             if m["t"] == "dialog":
                 self.dialogs.append(m)
                 continue
+            if m["t"] != "diff":
+                continue  # the main view's overlay
             if m.get("full"):
                 self.windows.clear()
                 self.widgets.clear()

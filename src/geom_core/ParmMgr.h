@@ -34,6 +34,8 @@ private:
     bool m_LastUndoFlag;
     ParmUndo m_LastUndo;
     std::stack< ParmUndo > m_ParmUndoStack;
+    int m_UndoGroup = 0;        // The group changes go in now (0: each its own step)
+    int m_LastUndoGroup = 0;
 
     string m_ActiveParmID;
 
@@ -69,6 +71,9 @@ public:
     void AddToUndoStack( Parm* parm_ptr, bool drag_flag );
     void UnDo();
     void ClearUndo();
+    // Parm changes between these are one step of UnDo (a move of several Geoms, say).
+    void BeginUndoGroup()                          { m_UndoGroup = ++m_LastUndoGroup; }
+    void EndUndoGroup()                            { m_UndoGroup = 0; }
 
     void SwapIDs( const string &aID, const string &bID );
 

@@ -72,7 +72,7 @@ public:
     void MirrorPostEvent( const std::string & json );
     std::string MirrorTakeOutput();
     void MirrorRequestFull();
-    void MirrorPickGeom( const std::string & geom_id );
+    void MirrorPickGeom( const std::string & geom_id, bool toggle = false );
     std::string MirrorNativeFileDialog( const std::string & title, bool save, const std::string & types,
                                         const std::string & dir, const std::string & file, const std::string & defext );
 };

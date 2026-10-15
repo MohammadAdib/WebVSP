@@ -63,11 +63,19 @@ export type Kind =
   | 'round' | 'light' | 'repeat' | 'button' | 'box' | 'group' | 'widget'
 
 export interface GlDrawObj {
-  t: 'lines' | 'strip' | 'loop' | 'points'
+  /** tris only in the main view's overlay (arrowheads) */
+  t: 'lines' | 'strip' | 'loop' | 'points' | 'tris' | 'blank'
   c: string
   pc: string
   lw: number
   ps: number
+  /** Dashed (stippled) lines */
+  dash?: boolean
+  /** A bounding box: 1 a geom's, 2 the active wing section's */
+  box?: number
+  /** blank: the geom's id, and whether it's selected */
+  id?: string
+  sel?: boolean
   /** x,y,z triples */
   p: number[]
 }

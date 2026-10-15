@@ -41,7 +41,7 @@ public:
     static void RequestFull();
 
     // Select the given geom as if picked in the 3D view.
-    static void PickGeom( const std::string &geom_id );
+    static void PickGeom( const std::string &geom_id, bool toggle = false );
 
     // Client-answered prompts; block (while pumping) until the client replies.
     static int Choice( const std::string &msg, const std::string &b0, const std::string &b1, const std::string &b2 );

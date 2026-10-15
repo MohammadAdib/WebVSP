@@ -9,7 +9,8 @@ export interface SurfaceMesh {
   indices: Uint32Array
 }
 
-export function decodeMesh(buf: ArrayBuffer): SurfaceMesh[] {
+/** A geom's surfaces, and its outline (feature lines) as segment end points. */
+export function decodeMesh(buf: ArrayBuffer): SurfaceMesh[] & { features?: Float32Array } {
   const view = new DataView(buf)
   const magic = String.fromCharCode(view.getUint8(0), view.getUint8(1), view.getUint8(2), view.getUint8(3))
   if (magic !== 'VSPM') throw new Error('bad mesh payload')
@@ -30,7 +31,12 @@ export function decodeMesh(buf: ArrayBuffer): SurfaceMesh[] {
     off += nidx * 4
     out.push({ nu, nw, positions, normals, indices })
   }
-  return out
+  const res: SurfaceMesh[] & { features?: Float32Array } = out
+  if (off + 4 <= buf.byteLength) {
+    const nf = view.getUint32(off, true)
+    res.features = new Float32Array(buf, off + 4, nf * 3)
+  }
+  return res
 }
 
 /** Line-segment indices along the u/w grid lines (the "wireframe" VSP draws). */

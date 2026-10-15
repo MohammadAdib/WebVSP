@@ -27,12 +27,16 @@ public:
     string GetID()              { return m_ParmID; }
     double GetLastVal()         { return m_LastVal; }
     void SetLastVal( double v ) { m_LastVal = v; }
+    // Changes made in one group (non-zero) are undone together.
+    int GetGroup()              { return m_Group; }
+    void SetGroup( int g )      { m_Group = g; }
 
 protected:
 
     string m_ParmID;
     double m_Val;
     double m_LastVal;
+    int m_Group = 0;
 
 };
 

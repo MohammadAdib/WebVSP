@@ -1375,8 +1375,35 @@ void ManageGeomScreen::Set( const std::string &geomId )
 {
     printf("%s\n", geomId.c_str());
     m_GeomBrowser->deselect_all();
-    m_VehiclePtr->SetActiveGeom(geomId);
+    if ( geomId.empty() )
+    {
+        m_VehiclePtr->ClearActiveGeom(); // a click on nothing
+    }
+    else
+    {
+        m_VehiclePtr->SetActiveGeom(geomId);
+    }
     m_SelVec = m_VehiclePtr->GetActiveGeomVec();
+
+    SetNeedsShowHideGeoms();
+    m_ScreenMgr->SetUpdateFlag( true );
+}
+
+void ManageGeomScreen::Toggle( const std::string &geomId )
+{
+    vector< string > sel = m_VehiclePtr->GetActiveGeomVec();
+    auto it = std::find( sel.begin(), sel.end(), geomId );
+    if ( it != sel.end() )
+    {
+        sel.erase( it );
+    }
+    else if ( m_VehiclePtr->FindGeom( geomId ) )
+    {
+        sel.push_back( geomId );
+    }
+    m_GeomBrowser->deselect_all();
+    m_VehiclePtr->SetActiveGeomVec( sel );
+    m_SelVec = sel;
 
     SetNeedsShowHideGeoms();
     m_ScreenMgr->SetUpdateFlag( true );

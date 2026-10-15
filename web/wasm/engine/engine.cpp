@@ -376,6 +376,18 @@ vector< uint8_t > MeshBytes( const string &id )
         PutVec( b, sf.nrm );
         PutVec( b, sf.idx );
     }
+    // Then the outline (feature lines), as segments: count of points, then x,y,z floats.
+    vector< float > feat;
+    if ( nsurf > 0 )
+    {
+        for ( const vec3d &p : vsp::MirrorFeatureLines( id ) )
+        {
+            feat.insert( feat.end(), { ( float ) p.x(), ( float ) p.y(), ( float ) p.z() } );
+        }
+        TakeErrors();
+    }
+    Put32( b, ( uint32_t ) ( feat.size() / 3 ) );
+    PutVec( b, feat );
     return b;
 }
 
@@ -588,6 +600,24 @@ void Run( const Job &j )
         Watch( "Parameter change", true );
         return Result( j.id, err, "{\"ok\":true}" );
     }
+    if ( j.op == "move" )
+    {
+        vector< string > c = SplitCsv( j.b );
+        vec3d d( c.size() > 0 ? atof( c[0].c_str() ) : 0, c.size() > 1 ? atof( c[1].c_str() ) : 0,
+                 c.size() > 2 ? atof( c[2].c_str() ) : 0 );
+        vsp::MirrorMoveGeoms( SplitCsv( j.a ), d );
+        string err = TakeErrors();
+        Watch( "Move", true );
+        return Result( j.id, err, "{\"ok\":true}" );
+    }
+    if ( j.op == "origin" )
+    {
+        vec3d p = vsp::MirrorGeomOrigin( j.a );
+        string err = TakeErrors();
+        char buf[128];
+        snprintf( buf, sizeof( buf ), "[%.17g,%.17g,%.17g]", p.x(), p.y(), p.z() );
+        return Result( j.id, err, buf );
+    }
     if ( j.op == "newModel" )
     {
         vsp::ClearVSPModel();
@@ -619,7 +649,7 @@ void Run( const Job &j )
     }
     if ( j.op == "pick" )
     {
-        vsp::MirrorPickGeom( j.a );
+        vsp::MirrorPickGeom( j.a, j.b == "1" );
         return Result( j.id, TakeErrors(), "{\"ok\":true}" );
     }
     Result( j.id, "unknown request: " + j.op, "" );

@@ -259,6 +259,19 @@ class Session:
         await self.worker.call(run)
         return await self._after_change(tree=False)
 
+    async def geom_origin(self, gid: str) -> list[float]:
+        def run():
+            p = vsp.MirrorGeomOrigin(gid)
+            return [p.x(), p.y(), p.z()]
+
+        return await self.worker.call(run)
+
+    async def move_geoms(self, ids: list[str], delta: list[float]) -> None:
+        """Move geoms by an offset in the 3D view (the move gizmo). OpenVSP records it as one
+        step of Edit > Undo, which is the undo the page uses."""
+        await self.worker.call(lambda: vsp.MirrorMoveGeoms(ids, vsp.vec3d(*delta)))
+        await self._after_change(tree=False)
+
     async def _structural(self, label: str, fn: Callable[[], object], tree: bool = True) -> object:
         def run():
             before = Snapshot()
@@ -367,7 +380,7 @@ class Session:
     async def export_file(self, path: str, file_type: int, set_index: int = 0) -> str:
         return await self.worker.call(vsp.ExportFile, path, set_index, file_type)
 
-    async def pick(self, gid: str) -> None:
-        """Select a geom in the GUI, as a click in the 3D view would."""
+    async def pick(self, gid: str, toggle: bool = False) -> None:
+        """Select a geom in the GUI, as a click in the 3D view would (toggle: a shift click)."""
         if hasattr(vsp, "MirrorPickGeom"):
-            await self.worker.call(vsp.MirrorPickGeom, gid)
+            await self.worker.call(vsp.MirrorPickGeom, gid, toggle)

@@ -200,10 +200,10 @@ void GuiInterface::MirrorRequestFull()
 #endif
 }
 
-void GuiInterface::MirrorPickGeom( const std::string & geom_id )
+void GuiInterface::MirrorPickGeom( const std::string & geom_id, bool toggle )
 {
 #ifdef VSP_USE_FLTK
-    WebMirror::PickGeom( geom_id );
+    WebMirror::PickGeom( geom_id, toggle );
 #endif
 }
 

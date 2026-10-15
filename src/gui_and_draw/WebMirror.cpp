@@ -441,7 +441,7 @@ const Capture *CaptureWidget( Fl_Widget *w )
 }
 
 
-vector< string > DrawObjItems( const vector< DrawObj* > &objs, DrawObj::ScreenEnum screen, size_t max_pts = 500000 );
+vector< string > DrawObjItems( const vector< DrawObj* > &objs, DrawObj::ScreenEnum screen, size_t max_pts = 500000, bool tris = false );
 
 // Lines and points a GL view draws, plus its 2D camera, so the client can draw them.
 string GlDrawJson( Fl_Widget *w )
@@ -476,7 +476,8 @@ string GlDrawJson( Fl_Widget *w )
 }
 
 // The visible line and point draw objects of a view, as JSON items (at most max_pts points).
-vector< string > DrawObjItems( const vector< DrawObj* > &objs, DrawObj::ScreenEnum screen, size_t max_pts )
+// With tris, shaded triangles too (arrowheads), coloured by their diffuse colour.
+vector< string > DrawObjItems( const vector< DrawObj* > &objs, DrawObj::ScreenEnum screen, size_t max_pts, bool tris )
 {
     vector< string > items;
     size_t total = 0;
@@ -497,6 +498,7 @@ vector< string > DrawObjItems( const vector< DrawObj* > &objs, DrawObj::ScreenEn
             case DrawObj::VSP_LINE_STRIP: type = "strip"; break;
             case DrawObj::VSP_LINE_LOOP: type = "loop"; break;
             case DrawObj::VSP_POINTS: type = "points"; break;
+            case DrawObj::VSP_SHADED_TRIS: type = tris ? "tris" : nullptr; break;
             default: break;
         }
         if ( !type )
@@ -519,9 +521,24 @@ vector< string > DrawObjItems( const vector< DrawObj* > &objs, DrawObj::ScreenEn
             snprintf( cb, sizeof( cb ), "#%02x%02x%02x", cl( c.x() ), cl( c.y() ), cl( c.z() ) );
             return string( cb );
         };
+        vec3d lc = d->m_LineColor;
+        if ( d->m_Type == DrawObj::VSP_SHADED_TRIS )
+        {
+            const float *df = d->m_MaterialInfo.Diffuse;
+            lc = vec3d( df[0], df[1], df[2] );
+        }
         Obj o;
-        o.Str( "t", type ).Str( "c", col( d->m_LineColor ) ).Str( "pc", col( d->m_PointColor ) )
+        o.Str( "t", type ).Str( "c", col( lc ) ).Str( "pc", col( d->m_PointColor ) )
          .Num( "lw", d->m_LineWidth ).Num( "ps", d->m_PointSize ).Raw( "p", pts );
+        if ( d->m_StippleFlag )
+        {
+            o.Bool( "dash", true );
+        }
+        if ( d->m_GeomID.rfind( BBOXHEADER, 0 ) == 0 )
+        {
+            // 1: a geom's bounding box, 2: the active wing section's
+            o.Int( "box", d->m_GeomID.size() > 11 && d->m_GeomID.compare( d->m_GeomID.size() - 11, 11, "ACTIVE_SECT" ) == 0 ? 2 : 1 );
+        }
         items.push_back( o.Done() );
         total += d->m_PntVec.size();
     }
@@ -1059,17 +1076,64 @@ string MainOverlayJson()
             extra.push_back( d );
         }
     }
-    // Geoms without a surface (Blank, Hinge) are only their points and axes, which the
-    // client's tessellated model doesn't have.
+    // From the geoms, what the client's tessellated model doesn't have: geoms without a
+    // surface (Blank, Hinge) are only their points and axes, and the selected geom's boxes
+    // (red around it, green around the active wing section), its cross sections (the active
+    // one blue) and the skinning and blending tangents. Their visibility follows the desktop.
+    vector< string > markers;
     for ( Geom *g : veh->FindGeomVec( veh->GetGeomVec() ) )
     {
-        int type = g ? g->GetType().m_Type : -1;
-        if ( type == BLANK_GEOM_TYPE || type == HINGE_GEOM_TYPE )
+        if ( !g )
         {
-            g->LoadDrawObjs( extra );
+            continue;
+        }
+        vector< DrawObj* > objs;
+        g->LoadDrawObjs( objs );
+        int type = g->GetType().m_Type;
+        if ( type == BLANK_GEOM_TYPE )
+        {
+            // The page draws blanks as markers it can pick (its origin and symmetric copies,
+            // red when selected) instead of VSP's point and axes; the point mass CG stays.
+            if ( !g->GetSetFlag( vsp::SET_SHOWN ) )
+            {
+                continue;
+            }
+            for ( DrawObj *d : objs )
+            {
+                if ( d->m_GeomID == g->GetID() + "1" && !d->m_PntVec.empty() )
+                {
+                    string pts;
+                    char buf[64];
+                    for ( size_t i = 0; i < d->m_PntVec.size(); i++ )
+                    {
+                        const vec3d &v = d->m_PntVec[i];
+                        snprintf( buf, sizeof( buf ), "%s%.6g,%.6g,%.6g", i ? "," : "", v.x(), v.y(), v.z() );
+                        pts += buf;
+                    }
+                    Obj b;
+                    b.Str( "t", "blank" ).Str( "id", g->GetID() ).Bool( "sel", veh->IsGeomActive( g->GetID() ) )
+                     .Raw( "p", "[" + pts + "]" );
+                    markers.push_back( b.Done() );
+                }
+                else if ( d->m_GeomID == g->GetID() + "PtMassCG" )
+                {
+                    extra.push_back( d );
+                }
+            }
+            continue;
+        }
+        bool whole = type == HINGE_GEOM_TYPE;
+        for ( DrawObj *d : objs )
+        {
+            if ( whole || d->m_GeomID.rfind( BBOXHEADER, 0 ) == 0 || d->m_GeomID.rfind( XSECHEADER, 0 ) == 0 )
+            {
+                extra.push_back( d );
+            }
         }
     }
-    return JoinArray( DrawObjItems( extra, DrawObj::VSP_MAIN_SCREEN, 200000 ) );
+    vector< string > items = DrawObjItems( extra, DrawObj::VSP_MAIN_SCREEN, 200000, true );
+    items.insert( items.end(), markers.begin(), markers.end() );
+    return JoinArray( items );
 }
 
 void Diff()
@@ -1576,7 +1640,7 @@ void WebMirror::RequestFull()
     PostEvent( "{\"op\":\"full\"}" );
 }
 
-void WebMirror::PickGeom( const std::string &geom_id )
+void WebMirror::PickGeom( const std::string &geom_id, bool toggle )
 {
     State &s = S();
     if ( !s.mgr )
@@ -1584,7 +1648,11 @@ void WebMirror::PickGeom( const std::string &geom_id )
         return;
     }
     ManageGeomScreen *mgs = dynamic_cast< ManageGeomScreen* >( s.mgr->GetScreen( vsp::VSP_MANAGE_GEOM_SCREEN ) );
-    if ( mgs )
+    if ( mgs && toggle )
+    {
+        mgs->Toggle( geom_id );
+    }
+    else if ( mgs )
     {
         mgs->Set( geom_id );
     }

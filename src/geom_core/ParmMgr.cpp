@@ -209,6 +209,7 @@ bool ParmMgrSingleton::ValidateParmContainerMap()
 void ParmMgrSingleton::AddToUndoStack( Parm* parm_ptr, bool drag_flag )
 {
     ParmUndo undo( parm_ptr );
+    undo.SetGroup( m_UndoGroup );
 
     if ( !drag_flag )
     {
@@ -249,6 +250,18 @@ void ParmMgrSingleton::UnDo()
     if ( parm_ptr )
     {
         parm_ptr->SetFromDevice( top.GetLastVal(), true );    // Set Last Val - Don't Add To Stack
+    }
+
+    // And the rest of its group, if it was made in one.
+    int group = top.GetGroup();
+    while ( group != 0 && !m_ParmUndoStack.empty() && m_ParmUndoStack.top().GetGroup() == group )
+    {
+        ParmUndo next = m_ParmUndoStack.top();
+        m_ParmUndoStack.pop();
+        if ( Parm* p = FindParm( next.GetID() ) )
+        {
+            p->SetFromDevice( next.GetLastVal(), true );
+        }
     }
 }
 

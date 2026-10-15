@@ -472,3 +472,21 @@ input:focus, select:focus, textarea:focus, button:focus-visible {
   position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); font-size: 12px; font-family: var(--mono);
   color: var(--fg-1); background: rgba(22, 22, 22, 0.7); padding: 3px 10px; border-radius: 3px; pointer-events: none;
 }
+
+/* Blank geoms in the 3D view */
+.blank-marker {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #9a9a9a;
+  border: 2px solid #3a3a3a;
+  box-shadow: 0 0 2px rgba(0, 0, 0, 0.6);
+  cursor: pointer;
+}
+.blank-marker:hover {
+  background: #c4c4c4;
+}
+.blank-marker.sel {
+  background: #e02020;
+  border-color: #6e0000;
+}

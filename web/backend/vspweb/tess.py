@@ -90,4 +90,10 @@ def geom_mesh_bytes(geom_id: str) -> bytes:
         parts.append(pts.tobytes())
         parts.append(nrm.tobytes())
         parts.append(idx.tobytes())
+    # Then the outline (feature lines), as segments: count of points, then x,y,z floats.
+    feat = []
+    if surfaces and hasattr(vsp, "MirrorFeatureLines"):
+        feat = [c for p in vsp.MirrorFeatureLines(geom_id) for c in (p.x(), p.y(), p.z())]
+    parts.append(struct.pack("<I", len(feat) // 3))
+    parts.append(np.asarray(feat, dtype="<f4").tobytes())
     return b"".join(parts)

@@ -135,7 +135,11 @@ export const api = {
   openFile: (path: string) => request('POST', '/file/open', { path }),
   insertFile: (path: string, parent?: string | null) => request('POST', '/file/insert', { path, parent: parent ?? null }),
   saveFile: (path?: string) => request<{ path: string }>('POST', '/file/save', { path: path ?? null }),
-  pick: (id: string) => request('POST', '/pick', { id }),
+  /** Select a geom as a click in the 3D view does; toggle (a shift click) adds it or takes it out */
+  pick: (id: string, toggle = false) => request('POST', '/pick', { id, toggle }),
+  /** A geom's origin in the 3D view, and moving geoms by an offset (the move gizmo; one undo) */
+  geomOrigin: (id: string) => request<[number, number, number]>('GET', `/geoms/${enc(id)}/origin`),
+  moveGeoms: (ids: string[], delta: [number, number, number]) => request('POST', '/geoms/move', { ids, delta }),
   newInstance: () => request<{ port: number }>('POST', '/instances'),
   listDir: (path?: string) => request<DirListing>('GET', '/fs' + (path ? `?path=${enc(path)}` : '')),
 }

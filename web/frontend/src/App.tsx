@@ -53,7 +53,12 @@ function EngineSwitch() {
   )
 }
 
-const isDocked = (w: MWindow) => w.role === 'browser' || w.role === 'geom' || (w.role === 'screen' && w.screen === 'Vehicle')
+// The Geom Browser docks left and the geom editors right. Group Modifications (several geoms
+// selected) floats like the desktop's, rather than taking the editor's place.
+const isDocked = (w: MWindow) =>
+  w.role === 'browser' ||
+  (w.role === 'geom' && w.screen !== 'Group Modifications') ||
+  (w.role === 'screen' && w.screen === 'Vehicle')
 
 export default function App() {
   const loadTree = useStore((s) => s.loadTree)

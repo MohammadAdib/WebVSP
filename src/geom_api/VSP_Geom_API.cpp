@@ -14,6 +14,7 @@
 #endif
 
 #include <cmath>
+#include <unordered_set>
 
 #include "AdvLinkMgr.h"
 #include "AnalysisMgr.h"
@@ -3824,11 +3825,120 @@ std::vector<std::string> GetActiveGeoms()
     return veh->GetActiveGeomVec();
 }
 
-extern void MirrorPickGeom( const std::string & geom_id )
+extern void MirrorPickGeom( const std::string & geom_id, bool toggle )
 {
 #ifdef VSP_USE_FLTK
-    GuiInterface::getInstance().MirrorPickGeom( geom_id );
+    GuiInterface::getInstance().MirrorPickGeom( geom_id, toggle );
 #endif
+    ErrorMgr.NoError();
+}
+
+extern vec3d MirrorGeomOrigin( const std::string & geom_id )
+{
+    Vehicle* veh = GetVehicle();
+    Geom* geom = veh->FindGeom( geom_id );
+    if ( !geom )
+    {
+        ErrorMgr.AddError( VSP_INVALID_GEOM_ID, "MirrorGeomOrigin::Can't Find Geom " + geom_id );
+        return vec3d();
+    }
+    ErrorMgr.NoError();
+    return geom->getModelMatrix().getTranslation();
+}
+
+extern std::vector< vec3d > MirrorFeatureLines( const std::string & geom_id )
+{
+    std::vector< vec3d > pts;
+    Vehicle* veh = GetVehicle();
+    Geom* geom = veh->FindGeom( geom_id );
+    if ( !geom )
+    {
+        ErrorMgr.AddError( VSP_INVALID_GEOM_ID, "MirrorFeatureLines::Can't Find Geom " + geom_id );
+        return pts;
+    }
+    vector< DrawObj* > objs;
+    geom->LoadDrawObjs( objs );
+    for ( DrawObj* d : objs )
+    {
+        if ( d->m_GeomID.rfind( geom_id + "Feature_", 0 ) == 0 && d->m_Visible && d->m_Type == DrawObj::VSP_LINES )
+        {
+            pts.insert( pts.end(), d->m_PntVec.begin(), d->m_PntVec.end() );
+        }
+    }
+    ErrorMgr.NoError();
+    return pts;
+}
+
+extern void MirrorMoveGeoms( const std::vector< std::string > & geom_ids, const vec3d & delta )
+{
+    Vehicle* veh = GetVehicle();
+    std::unordered_set< std::string > sel( geom_ids.begin(), geom_ids.end() );
+
+    // Work out every location change first, in the frames as they are now.
+    struct Change
+    {
+        Parm* parm;
+        double val;
+    };
+    std::vector< Change > changes;
+    for ( const std::string & id : geom_ids )
+    {
+        Geom* geom = veh->FindGeom( id );
+        if ( !geom )
+        {
+            ErrorMgr.AddError( VSP_INVALID_GEOM_ID, "MirrorMoveGeoms::Can't Find Geom " + id );
+            return;
+        }
+        // A geom whose position follows a selected ancestor moves with it already.
+        bool follows = false;
+        for ( Geom* g = geom; !follows && g->m_TransAttachFlag() != vsp::ATTACH_TRANS_NONE; )
+        {
+            g = veh->FindGeom( g->GetParentID() );
+            if ( !g )
+            {
+                break;
+            }
+            follows = sel.count( g->GetID() ) > 0;
+        }
+        if ( follows )
+        {
+            continue;
+        }
+        // The absolute location is in the world frame; the relative one in the frame the geom
+        // is attached to.
+        bool abs = geom->m_AbsRelFlag() == vsp::ABS;
+        Parm *loc[3] = { &geom->m_XRelLoc, &geom->m_YRelLoc, &geom->m_ZRelLoc };
+        vec3d d = delta;
+        if ( abs )
+        {
+            loc[0] = &geom->m_XLoc;
+            loc[1] = &geom->m_YLoc;
+            loc[2] = &geom->m_ZLoc;
+        }
+        else
+        {
+            Matrix4d inv = geom->getAttachMatrix();
+            inv.affineInverse();
+            vec3d now = geom->getModelMatrix().getTranslation();
+            d = inv.xform( now + delta ) - inv.xform( now );
+        }
+        for ( int i = 0; i < 3; i++ )
+        {
+            if ( std::abs( d.v[i] ) > 1e-12 )
+            {
+                changes.push_back( { loc[i], loc[i]->Get() + d.v[i] } );
+            }
+        }
+    }
+
+    // As the GUI sets them, all one step of Edit > Undo.
+    ParmMgr.BeginUndoGroup();
+    for ( const Change & c : changes )
+    {
+        c.parm->SetFromDevice( c.val );
+    }
+    ParmMgr.EndUndoGroup();
+    veh->Update();
     ErrorMgr.NoError();
 }
 
