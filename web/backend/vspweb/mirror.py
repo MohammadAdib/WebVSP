@@ -9,11 +9,63 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
+import re
+import sys
+from pathlib import Path
 from typing import Awaitable, Callable
 
 from . import runtime
 
 Broadcast = Callable[[dict], Awaitable[None]]
+
+# File choosers use the desktop's own open/save dialog (the engine runs on the user's
+# machine). WEBVSP_NATIVE_DIALOGS=0 uses the web file browser instead.
+NATIVE_DIALOGS = sys.platform == "win32" and os.environ.get("WEBVSP_NATIVE_DIALOGS", "1") not in ("0", "false", "no")
+
+
+def _settings_path() -> Path:
+    base = os.environ.get("APPDATA") or str(Path.home())
+    return Path(base) / "WebVSP" / "settings.json"
+
+
+def _load_settings() -> dict:
+    try:
+        return json.loads(_settings_path().read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001 - missing or unreadable: defaults
+        return {}
+
+
+def _save_setting(key: str, value) -> None:
+    settings = _load_settings()
+    settings[key] = value
+    try:
+        path = _settings_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(settings, indent=2), encoding="utf-8")
+    except OSError as exc:
+        print(f"vspweb: could not save settings: {exc!r}", flush=True)
+
+
+def file_types(fltk_filter: str) -> tuple[str, str]:
+    """An FLTK filter ("*.vsp3", "*.{af,dat}", "Images (*.{jpg,png})", one per tab/newline)
+    as native dialog file types ("Label\tpattern" lines) plus the default extension."""
+    lines, first_ext = [], ""
+    for part in re.split(r"[\t\n]+", fltk_filter or ""):
+        exts: list[str] = []
+        for m in re.finditer(r"\*\.(\{[^}]*\}|[\w]+)", part):
+            exts += [e.strip() for e in m.group(1).strip("{}").split(",") if e.strip()]
+        exts = [e for e in exts if e != "*"]
+        if not exts:
+            continue
+        first_ext = first_ext or exts[0]
+        label = re.sub(r"\s*\(.*\)\s*$", "", part).strip()
+        if not label or label.startswith("*"):
+            label = ", ".join(e.upper() for e in exts) + " files"
+        patterns = ";".join(f"*.{e}" for e in exts)
+        lines.append(f"{label} ({patterns})\t{patterns}")
+    lines.append("All files (*.*)\t*.*")
+    return "\n".join(lines), first_ext
 
 
 class Mirror:
@@ -66,7 +118,34 @@ class Mirror:
                 # Nobody to ask: answer like Cancel so the GUI thread doesn't wait forever.
                 runtime.vsp.MirrorPostEvent(json.dumps({"op": "dialog", "seq": m["seq"], "result": 0, "path": ""}))
             elif self._has_clients():
+                if m.get("kind") == "file" and NATIVE_DIALOGS and hasattr(runtime.vsp, "MirrorNativeFileDialog"):
+                    m["native"] = True  # clients show a notice instead of their own picker
+                    asyncio.create_task(self._native_file(m))
                 self.dialogs[m["seq"]] = m
+
+    async def _native_file(self, m: dict) -> None:
+        """Answer a file chooser with the desktop's dialog, opened in the last folder used."""
+        save = bool(m.get("mode"))
+        types, ext = file_types(m.get("filter", ""))
+        last = _load_settings().get("last_dir", "")
+        folder = last if last and os.path.isdir(last) else m.get("dir", "")
+        preset = os.path.basename(m.get("preset", "")) if save else ""
+        title = m.get("title") or ("Save" if save else "Open")
+        # Off the OpenVSP thread (the SWIG call releases the GIL), so the GUI keeps running.
+        path = await asyncio.to_thread(
+            runtime.vsp.MirrorNativeFileDialog, title, save, types, folder, preset, ext if save else ""
+        )
+        if path.startswith("*error"):
+            print(f"vspweb: native file dialog unavailable ({path[1:]}); using the web dialog", flush=True)
+            # Hand the prompt to the clients' own file browser instead.
+            await self._broadcast({"type": "dialog_done", "seq": m["seq"]})
+            m = {**m, "native": False}
+            self.dialogs[m["seq"]] = m
+            await self._broadcast({"type": "mirror", "msgs": [m]})
+            return
+        if path:
+            _save_setting("last_dir", os.path.dirname(path))
+        await self.post({"op": "dialog", "seq": m["seq"], "result": 1 if path else 0, "path": path})
 
     def snapshot(self) -> dict:
         return {

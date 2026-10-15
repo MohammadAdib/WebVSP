@@ -10,7 +10,7 @@ export function DialogHost() {
 
   // File choosers use the app's file browser, then answer the GUI with the path.
   useEffect(() => {
-    if (!dialog || dialog.kind !== 'file' || handled.current === dialog.seq) return
+    if (!dialog || dialog.kind !== 'file' || dialog.native || handled.current === dialog.seq) return
     handled.current = dialog.seq
     const title = dialog.title || (dialog.mode ? 'Save' : 'Open')
     const pick = dialog.mode

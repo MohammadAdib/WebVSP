@@ -3831,6 +3831,17 @@ extern void MirrorPickGeom( const std::string & geom_id )
     ErrorMgr.NoError();
 }
 
+extern std::string MirrorNativeFileDialog( const std::string & title, bool save, const std::string & types,
+                                           const std::string & dir, const std::string & file, const std::string & defext )
+{
+    // Called from any thread: leave the (single-threaded) error state alone.
+#ifdef VSP_USE_FLTK
+    return GuiInterface::getInstance().MirrorNativeFileDialog( title, save, types, dir, file, defext );
+#else
+    return std::string( "*error built without the GUI" );
+#endif
+}
+
 extern bool IsEventLoopRunning( )
 {
 #ifdef VSP_USE_FLTK

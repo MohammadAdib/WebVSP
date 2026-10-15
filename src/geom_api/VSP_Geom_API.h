@@ -11558,6 +11558,24 @@ extern void MirrorRequestFull();
 extern void MirrorPickGeom( const std::string & geom_id );
 
 /*!
+    \ingroup Visualization
+*/
+/*!
+    Show the operating system's open or save dialog (Windows only) and wait for it to close.
+    Safe to call from any thread, so the GUI can keep running while the dialog is open.
+    \param [in] title string Dialog title
+    \param [in] save bool True for a save dialog, false for an open dialog
+    \param [in] types string One "Label	pattern" per line, patterns separated by ';'
+    \param [in] dir string Folder to start in (may be empty)
+    \param [in] file string Suggested file name (may be empty)
+    \param [in] defext string Extension added to a typed name without one (may be empty)
+    eturn string Chosen path, "" if cancelled, or "*error <reason>"
+*/
+
+extern std::string MirrorNativeFileDialog( const std::string & title, bool save, const std::string & types,
+                                           const std::string & dir, const std::string & file, const std::string & defext );
+
+/*!
     \ingroup Geom
 */
 /*!

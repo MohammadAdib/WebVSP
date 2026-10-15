@@ -73,6 +73,8 @@ public:
     std::string MirrorTakeOutput();
     void MirrorRequestFull();
     void MirrorPickGeom( const std::string & geom_id );
+    std::string MirrorNativeFileDialog( const std::string & title, bool save, const std::string & types,
+                                        const std::string & dir, const std::string & file, const std::string & defext );
 };
 
 #endif // !defined(GUIINTERFACE__INCLUDED_)

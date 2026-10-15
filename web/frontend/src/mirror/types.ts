@@ -150,6 +150,8 @@ export interface MDialog {
   mode?: number
   preset?: string
   dir?: string
+  /** The engine is showing the desktop's own dialog for this one */
+  native?: boolean
 }
 
 export type MirrorMsg = MDiff | MDialog
