@@ -442,7 +442,9 @@ export function Viewport() {
   return (
     <div className="viewport">
       <ViewTools />
-      <Canvas dpr={[1, 2]}>
+      {/* Resize on every frame while the side panels slide: the default (debounced) resize
+          stretches the old frame for the whole animation and then snaps. */}
+      <Canvas dpr={[1, 2]} resize={{ scroll: false, debounce: 0 }}>
         <Scene />
       </Canvas>
     </div>

@@ -93,6 +93,9 @@ input:focus, select:focus, textarea:focus, button:focus-visible {
 .main { position: relative; display: flex; min-height: 0; overflow: hidden; }
 .viewer { position: relative; flex: 1; min-width: 0; display: flex; }
 .viewport { position: relative; flex: 1; min-width: 0; background: var(--bg-0); }
+/* Always fill the box: while the panels slide, the drawing buffer catches up a frame later,
+   and stretching that frame by a few pixels is invisible where a gap at the edge is not. */
+.viewport canvas { width: 100% !important; height: 100% !important; }
 
 /* Side panels: always full height; slide open/closed by animating their width. */
 .side-panel {
