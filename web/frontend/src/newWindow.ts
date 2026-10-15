@@ -1,10 +1,16 @@
 import { api, isHostedUI } from './api/client'
+import { isWasmEngine } from './api/wasmEngine'
 
 /**
  * File > New Window: another WebVSP window with a model of its own. OpenVSP has one model
  * per process, so the engine starts another engine and the new tab talks to that one.
  */
 export async function openNewWindow() {
+  // In-browser engine: every tab runs its own OpenVSP, so a new tab is a new window.
+  if (isWasmEngine) {
+    window.open(window.location.href, '_blank')
+    return
+  }
   // Open the tab now, while the click still counts as a user action (popup blockers),
   // and point it at the new engine once that has started.
   const tab = window.open('', '_blank')

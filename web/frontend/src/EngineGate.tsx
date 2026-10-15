@@ -4,6 +4,13 @@ import { useStore } from './store'
 
 const DOWNLOAD = 'https://github.com/MohammadAdib/WebVSP/releases/latest/download/WebVSP-Engine-win64.zip'
 
+/** This page with the in-browser engine (OpenVSP compiled to WebAssembly). */
+function inBrowserUrl() {
+  const url = new URL(window.location.href)
+  url.searchParams.set('engine', 'wasm')
+  return url.toString()
+}
+
 /**
  * On a hosted copy of the UI (GitHub Pages), OpenVSP itself runs on the user's machine.
  * While that engine can't be reached, offer the download; the socket keeps retrying, so the
@@ -35,6 +42,9 @@ export function EngineGate() {
           </ol>
           <p className="engine-wait">
             <span className="engine-dot" /> Waiting for the engine at <code>{engineAddress}</code>
+          </p>
+          <p className="engine-alt">
+            Or <a href={inBrowserUrl()}>run OpenVSP in this browser tab</a> (no download; experimental, no VSPAERO).
           </p>
         </div>
       </div>

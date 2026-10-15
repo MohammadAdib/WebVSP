@@ -121,6 +121,11 @@ export function ImageBody({ w }: { w: MWidget }) {
     c.height = w.ih
     c.getContext('2d')!.putImageData(img, 0, 0)
   }, [w.img, w.iw, w.ih])
+  // The in-browser engine sends the drawing as SVG (it doesn't rasterize).
+  const svgUrl = useMemo(() => (w.svg ? 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(w.svg) : null), [w.svg])
+  if (svgUrl) {
+    return <img className="m-image" src={svgUrl} alt="" draggable={false} style={{ width: w.w, height: w.h }} {...input} />
+  }
   if (!w.img) return <div className="m-placeholder" />
   return <canvas ref={ref} className="m-image" style={{ width: w.w, height: w.h }} {...input} />
 }

@@ -80,6 +80,10 @@
 #include <FL/Fl_Button.H>
 #include <FL/Fl_Box.H>
 #include <FL/Fl_Image_Surface.H>
+#ifdef __EMSCRIPTEN__
+#include <FL/Fl_SVG_File_Surface.H>
+#include <cstdio>
+#endif
 #include <FL/fl_draw.H>
 
 #include <chrono>
@@ -325,6 +329,7 @@ string Base64( const unsigned char *data, size_t n )
 struct Capture
 {
     string b64;         // tightly packed RGB rows
+    string svg;         // or, where nothing rasterizes (WebAssembly), the drawing as SVG
     int w = 0, h = 0;
     std::chrono::steady_clock::time_point when;
 };
@@ -354,10 +359,40 @@ const Capture *CaptureWidget( Fl_Widget *w )
     }
     auto now = std::chrono::steady_clock::now();
     Capture &cap = Captures()[w];
-    if ( !cap.b64.empty() && cap.w == w->w() && cap.h == w->h() && now - cap.when < std::chrono::milliseconds( 250 ) )
+    if ( ( !cap.b64.empty() || !cap.svg.empty() ) && cap.w == w->w() && cap.h == w->h() &&
+         now - cap.when < std::chrono::milliseconds( 250 ) )
     {
         return &cap;
     }
+
+#ifdef __EMSCRIPTEN__
+    // FLTK's headless platform draws nothing; its SVG surface records the drawing instead
+    // (into memory), and the browser renders it.
+    char *buf = nullptr;
+    size_t len = 0;
+    FILE *f = open_memstream( &buf, &len );
+    if ( !f )
+    {
+        return nullptr;
+    }
+    {
+        Fl_SVG_File_Surface surf( w->w(), w->h(), f, []( FILE * ) { return 0; } ); // close() leaves f open
+        Fl_Surface_Device::push_current( &surf );
+        fl_color( FL_WHITE );
+        fl_rectf( 0, 0, w->w(), w->h() );
+        surf.draw( w );
+        Fl_Surface_Device::pop_current();
+        surf.close();
+    }
+    fclose( f );
+    cap.svg.assign( buf ? buf : "", len );
+    free( buf );
+    cap.b64.clear();
+    cap.w = w->w();
+    cap.h = w->h();
+    cap.when = now;
+    return &cap;
+#endif
 
     Fl_RGB_Image *img = nullptr;
     {
@@ -877,7 +912,14 @@ string SerializeWidget( Fl_Widget *w, int win_id, int parent_id, int order, int 
         }
         else if ( const Capture *cap = CaptureWidget( w ) )
         {
-            o.Int( "iw", cap->w ).Int( "ih", cap->h ).Str( "img", cap->b64 );
+            if ( !cap->svg.empty() )
+            {
+                o.Int( "iw", cap->w ).Int( "ih", cap->h ).Str( "svg", cap->svg );
+            }
+            else
+            {
+                o.Int( "iw", cap->w ).Int( "ih", cap->h ).Str( "img", cap->b64 );
+            }
         }
     }
     return o.Done();

@@ -62,7 +62,13 @@ Developers can also run the engine from a source build with `websp-web.cmd`.
   can open and save files on the machine running the engine.
 - Browsers allow an https page to reach `http://localhost`; Chrome asks once for
   permission to access the local network.
-- Point the page at another port with `?engine=http://localhost:PORT` (remembered).
+- Point the page at another port with `?engine=http://localhost:PORT` (for that tab).
+
+## In-browser engine (experimental)
+
+`?engine=wasm` runs OpenVSP itself in the browser tab (compiled to WebAssembly), with no engine
+to install; no VSPAERO or STEP export there. See [wasm/README.md](wasm/README.md) to build and
+try it locally.
 
 ## Develop
 

@@ -1,4 +1,5 @@
 import type { BBox, DirListing, GeomSchema, ModelTree, ParmValues, ServerEvent } from './types'
+import { isWasmEngine, wasmConnect, wasmRequest, WasmEngineError } from './wasmEngine'
 
 // The backend passes its session token in the URL fragment (#token=...) so it never
 // hits server logs; a desktop shell can inject `window.__VSPWEB__` instead.
@@ -54,7 +55,8 @@ export const DEFAULT_ENGINE = 'http://localhost:8765'
 const config = readConfig()
 
 /** True when this page is a hosted copy of the UI that talks to a local engine. */
-export const isHostedUI = config.baseUrl !== ''
+/** Hosted copy of the UI talking to an engine on this machine (not the in-browser engine). */
+export const isHostedUI = config.baseUrl !== '' && !isWasmEngine
 export const engineAddress = config.baseUrl || window.location.origin
 
 export class ApiError extends Error {
@@ -66,6 +68,14 @@ export class ApiError extends Error {
 }
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  if (isWasmEngine) {
+    try {
+      return (await wasmRequest(method, path, body)) as T
+    } catch (err) {
+      if (err instanceof WasmEngineError) throw new ApiError(err.status, err.message)
+      throw err
+    }
+  }
   const headers: Record<string, string> = {}
   if (config.token) headers['x-vsp-token'] = config.token
   if (body !== undefined) headers['content-type'] = 'application/json'
@@ -134,6 +144,7 @@ export const api = {
 export type SocketMessage = ServerEvent | { type: 'mirror_snapshot' | 'mirror' | 'dialog_done'; [k: string]: any }
 
 export function connectEvents(onEvent: (e: SocketMessage) => void, onStatus: (connected: boolean) => void) {
+  if (isWasmEngine) return wasmConnect(onEvent, onStatus)
   let ws: WebSocket | null = null
   let closed = false
   let retry = 500

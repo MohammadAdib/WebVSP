@@ -123,6 +123,8 @@ export interface MWidget {
   rows?: number
   ncols?: number
   img?: string
+  /** The drawing as SVG, instead of img pixels (in-browser engine) */
+  svg?: string
   iw?: number
   ih?: number
   draw?: GlDraw

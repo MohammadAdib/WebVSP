@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { connectEvents } from './api/client'
+import { isWasmEngine } from './api/wasmEngine'
 import type { ServerEvent } from './api/types'
 import { EngineGate } from './EngineGate'
 import { DialogHost } from './mirror/Dialogs'
@@ -11,6 +12,7 @@ import { FileDialog } from './panels/FileDialog'
 import { setWindowTitle } from './platform'
 import { useStore } from './store'
 import { Viewport } from './viewport/Viewport'
+import { WasmToolbar } from './WasmToolbar'
 
 function StatusBar() {
   const tree = useStore((s) => s.tree)
@@ -90,6 +92,7 @@ export default function App() {
       <div className="topbar">
         <span className="brand">WebVSP</span>
         <MirrorMenuBar />
+        {isWasmEngine && <WasmToolbar />}
         {!mirrorEnabled && connected && <span className="hint">GUI mirror unavailable (engine built without the GUI)</span>}
       </div>
       <div className="main" ref={mainRef}>

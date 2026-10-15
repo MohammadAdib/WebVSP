@@ -176,6 +176,11 @@ SET( VSP_G_LIBRARIES_CORE_FIRST
 
 ADD_SUBDIRECTORY( vsp )
 
+# Experimental in-browser engine (web/wasm): only when building with Emscripten.
+IF( EMSCRIPTEN )
+    ADD_SUBDIRECTORY( ${PROJECT_SOURCE_DIR}/../web/wasm/engine ${CMAKE_BINARY_DIR}/wasm_engine )
+ENDIF()
+
 set(IS_NUMPY_FOUND FALSE)
 
 IF( NOT VSP_NO_API_WRAPPERS )

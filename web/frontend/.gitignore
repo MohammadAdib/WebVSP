@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# WebAssembly engine module, built by web/wasm/build_wasm.ps1
+public/wasm/
