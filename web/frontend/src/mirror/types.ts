@@ -156,6 +156,12 @@ export interface MDialog {
   native?: boolean
 }
 
-export type MirrorMsg = MDiff | MDialog
+/** What the main 3D view shows besides the model (the CG from Mass Properties, measures, ...) */
+export interface MOverlay {
+  t: 'overlay'
+  objs: GlDrawObj[]
+}
+
+export type MirrorMsg = MDiff | MDialog | MOverlay
 
 export type MirrorEvent = Record<string, string | number>

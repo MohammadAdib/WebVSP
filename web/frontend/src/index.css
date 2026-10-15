@@ -402,3 +402,73 @@ input:focus, select:focus, textarea:focus, button:focus-visible {
   transition: background 120ms;
 }
 .engine-download:hover { background: #ececec; }
+
+/* ------------------------------------------------------------ VSPAERO results viewer */
+.results-viewer {
+  position: absolute; display: flex; flex-direction: column; min-width: 0; min-height: 0;
+  background: var(--bg-1); border: 1px solid var(--line-strong); border-radius: 6px;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.55); overflow: hidden;
+  animation: pop-in 180ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.results-viewer.maximized { border-radius: 0; border-width: 1px 0 0; box-shadow: none; }
+.results-titlebar { flex: none; }
+.results-titlebuttons { display: flex; gap: 2px; }
+/* Invisible grips on the edges and corners of a restored window. */
+.results-resize { position: absolute; z-index: 5; }
+.results-resize.n, .results-resize.s { left: 8px; right: 8px; height: 6px; cursor: ns-resize; }
+.results-resize.e, .results-resize.w { top: 8px; bottom: 8px; width: 6px; cursor: ew-resize; }
+.results-resize.n { top: -3px; }
+.results-resize.s { bottom: -3px; }
+.results-resize.e { right: -3px; }
+.results-resize.w { left: -3px; }
+.results-resize.ne, .results-resize.nw, .results-resize.se, .results-resize.sw { width: 12px; height: 12px; }
+.results-resize.ne { top: -3px; right: -3px; cursor: nesw-resize; }
+.results-resize.sw { bottom: -3px; left: -3px; cursor: nesw-resize; }
+.results-resize.nw { top: -3px; left: -3px; cursor: nwse-resize; }
+.results-resize.se { bottom: -3px; right: -3px; cursor: nwse-resize; }
+.results-bar {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 6px 10px;
+  background: var(--bg-2); border-bottom: 1px solid var(--line); font-size: 12px; color: var(--fg-1);
+}
+.results-bar select { height: 24px; }
+.results-bar label { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.results-bar input[type='number'] { width: 80px; height: 22px; }
+.results-range { display: inline-flex; align-items: center; gap: 6px; }
+.results-body { position: relative; flex: 1; min-height: 0; }
+.results-body > canvas, .results-body > div:first-child { position: absolute; inset: 0; }
+.results-error { padding: 24px; color: var(--fg-1); }
+
+/* Legend: on the left, as in VSPAERO's viewer (below the view buttons). */
+.results-legend {
+  position: absolute; left: 12px; top: 56px; bottom: 48px; display: flex; flex-direction: column; gap: 6px;
+  padding: 8px 10px; font-size: 11px; color: var(--fg-1); font-family: var(--mono);
+  background: rgba(22, 22, 22, 0.8); border: 1px solid var(--line-strong); border-radius: 4px; pointer-events: none;
+}
+.results-legend-title { font-family: inherit; font-weight: 600; font-size: 12px; color: var(--fg-0); }
+.results-legend-clip { display: flex; align-items: center; gap: 8px; color: var(--fg-2); }
+.results-legend-swatch { width: 16px; height: 8px; border: 1px solid var(--line-strong); }
+.results-legend-body { display: flex; gap: 8px; flex: 1; min-height: 80px; max-height: 360px; }
+.results-legend-bar { width: 16px; border: 1px solid var(--line-strong); }
+.results-legend-ticks { display: flex; flex-direction: column; justify-content: space-between; }
+
+/* Case, coefficients, reference: top right. */
+.results-panel {
+  position: absolute; right: 12px; top: 12px; width: 240px; max-height: calc(100% - 150px); overflow: auto;
+  padding: 8px 10px; font-size: 12px; color: var(--fg-1);
+  background: rgba(22, 22, 22, 0.85); border: 1px solid var(--line-strong); border-radius: 4px;
+}
+.results-case { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; white-space: nowrap; }
+.results-case select { height: 22px; }
+.results-case span:first-child { font-weight: 600; color: var(--fg-0); }
+.results-panel dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin: 0; }
+.results-panel dt { color: var(--fg-2); }
+.results-panel dd { margin: 0; text-align: right; font-family: var(--mono); color: var(--fg-0); }
+.results-row { display: contents; }
+.results-section { margin: 10px 0 4px; font-weight: 600; color: var(--fg-0); border-top: 1px solid var(--line); padding-top: 8px; }
+.results-comment { margin-top: 6px; color: var(--fg-2); white-space: pre-wrap; }
+
+/* "Mach: …, Beta: …, Alpha: …", bottom centre as in VSPAERO's viewer. */
+.results-label {
+  position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); font-size: 12px; font-family: var(--mono);
+  color: var(--fg-1); background: rgba(22, 22, 22, 0.7); padding: 3px 10px; border-radius: 3px; pointer-events: none;
+}

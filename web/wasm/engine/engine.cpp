@@ -174,6 +174,13 @@ string ModelJson()
     return out;
 }
 
+// Geoms drawn from triangles rather than surfaces (GetMeshGeomTriPnts): imported/CompGeom
+// meshes, and NGon meshes such as VSPAERO's geometry.
+bool IsTriMesh( const string &type )
+{
+    return type == "Mesh" || type == "NGonMesh";
+}
+
 void Grow( double lo[3], double hi[3], double x, double y, double z )
 {
     const double p[3] = { x, y, z };
@@ -202,7 +209,7 @@ string BBoxJson()
             Grow( lo, hi, b.x(), b.y(), b.z() );
             any = true;
         }
-        if ( nsurf == 0 && vsp::GetGeomTypeName( id ) == "Mesh" )
+        if ( nsurf == 0 && IsTriMesh( vsp::GetGeomTypeName( id ) ) )
         {
             vector< double > p = vsp::GetMeshGeomTriPnts( id );
             for ( size_t i = 0; i + 2 < p.size(); i += 3 )
@@ -348,7 +355,7 @@ vector< uint8_t > MeshBytes( const string &id )
         }
     }
     if ( surfs.empty() && nsurf == 0 && std::find( geoms.begin(), geoms.end(), id ) != geoms.end() &&
-         vsp::GetGeomTypeName( id ) == "Mesh" )
+         IsTriMesh( vsp::GetGeomTypeName( id ) ) )
     {
         Surface sf;
         if ( TriangleSurface( id, sf ) )
@@ -632,7 +639,7 @@ int main()
     // VSPAERO's programs, compiled to WebAssembly, are run by the page (WebProcess.h):
     // OpenVSP only checks that they exist, so give it a folder with placeholders.
     mkdir( "/bin", 0755 );
-    for ( const char *exe : { "/bin/vspaero", "/bin/vsploads" } )
+    for ( const char *exe : { "/bin/vspaero", "/bin/vsploads", "/bin/vspviewer" } )
     {
         if ( FILE *f = fopen( exe, "w" ) )
         {

@@ -32,6 +32,14 @@ export function MirrorWindow({ win, scale = 1 }: { win: MWindow; scale?: number 
 
 let topZ = 20
 
+/** The next stacking level for a window brought to the front (shared by all floating windows). */
+export function nextZ() {
+  return ++topZ
+}
+
+/** Whether z is the frontmost window's level. */
+export const isTopZ = (z: number) => z === topZ
+
 /** A floating, draggable frame around a mirrored window (screens and popups). */
 export function FloatingWindow({ win, index, origin }: { win: MWindow; index: number; origin?: MWindow }) {
   // Open where VSP placed the window relative to its main window; cascade if unknown.

@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { MDialog, MirrorEvent, MirrorMsg, MWidget, MWindow } from './types'
+import type { GlDrawObj, MDialog, MirrorEvent, MirrorMsg, MWidget, MWindow } from './types'
 
 interface MirrorState {
   enabled: boolean
@@ -8,6 +8,8 @@ interface MirrorState {
   /** children ids per "win:parent", in child order */
   children: Record<string, number[]>
   dialogs: MDialog[]
+  /** The main 3D view's extra lines and points (CG, measures, ...) */
+  overlay: GlDrawObj[]
   send: (e: MirrorEvent) => void
 
   setSender: (fn: (e: MirrorEvent) => void) => void
@@ -37,6 +39,7 @@ export const useMirror = create<MirrorState>((set, get) => ({
   widgets: {},
   children: {},
   dialogs: [],
+  overlay: [],
   send: () => {},
 
   setSender: (send) => set({ send }),
@@ -53,6 +56,10 @@ export const useMirror = create<MirrorState>((set, get) => ({
     for (const m of msgs) {
       if (m.t === 'dialog') {
         dialogs = [...dialogs, m]
+        continue
+      }
+      if (m.t === 'overlay') {
+        set({ overlay: m.objs })
         continue
       }
       if (m.full) {

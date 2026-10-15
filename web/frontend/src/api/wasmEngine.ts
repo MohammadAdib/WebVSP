@@ -15,6 +15,7 @@
  */
 import type { SocketMessage } from './client'
 import type { MDialog } from '../mirror/types'
+import { useViewer } from '../viewer/store'
 
 interface VspModule {
   call(id: number, op: string, a: string, b: string, value: number): void
@@ -374,6 +375,7 @@ function dirname(path: string) {
 function runProgram(vsp: VspModule, r: ProcRequest) {
   const cmd = (r.cmd ?? '').split('/').pop()!.replace(/\.exe$/i, '')
   const args = r.args ?? []
+  if (cmd === 'vspviewer') return openViewer(vsp, r.id, args)
   const cwd = r.cwd || '/'
   // The folders the program reads and writes: the user's files, the working folder, and the
   // folders of any paths among its arguments (VSPAERO gets the model's path).
@@ -420,4 +422,24 @@ function killProgram(vsp: VspModule, id: number) {
   worker.terminate()
   vsp.processOutput(id, 'Stopped.\n')
   vsp.processExit(id, 143)
+}
+
+/**
+ * VSPAERO's viewer: shown in the page (src/viewer) instead of a desktop program. OpenVSP sees
+ * it running until it's closed. Its last argument is the model's base path (<base>.adb).
+ */
+function openViewer(vsp: VspModule, id: number, args: string[]) {
+  const base = (args[args.length - 1] ?? '').replace(/\.adb$/, '')
+  const read = (path: string) => (vsp.FS.analyzePath(path).exists ? new Uint8Array(vsp.FS.readFile(path)) : null)
+  const adb = read(`${base}.adb`)
+  const cases = read(`${base}.adb.cases`)
+  const polar = read(`${base}.polar`)
+  if (!adb) {
+    vsp.processOutput(id, `vspviewer: ${base}.adb not found\n`)
+    vsp.processExit(id, 1)
+    return
+  }
+  const name = base.split('/').pop() || base
+  const text = (b: Uint8Array | null) => (b ? new TextDecoder().decode(b) : '')
+  useViewer.getState().show(name, adb.buffer, text(cases), text(polar), () => vsp.processExit(id, 0))
 }

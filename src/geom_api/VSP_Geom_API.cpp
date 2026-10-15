@@ -56,6 +56,7 @@
 #include "VspUtil.h"
 #include "WingGeom.h"
 #include "MeshGeom.h"
+#include "NGonMeshGeom.h"
 #include "PtCloudGeom.h"
 #include "StlHelper.h"
 #include "ModeMgr.h"
@@ -5156,15 +5157,20 @@ int GetTotalNumSurfs( const std::string& geom_id )
 std::vector < double > GetMeshGeomTriPnts( const std::string& geom_id )
 {
     Vehicle* veh = GetVehicle();
-    MeshGeom* mesh_ptr = dynamic_cast< MeshGeom* >( veh->FindGeom( geom_id ) );
-    if ( !mesh_ptr )
+    Geom* geom_ptr = veh->FindGeom( geom_id );
+    if ( MeshGeom* mesh_ptr = dynamic_cast< MeshGeom* >( geom_ptr ) )
     {
-        ErrorMgr.AddError( VSP_INVALID_GEOM_ID, "GetMeshGeomTriPnts::Can't Find Mesh Geom " + geom_id );
-        return std::vector < double >();
+        ErrorMgr.NoError();
+        return mesh_ptr->GetDrawTriPnts();
     }
-
-    ErrorMgr.NoError();
-    return mesh_ptr->GetDrawTriPnts();
+    // NGon meshes (e.g. the VSPAERO geometry): their polygons, triangulated.
+    if ( NGonMeshGeom* ngon_ptr = dynamic_cast< NGonMeshGeom* >( geom_ptr ) )
+    {
+        ErrorMgr.NoError();
+        return ngon_ptr->GetDrawTriPnts();
+    }
+    ErrorMgr.AddError( VSP_INVALID_GEOM_ID, "GetMeshGeomTriPnts::Can't Find Mesh Geom " + geom_id );
+    return std::vector < double >();
 }
 
 // Get the maximum bounding box point for the Geom in absolute or body axes

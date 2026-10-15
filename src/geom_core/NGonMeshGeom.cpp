@@ -740,3 +740,23 @@ vector<TMesh*> NGonMeshGeom::CreateTMeshVec( bool skipnegflipnormal, const int &
 {
     return BuildPGTMeshVec( this );
 }
+vector< double > NGonMeshGeom::GetDrawTriPnts() const
+{
+    vector< double > pnts;
+    vector< TMesh* > tmv = CreateTMeshVec( false );
+    for ( TMesh *tm : tmv )
+    {
+        pnts.reserve( pnts.size() + tm->m_TVec.size() * 9 );
+        for ( TTri *tri : tm->m_TVec )
+        {
+            for ( TNode *n : { tri->m_N0, tri->m_N1, tri->m_N2 } )
+            {
+                pnts.push_back( n->m_Pnt.x() );
+                pnts.push_back( n->m_Pnt.y() );
+                pnts.push_back( n->m_Pnt.z() );
+            }
+        }
+        delete tm;
+    }
+    return pnts;
+}

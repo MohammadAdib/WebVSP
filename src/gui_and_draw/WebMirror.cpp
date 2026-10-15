@@ -39,6 +39,8 @@
 #include "ScreenBase.h"
 #include "ManageGeomScreen.h"
 #include "MainVSPScreen.h"
+#include "Vehicle.h"
+#include "VehicleMgr.h"
 #include "GuiDevice.h"
 #include "TreeIconWidget.h"
 #include "ParmMgr.h"
@@ -92,6 +94,7 @@
 #include <deque>
 #include <functional>
 #include <map>
+#include <unordered_set>
 #include <mutex>
 #include <set>
 #include <thread>
@@ -438,6 +441,8 @@ const Capture *CaptureWidget( Fl_Widget *w )
 }
 
 
+vector< string > DrawObjItems( const vector< DrawObj* > &objs, DrawObj::ScreenEnum screen, size_t max_pts = 500000 );
+
 // Lines and points a GL view draws, plus its 2D camera, so the client can draw them.
 string GlDrawJson( Fl_Widget *w )
 {
@@ -463,12 +468,27 @@ string GlDrawJson( Fl_Widget *w )
         return string();
     }
 
+    Obj v;
+    v.Num( "zoom", zoom ).Num( "px", pan_x ).Num( "py", pan_y ).Int( "plane", plane )
+     .Num( "ppu", dynamic_cast< Fl_Gl_Window* >( w ) ? static_cast< Fl_Gl_Window* >( w )->pixels_per_unit() : 1.0 )
+     .Raw( "objs", JoinArray( DrawObjItems( objs, screen ) ) );
+    return v.Done();
+}
+
+// The visible line and point draw objects of a view, as JSON items (at most max_pts points).
+vector< string > DrawObjItems( const vector< DrawObj* > &objs, DrawObj::ScreenEnum screen, size_t max_pts )
+{
     vector< string > items;
+    size_t total = 0;
     for ( DrawObj *d : objs )
     {
         if ( !d || d->m_Screen != screen || !d->m_Visible || d->m_PntVec.empty() )
         {
             continue;
+        }
+        if ( total + d->m_PntVec.size() > max_pts )
+        {
+            break;
         }
         const char *type = nullptr;
         switch ( d->m_Type )
@@ -503,12 +523,11 @@ string GlDrawJson( Fl_Widget *w )
         o.Str( "t", type ).Str( "c", col( d->m_LineColor ) ).Str( "pc", col( d->m_PointColor ) )
          .Num( "lw", d->m_LineWidth ).Num( "ps", d->m_PointSize ).Raw( "p", pts );
         items.push_back( o.Done() );
+        total += d->m_PntVec.size();
     }
-    Obj v;
-    v.Num( "zoom", zoom ).Num( "px", pan_x ).Num( "py", pan_y ).Int( "plane", plane )
-     .Num( "ppu", dynamic_cast< Fl_Gl_Window* >( w ) ? static_cast< Fl_Gl_Window* >( w )->pixels_per_unit() : 1.0 ).Raw( "objs", JoinArray( items ) );
-    return v.Done();
+    return items;
 }
+
 
 string ColorHex( Fl_Color c )
 {
@@ -553,6 +572,8 @@ struct State
     std::unordered_map< Fl_Window*, WinInfo > info;
     bool want_full = true;
     std::chrono::steady_clock::time_point last_diff;
+    string overlay;                      // last main-view overlay sent
+    std::chrono::steady_clock::time_point last_overlay;
 
     std::mutex io_mutex;                 // guards everything below
     std::deque< string > inbox;
@@ -1016,6 +1037,41 @@ void BuildWindowInfo()
     }
 }
 
+// What the main 3D view shows besides the model, which the page draws itself: the CG from
+// Mass Properties, measures, CFD sources, structures... (the screens' draw objects).
+string MainOverlayJson()
+{
+    MainVSPScreen *main = S().mgr ? dynamic_cast< MainVSPScreen* >( S().mgr->GetScreen( vsp::VSP_MAIN_SCREEN ) ) : nullptr;
+    Vehicle *veh = VehicleMgr.GetVehicle();
+    if ( !main || !main->GetGLWindow() || !veh )
+    {
+        return "[]";
+    }
+    vector< DrawObj* > all, own;
+    main->GetGLWindow()->LoadAllDrawObjs( all );
+    veh->LoadDrawObjs( own );
+    std::unordered_set< DrawObj* > vehicle( own.begin(), own.end() );
+    vector< DrawObj* > extra;
+    for ( DrawObj *d : all )
+    {
+        if ( !vehicle.count( d ) )
+        {
+            extra.push_back( d );
+        }
+    }
+    // Geoms without a surface (Blank, Hinge) are only their points and axes, which the
+    // client's tessellated model doesn't have.
+    for ( Geom *g : veh->FindGeomVec( veh->GetGeomVec() ) )
+    {
+        int type = g ? g->GetType().m_Type : -1;
+        if ( type == BLANK_GEOM_TYPE || type == HINGE_GEOM_TYPE )
+        {
+            g->LoadDrawObjs( extra );
+        }
+    }
+    return JoinArray( DrawObjItems( extra, DrawObj::VSP_MAIN_SCREEN, 200000 ) );
+}
+
 void Diff()
 {
     State &s = S();
@@ -1099,6 +1155,17 @@ void Diff()
 
     bool full = s.want_full;
     s.want_full = false;
+    auto now = std::chrono::steady_clock::now();
+    if ( full || now - s.last_overlay > std::chrono::milliseconds( 200 ) )
+    {
+        s.last_overlay = now;
+        string overlay = MainOverlayJson();
+        if ( full || overlay != s.overlay )
+        {
+            s.overlay = overlay;
+            Emit( "{\"t\":\"overlay\",\"objs\":" + overlay + "}" );
+        }
+    }
     if ( full || !windows.empty() || !closed.empty() || !widgets.empty() || !removed.empty() )
     {
         Obj o;

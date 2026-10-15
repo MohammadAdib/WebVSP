@@ -84,6 +84,10 @@ public:
 
     virtual vector< TMesh* > CreateTMeshVec( bool skipnegflipnormal, const int & n_ref = 0 ) const override;
 
+    // The active mesh's polygons as triangles, placed by the Geom's transform: x, y, z of each
+    // corner, three corners per triangle (as MeshGeom::GetDrawTriPnts).
+    vector< double > GetDrawTriPnts() const;
+
     // Scale Transformation Matrix
     Matrix4d m_ScaleMatrix;
     Parm m_ScaleFromOrig;

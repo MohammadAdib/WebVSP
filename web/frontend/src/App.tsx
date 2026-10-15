@@ -12,6 +12,7 @@ import { FileDialog } from './panels/FileDialog'
 import { setWindowTitle } from './platform'
 import { useStore } from './store'
 import { Viewport } from './viewport/Viewport'
+import { ResultsViewer } from './viewer/ResultsViewer'
 import { WasmToolbar } from './WasmToolbar'
 
 function StatusBar() {
@@ -123,6 +124,7 @@ export default function App() {
         {floating.map((w, i) => (
           <FloatingWindow key={w.id} win={w} index={i} origin={mainWin} />
         ))}
+        <ResultsViewer />
       </div>
       <StatusBar />
       <DialogHost />

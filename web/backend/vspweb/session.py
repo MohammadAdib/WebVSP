@@ -231,7 +231,7 @@ class Session:
                     a = vsp.GetGeomBBoxMin(gid, s, True)
                     b = vsp.GetGeomBBoxMax(gid, s, True)
                     boxes.append(((a.x(), a.y(), a.z()), (b.x(), b.y(), b.z())))
-                if not boxes and hasattr(vsp, "GetMeshGeomTriPnts") and vsp.GetGeomTypeName(gid) == "Mesh":
+                if not boxes and hasattr(vsp, "GetMeshGeomTriPnts") and vsp.GetGeomTypeName(gid) in ("Mesh", "NGonMesh"):
                     # Mesh Geoms have no surfaces: bound the triangles they draw.
                     pts = vsp.GetMeshGeomTriPnts(gid)
                     if pts:

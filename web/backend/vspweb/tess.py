@@ -80,7 +80,7 @@ def geom_mesh_bytes(geom_id: str) -> bytes:
         m = surface_mesh(geom_id, s)
         if m is not None:
             surfaces.append(m)
-    if not surfaces and hasattr(vsp, "GetMeshGeomTriPnts") and vsp.GetGeomTypeName(geom_id) == "Mesh":
+    if not surfaces and hasattr(vsp, "GetMeshGeomTriPnts") and vsp.GetGeomTypeName(geom_id) in ("Mesh", "NGonMesh"):
         m = triangle_mesh(geom_id)
         if m is not None:
             surfaces.append(m)
