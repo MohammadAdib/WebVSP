@@ -13,6 +13,8 @@ Binary mesh format (little-endian, all fields 4-byte aligned):
         float32 positions[nu*nw*3]
         float32 normals[nu*nw*3]
         uint32  indices[nidx]
+    uint32   number of outline points (OpenVSP's feature lines, MirrorFeatureLines)
+    float32  outline[n*3]           pairs of points, one pair per line segment
 """
 
 from __future__ import annotations

@@ -72,8 +72,8 @@ Developers can also run the engine from a source build with `websp-web.cmd`.
 ## In-browser engine
 
 The hosted page's default: OpenVSP itself runs in the browser tab (compiled to WebAssembly),
-with no engine to install. VSPAERO runs there too (single-threaded); not available: STEP export
-and the VSPAERO viewer. Pages served by an engine
+with no engine to install. VSPAERO runs there too (single-threaded), and its results open in
+the page's own viewer; STEP export isn't available. Pages served by an engine
 (`localhost:8765`) use that engine unless opened with `?engine=wasm`. See
 [wasm/README.md](wasm/README.md) to build and try it locally.
 
@@ -105,8 +105,8 @@ backend's same-origin check accepts it. Run `npm run build` to update what :8765
   (`GetUWTess01` + `CompVecPnt01`/`CompVecNorm01`), sent as a compact binary payload
   (`vspweb/tess.py`). A watcher refetches only geoms whose Parms changed and follows each
   geom's draw type (Wire/Hidden/Shade) and the GUI's selection.
-- Docking: Geom Browser and the active geom editor sit on the right like the FLTK app;
-  all other screens and popups are floating windows. View-menu camera items drive the
+- Docking: the Geom Browser sits on the left and the active geom editor on the right;
+  all other screens (Group Modifications included) and popups are floating windows. View-menu camera items drive the
   three.js view.
 - Host-specific features (file dialogs, window title) go through `frontend/src/platform.ts`
   so a desktop wrapper can replace them.

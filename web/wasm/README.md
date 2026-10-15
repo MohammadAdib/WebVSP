@@ -1,7 +1,8 @@
 # WebVSP in-browser engine (experimental)
 
 OpenVSP compiled to WebAssembly, running inside the browser tab: no engine to download or
-run. Open the UI with `?engine=wasm`. Everything else in the UI is the same as with the local
+run. It's the hosted page's default (and the dev server's); elsewhere open the UI with
+`?engine=wasm`. Everything else in the UI is the same as with the local
 engine: OpenVSP's own windows, menus and dialogs are mirrored into the page, and the 3D view is
 the page's own.
 
@@ -36,10 +37,11 @@ The first full build takes a while; later ones are incremental.
 
 ## Not available in the browser (yet)
 
-- **VSPAERO's viewer** (`vspviewer`, a desktop OpenGL program). VSPAERO itself runs: `vspaero` and
-  `vsploads` are compiled to WebAssembly too and run in workers (`src/util/WebProcess.h`,
-  `public/program.worker.js`), single-threaded. CalculiX (structural analysis) isn't part of
-  OpenVSP and isn't available either.
+- **VSPAERO's desktop viewer** (`vspviewer`, an OpenGL program). VSPAERO > Launch Viewer opens
+  the page's own results viewer instead (`web/frontend/src/viewer/`). VSPAERO itself runs:
+  `vspaero` and `vsploads` are compiled to WebAssembly too and run in workers
+  (`src/util/WebProcess.h`, `public/program.worker.js`), single-threaded. CalculiX
+  (structural analysis) isn't part of OpenVSP and isn't available either.
 - **STEP export**: STEPcode's build runs a code generator, which can't run when
   cross-compiling (`VSP_NO_STEP`).
 - Files: opened and saved through the browser. Chrome and Edge save back to the chosen file

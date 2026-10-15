@@ -20,7 +20,9 @@
 //   deleteGeoms(a=comma-separated ids)
 //   setParm(a=parm id, value)
 //   newModel, readFile(a=path), writeFile(a=path)   (paths in the in-memory file system)
-//   pick(a=geom id)                     select as if picked in the 3D view
+//   pick(a=geom id, b="1" to toggle)    select as if picked in the 3D view (shift/ctrl-click)
+//   origin(a=geom id)                   [x,y,z] of the geom's origin
+//   move(a=ids, b="dx,dy,dz")           move geoms by an offset (one undo step)
 
 #include "VSP_Geom_API.h"
 #include "APIErrorMgr.h"
