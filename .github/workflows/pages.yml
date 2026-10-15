@@ -2,6 +2,8 @@
 # The hosted UI connects to the WebVSP engine running on the user's machine
 # (web/vsp-web.cmd, http://localhost:8765). The engine only accepts requests from
 # trusted UI origins; see WEB_ORIGINS in web/backend/vspweb/app.py.
+# The in-browser engine (?engine=wasm, web/wasm) is built locally with web/wasm/build_wasm.ps1
+# and published as the wasm-latest release; it's added to the site here.
 name: Deploy web UI to GitHub Pages
 
 on:
@@ -38,6 +40,13 @@ jobs:
       - name: Install
         working-directory: web/frontend
         run: npm ci
+
+      - name: In-browser engine module
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p web/frontend/public/wasm
+          gh release download wasm-latest -R ${{ github.repository }} -p 'vsp.*' -D web/frontend/public/wasm --clobber             || echo "::warning::No wasm-latest release: the site has no in-browser engine"
 
       - name: Build
         working-directory: web/frontend
