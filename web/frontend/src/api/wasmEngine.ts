@@ -141,6 +141,7 @@ export async function wasmRequest(method: string, path: string, body?: unknown):
   }
   if (route === 'GET /geom-types') return call('geomTypes')
   if (route === 'GET /bbox') return call('bbox')
+  if (route === 'GET /bbox/all') return call('bbox', 'all')
   if ((m = route.match(/^GET \/geoms\/([^/]+)\/mesh$/))) return call('mesh', decodeURIComponent(m[1]))
   if (route === 'POST /geoms') return call('addGeom', String(b.type), b.parent ? String(b.parent) : '')
   if (route === 'POST /geoms/delete') return call('deleteGeoms', (b.ids as string[]).join(','))
@@ -149,6 +150,8 @@ export async function wasmRequest(method: string, path: string, body?: unknown):
   if (route === 'POST /pick') return call('pick', String(b.id ?? ''), b.toggle ? '1' : '')
   if ((m = route.match(/^GET \/geoms\/([^/]+)\/origin$/))) return call('origin', decodeURIComponent(m[1]))
   if (route === 'POST /geoms/move') return call('move', (b.ids as string[]).join(','), (b.delta as number[]).join(','))
+  if (route === 'POST /geoms/draw-type') return call('drawType', (b.ids as string[]).join(','), '', Number(b.type))
+  if (route === 'POST /geoms/rotate') return call('rotate', (b.ids as string[]).join(','), (b.axis as number[]).join(','), Number(b.angle))
   throw new WasmEngineError(501, `Not available in the in-browser engine: ${method} ${path}`)
 }
 

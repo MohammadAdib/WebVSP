@@ -11595,6 +11595,21 @@ extern std::vector< vec3d > MirrorFeatureLines( const std::string & geom_id );
 extern void MirrorMoveGeoms( const std::vector< std::string > & geom_ids, const vec3d & delta );
 
 /*!
+    \ingroup Visualization
+*/
+/*!
+    Rotate Geoms in the 3D view, each about its own origin, as Blender's R does: turns each one's
+    model matrix about a world axis and sets its absolute or relative location and rotation to
+    match, as one step of Edit > Undo. A Geom whose rotation is attached to a selected ancestor
+    turns with it.
+    \param [in] geom_ids vector<string> Geom IDs
+    \param [in] axis vec3d World axis to rotate about
+    \param [in] angle double Angle (degrees, right-handed about the axis)
+*/
+
+extern void MirrorRotateGeoms( const std::vector< std::string > & geom_ids, const vec3d & axis, double angle );
+
+/*!
     \ingroup Geom
 */
 /*!

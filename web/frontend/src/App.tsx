@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { connectEvents } from './api/client'
 import type { ServerEvent } from './api/types'
+import { useBlenderKeys } from './mirror/blenderKeys'
 import { DialogHost } from './mirror/Dialogs'
 import { useMirror } from './mirror/store'
 import type { MDialog, MirrorMsg, MWidget, MWindow } from './mirror/types'
@@ -63,6 +64,7 @@ export default function App() {
   const panelHeight = usePanelHeight(mainRef)
   const [fullscreen, setFullscreen] = useState(false)
   const mirrorEnabled = useMirror((s) => s.enabled)
+  useBlenderKeys()
 
   useEffect(() => {
     void run(async () => {

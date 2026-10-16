@@ -3,7 +3,6 @@ import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import type { TransformControls as TransformControlsImpl } from 'three-stdlib'
-import { create } from 'zustand'
 import { api } from '../api/client'
 import { decodeMesh, gridLineIndices } from '../api/mesh'
 import { NO_GEOMS, useStore, type Layout, type ViewName } from '../store'
@@ -11,6 +10,8 @@ import { useViewer } from '../viewer/store'
 import { useMirror } from '../mirror/store'
 import type { GlDrawObj } from '../mirror/types'
 import { Navigation, useViewKeys, ViewTools } from './camera'
+import { KeysHelp } from './KeysHelp'
+import { previewMatrix, revsOf, TransformAxisLine, TransformDriver, TransformHud, usePreview, useTransform } from './transform'
 
 /** Opacity of the selected geom's bounding box (red) and of the active wing section's box (green). */
 export const BBOX_ALPHA = 0.5
@@ -28,11 +29,6 @@ let gizmoPressedAt = 0
 
 const ZERO: [number, number, number] = [0, 0, 0]
 const NO_IDS: string[] = []
-
-/** The move gizmo's drag so far: the geoms, how far, and their meshRevs when it started. */
-const useMovePreview = create<{ ids: readonly string[]; d: [number, number, number]; revs: Record<string, number> }>(
-  () => ({ ids: [], d: ZERO, revs: {} }),
-)
 
 /** Opacity of disks (propellers in disk mode) when shaded. */
 const DISK_ALPHA = 0.25
@@ -117,8 +113,9 @@ function GeomMesh({ id }: { id: string }) {
   const mode: 'wire' | 'hidden' | 'shaded' | 'none' =
     drawType === 0 ? 'wire' : drawType === 1 ? 'hidden' : drawType === 4 ? 'none' : 'shaded'
   const [built, setBuilt] = useState<Built | null>(null)
-  // Dragged by the move gizmo: drawn moved until the mesh of the moved geom arrives.
-  const offset = useMovePreview((s) => (s.ids.includes(id) && (built?.rev ?? 0) <= (s.revs[id] ?? -1) ? s.d : null))
+  // Moved by the move gizmo or G / R: drawn moved until the moved geom's mesh arrives.
+  const preview = usePreview((s) => (s.ids.includes(id) && (built?.rev ?? 0) <= (s.revs[id] ?? -1) ? s : null))
+  const matrix = useMemo(() => previewMatrix(preview, id, new THREE.Matrix4()), [preview, id])
 
   useEffect(() => {
     let cancelled = false
@@ -224,7 +221,7 @@ function GeomMesh({ id }: { id: string }) {
 
   if (!built || mode === 'none') return null
   return (
-    <group onClick={onClick} position={offset ?? ZERO}>
+    <group onClick={onClick} matrix={matrix} matrixAutoUpdate={false}>
       {built.surfaces.map((s, i) => (
         <group key={i}>
           {(mode === 'shaded' || mode === 'hidden') && <mesh geometry={s.mesh} material={s.disk && mode === 'shaded' ? diskMat : (tagMats[i]?.shade ?? shadeMat)} />}
@@ -376,8 +373,9 @@ interface GridPlace {
   size: number
 }
 
-/** Where the ground grid goes: under the model's footprint, square on its longest side in plan.
- *  Read again whenever the model changes (not only when the view is fitted). */
+/** Where the ground grid goes: under the whole model's footprint (hidden geoms too, so hiding
+ *  some doesn't shrink or move it), square on its longest side in plan. Read again whenever the
+ *  model changes (not only when the view is fitted). */
 function useGridPlace(): GridPlace {
   const bounds = useStore((s) => s.bounds)
   const valuesRev = useStore((s) => s.valuesRev)
@@ -385,7 +383,7 @@ function useGridPlace(): GridPlace {
   useEffect(() => {
     let stale = false
     const t = window.setTimeout(() => {
-      api.bbox().then(
+      api.bboxAll().then(
         (b) => !stale && setGridKey(b ? JSON.stringify(b) : ''),
         () => undefined,
       )
@@ -414,10 +412,13 @@ function Scene({
   ortho,
   request,
   gridPlace,
+  active,
   onRotate,
   onAxisView,
 }: {
   ortho: boolean
+  /** The pane the keys and G / R act in */
+  active: boolean
   request: { name: ViewName; n: number }
   gridPlace: GridPlace
   onRotate: () => void
@@ -448,6 +449,8 @@ function Scene({
       ))}
       <Overlay />
       <MoveGizmo />
+      <TransformDriver active={active} />
+      <TransformAxisLine />
     </PaneViewContext.Provider>
   )
 }
@@ -598,15 +601,20 @@ export function Viewport() {
   const current = panes[active] ?? panes[0]
   return (
     <div className="viewport">
-      <ViewTools
-        onView={requestView}
-        ortho={current?.ortho ?? storeOrtho}
-        onToggleOrtho={toggleOrtho}
-        grid={grid}
-        onToggleGrid={toggleGrid}
-        layout={layout}
-        onLayout={changeLayout}
-      />
+      {/* The view toolbar, and the keyboard shortcuts button floating beside it. */}
+      <div className="view-tools-row">
+        <ViewTools
+          onView={requestView}
+          ortho={current?.ortho ?? storeOrtho}
+          onToggleOrtho={toggleOrtho}
+          grid={grid}
+          onToggleGrid={toggleGrid}
+          layout={layout}
+          onLayout={changeLayout}
+        />
+        <KeysHelp />
+      </div>
+      <TransformHud />
       <div className={`viewport-panes ${layout}` + (swapping ? ' swapping' : '')} aria-busy={swapping}>
         {panes.slice(0, count).map((pane, i) => (
           <div
@@ -631,6 +639,7 @@ export function Viewport() {
                 ortho={pane.ortho}
                 request={pane.request}
                 gridPlace={gridPlace}
+                active={i === active}
                 // Turning a pane with the mouse leaves its axis view: back to perspective if
                 // the axis view made it orthographic.
                 onRotate={() =>
@@ -710,6 +719,8 @@ function keepArrowsOutward(controls: TransformControlsImpl) {
 function MoveGizmo() {
   const ids = useStore((s) => s.tree?.active ?? NO_IDS)
   const key = ids.join(',')
+  // Out of the way while G / R moves the selection.
+  const transforming = useTransform((s) => !!s.mode)
   // Re-read the origins when any of the selected geoms changes.
   const revs = useStore((s) => ids.map((id) => s.meshRev[id] ?? 0).join(','))
   const [center, setCenter] = useState<[number, number, number] | null>(null)
@@ -750,15 +761,14 @@ function MoveGizmo() {
   // since every move re-tessellates them.
   const onChange = () => {
     if (!dragging.current) return
-    const r = useStore.getState().meshRev
-    useMovePreview.setState({ ids, d: delta(), revs: Object.fromEntries(ids.map((id) => [id, r[id] ?? 0])) })
+    usePreview.setState({ ids, d: delta(), rot: null, revs: revsOf(ids) })
   }
 
   useEffect(() => {
     if (controls.current) keepArrowsOutward(controls.current)
   }, [key, center])
 
-  if (!ids.length || !center) return null
+  if (!ids.length || !center || transforming) return null
   return (
     <>
       <group ref={obj} position={center} />
@@ -778,9 +788,9 @@ function MoveGizmo() {
           gizmoPressedAt = performance.now()
           dragging.current = false
           const d = delta()
-          if (d.every((v) => v === 0)) return useMovePreview.setState({ ids: [] })
+          if (d.every((v) => v === 0)) return usePreview.setState({ ids: [] })
           api.moveGeoms(ids, d).then(refresh, () => {
-            useMovePreview.setState({ ids: [] })
+            usePreview.setState({ ids: [] })
             refresh()
           })
         }}

@@ -391,6 +391,45 @@ input:focus, select:focus, textarea:focus, button:focus-visible {
 .view-tools .proj { width: 30px; padding: 0; display: grid; place-items: center; color: var(--fg-0); }
 .view-tools .proj.off { color: var(--fg-3); }
 
+/* The 3D view's toolbar with the keyboard shortcuts button floating to its right */
+.view-tools-row { position: absolute; top: 10px; left: 10px; z-index: 3; display: flex; align-items: flex-start; gap: 6px; }
+.view-tools-row .view-tools { position: static; }
+.keys-help { position: relative; display: flex; animation: fade-in 180ms ease-out; }
+.keys-help > button {
+  width: 32px; height: 30px; padding: 0; display: grid; place-items: center; color: var(--fg-1);
+  background: rgba(38, 38, 38, 0.85); border: 1px solid var(--line-strong); border-radius: 4px;
+}
+.keys-help > button:hover, .keys-help > button.on { background: var(--bg-4); color: var(--fg-0); }
+.keys-popup {
+  position: absolute; top: calc(100% + 8px); left: 0; z-index: 20;
+  width: 400px; max-width: calc(100vw - 32px); max-height: min(70vh, 640px); overflow: auto;
+  padding: 10px 14px 12px; display: grid; gap: 10px;
+  background: rgba(38, 38, 38, 0.97); border: 1px solid var(--line-strong); border-radius: 6px;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.55);
+  animation: drop-in 140ms ease-out;
+}
+.keys-popup h4 { margin: 0 0 4px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--fg-2); }
+.keys-popup dl { margin: 0; display: grid; gap: 3px; }
+.keys-popup dl > div { display: grid; grid-template-columns: 150px 1fr; align-items: center; gap: 10px; font-size: 12px; }
+.keys-popup dt { color: var(--fg-2); white-space: nowrap; }
+.keys-popup dd { margin: 0; color: var(--fg-1); }
+.keys-popup kbd {
+  display: inline-block; min-width: 18px; padding: 0 5px; text-align: center;
+  font: 11px/17px var(--font); color: var(--fg-0);
+  background: var(--bg-3); border: 1px solid var(--line-strong); border-bottom-width: 2px; border-radius: 3px;
+}
+
+/* G / R: what's being done, over the top of the 3D view */
+.transform-hud {
+  position: absolute; top: 52px; left: 50%; transform: translateX(-50%); z-index: 4;
+  display: flex; align-items: baseline; gap: 8px; max-width: calc(100% - 32px);
+  padding: 5px 12px; font-size: 12px; color: var(--fg-0); white-space: nowrap; overflow: hidden;
+  background: rgba(38, 38, 38, 0.92); border: 1px solid var(--line-strong); border-radius: 4px;
+  pointer-events: none; animation: fade-in 120ms ease-out;
+}
+.transform-hud b { font-weight: 600; }
+.transform-hud .hint { color: var(--fg-3); overflow: hidden; text-overflow: ellipsis; }
+
 .m-sym { display: inline-block; line-height: 1; font-size: 0.85em; letter-spacing: -0.2em; padding-right: 0.2em; }
 /* ------------------------------------------------------------ VSPAERO results viewer */
 .results-viewer {

@@ -13,7 +13,7 @@
 //     GUI, emitting "model_changed" events.
 //
 // Requests (op, a, b, value) and their results (the page's side is wasmRequest, wasmEngine.ts):
-//   model, geomTypes, bbox              JSON
+//   model, geomTypes, bbox              JSON (bbox: the shown geoms', or a="all" every geom's)
 //   mesh(a=geom id)                     binary "VSPM" mesh (format: web/frontend/src/api/mesh.ts)
 //   addGeom(a=type, b=parent)           {"id":...}
 //   deleteGeoms(a=comma-separated ids)
@@ -22,6 +22,9 @@
 //   pick(a=geom id, b="1" to toggle)    select as if picked in the 3D view (shift/ctrl-click)
 //   origin(a=geom id)                   [x,y,z] of the geom's origin
 //   move(a=ids, b="dx,dy,dz")           move geoms by an offset (one undo step)
+//   drawType(a=ids, value=type)         geoms' draw type (GEOM_DRAW_WIRE=0 ... NONE=4)
+//   rotate(a=ids, b="ax,ay,az", value=degrees)  rotate geoms about a world axis, each about its
+//                                       own origin (one undo step)
 
 #include "VSP_Geom_API.h"
 #include "APIErrorMgr.h"
@@ -198,13 +201,14 @@ void Grow( double lo[3], double hi[3], double x, double y, double z )
     }
 }
 
-string BBoxJson()
+// The shown geoms' bounding box, or every geom's (hidden ones too) when all is set.
+string BBoxJson( bool all = false )
 {
     double lo[3] = { INFINITY, INFINITY, INFINITY }, hi[3] = { -INFINITY, -INFINITY, -INFINITY };
     bool any = false;
     for ( const string &id : vsp::FindGeoms() )
     {
-        if ( !vsp::GetSetFlag( id, vsp::SET_SHOWN ) )
+        if ( !all && !vsp::GetSetFlag( id, vsp::SET_SHOWN ) )
         {
             continue;
         }
@@ -706,7 +710,7 @@ void Run( const Job &j )
     }
     if ( j.op == "bbox" )
     {
-        return Result( j.id, "", BBoxJson() );
+        return Result( j.id, "", BBoxJson( j.a == "all" ) );
     }
     if ( j.op == "mesh" )
     {
@@ -748,6 +752,26 @@ void Run( const Job &j )
         vsp::MirrorMoveGeoms( SplitCsv( j.a ), d );
         string err = TakeErrors();
         Watch( "Move", true );
+        return Result( j.id, err, "{\"ok\":true}" );
+    }
+    if ( j.op == "drawType" )
+    {
+        for ( const string &id : SplitCsv( j.a ) )
+        {
+            vsp::SetGeomDrawType( id, (int)j.value );
+        }
+        string err = TakeErrors();
+        Watch( "Draw type", true );
+        return Result( j.id, err, "{\"ok\":true}" );
+    }
+    if ( j.op == "rotate" )
+    {
+        vector< string > c = SplitCsv( j.b );
+        vec3d axis( c.size() > 0 ? atof( c[0].c_str() ) : 0, c.size() > 1 ? atof( c[1].c_str() ) : 0,
+                    c.size() > 2 ? atof( c[2].c_str() ) : 0 );
+        vsp::MirrorRotateGeoms( SplitCsv( j.a ), axis, j.value );
+        string err = TakeErrors();
+        Watch( "Rotate", true );
         return Result( j.id, err, "{\"ok\":true}" );
     }
     if ( j.op == "origin" )

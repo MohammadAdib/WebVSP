@@ -73,13 +73,15 @@ the work lives in a handful of files.
 | `src/main.tsx` | Makes the page cross-origin isolated (registers the service worker, reloads once), mounts `App`. |
 | `src/App.tsx` | Layout: top bar (mirrored menu, loading hint, errors, OpenVSP version, GitHub link), left panel (Geom Browser), 3D view (with the file name), right panel (geom editor), floating windows, results viewer. `isDocked()` decides docked vs floating. |
 | `src/store.ts` | Model store (zustand): tree, `geomsById`, `meshRev` (bumped per geom on change → mesh refetch), `valuesRev`, view requests, ortho. |
-| `src/api/client.ts` | `api.*` (model, geomTypes, bbox, mesh, pick, geomOrigin, moveGeoms) and `connectEvents`. |
+| `src/api/client.ts` | `api.*` (model, geomTypes, bbox, mesh, pick, geomOrigin, moveGeoms, rotateGeoms, setDrawType) and `connectEvents`. |
 | `src/api/wasmEngine.ts` | The engine's page side: loads the module, `wasmRequest(method, path)` → `call`, a polling loop over `take()` delivering results/events/mirror output, file choosers via the browser's pickers, `runProgram` for VSPAERO, `openViewer` for the results viewer. `window.__webvspEngine.request(...)` is exposed for the console. |
 | `src/api/mesh.ts` | Decoder for the `VSPM` mesh payload; the format is documented at its top. |
 | `src/api/types.ts` | Model tree, events, bbox. |
-| `src/mirror/` | The GUI mirror client: `types.ts` (message shapes), `store.ts` (windows, widgets, overlay, dialogs), `Window.tsx` (floating windows, menus, keyboard shortcuts, z-order), `Dock.tsx` (side panels), `Widgets.tsx` (one component per FLTK widget kind), `Custom.tsx` (GL sub-views and images), `Dialogs.tsx` (choice/alert/message prompts), `fltk.ts` (FLTK constants, symbol labels, shortcuts). |
+| `src/mirror/` | The GUI mirror client: `types.ts` (message shapes), `store.ts` (windows, widgets, overlay, dialogs), `Window.tsx` (floating windows, menus, keyboard shortcuts, z-order), `Dock.tsx` (side panels), `Widgets.tsx` (one component per FLTK widget kind), `Custom.tsx` (GL sub-views and images), `Dialogs.tsx` (choice/alert/message prompts), `blenderKeys.ts` (Blender's keys), `fltk.ts` (FLTK constants, symbol labels, shortcuts). |
 | `src/viewport/Viewport.tsx` | Main 3D view: `GeomMesh` (surfaces, wireframe, outline), `Overlay` (mirrored draw objects), `BlankMarkers`, `MoveGizmo`, click selection. Tunables at the top (`BBOX_ALPHA`, `SECTION_BOX_ALPHA`, `OUTLINE_COLOR/WIDTH`, `MOVE_SNAP`, `GIZMO_AXIS_RADIUS`). |
 | `src/viewport/camera.tsx` | Camera shared with the results viewer: perspective/ortho with pose carry-over, orbit/pan/zoom-to-cursor, fit, view keys (Blender numpad), view toolbar. |
+| `src/viewport/transform.tsx` | Blender's G / R: the run's state, mouse driver, axis line, status bar, and the preview (`usePreview`) shared with the move gizmo. |
+| `src/viewport/KeysHelp.tsx` | The keyboard button beside the view toolbar and its list of the 3D view's keys. |
 | `src/viewer/` | VSPAERO results viewer: `adb.ts` (binary `.adb` reader, `.adb.cases`, `.polar`), `store.ts`, `ResultsViewer.tsx` (floating window, colour legend, case/coefficients panel). |
 | `src/WasmToolbar.tsx` | "Loading OpenVSP in your browser…" until the engine is ready. |
 
@@ -92,7 +94,7 @@ the work lives in a handful of files.
 | `src/gui_and_draw/MirrorGL.{h,cpp}` | A hidden GL window/context for incidental GL work (backed by the stubs in WebAssembly); excluded from the mirror. |
 | `src/gui_and_draw/CrashTrace.{h,cpp}` | Stack traces on crashes in mirror mode. |
 | `src/gui_and_draw/MainGLWindow`, `SubGLWindow`, `VSPWindow`, `ScreenMgr`, `ManageGeomScreen`, `TreeIconWidget` | Hooks the mirror needs (camera/view state for GL views, hidden windows, `ManageGeomScreen::Toggle` for multi-select). |
-| `src/geom_api/VSP_Geom_API.{h,cpp}`, `GuiInterface.{h,cpp}` | API used by the engine: `Mirror*` (enable, pump, post event, take output, request full, pick), `MirrorGeomOrigin`, `MirrorMoveGeoms`, `MirrorFeatureLines`, `GetMeshGeomTriPnts`, `GetActiveGeoms`, `GetParmActiveFlag`. |
+| `src/geom_api/VSP_Geom_API.{h,cpp}`, `GuiInterface.{h,cpp}` | API used by the engine: `Mirror*` (enable, pump, post event, take output, request full, pick), `MirrorGeomOrigin`, `MirrorMoveGeoms`, `MirrorRotateGeoms`, `MirrorFeatureLines`, `GetMeshGeomTriPnts`, `GetActiveGeoms`, `GetParmActiveFlag`. |
 | `src/geom_core/ParmMgr.{h,cpp}`, `ParmUndo.h` | Undo groups (`BeginUndoGroup`/`EndUndoGroup`): changes in a group are one `UnDo()` step. |
 | `src/geom_core/MeshGeom`, `NGonMeshGeom` | Triangles for drawing Mesh / NGon Mesh geoms (`GetDrawTriPnts`). |
 | `src/geom_core/ScriptCall.h`, `ScriptMgr.cpp` | AngelScript registrations through calling-convention macros (generic wrappers in WebAssembly). |
@@ -156,7 +158,7 @@ resizes the real FLTK window so it re-lays out.
 The page calls `api.*` (`client.ts`) → `wasmRequest(method, path, body)` (`wasmEngine.ts`), which
 maps routes to engine ops (`call(id, op, a, b, value)`); results come back through `take()`
 (JSON) or `takeBinary(id)` (meshes). Engine ops: `model`, `geomTypes`, `bbox`, `mesh`,
-`addGeom`, `deleteGeoms`, `setParm`, `move`, `origin`, `newModel`, `readFile`, `writeFile`,
+`addGeom`, `deleteGeoms`, `setParm`, `move`, `rotate`, `drawType`, `origin`, `newModel`, `readFile`, `writeFile`,
 `pick`. Most editing happens through the mirrored GUI, not the API.
 
 Model changes:
@@ -215,12 +217,29 @@ edges for NGon meshes. Last, a flag per surface (bit 0: a disk, `DISK_SURF`, dra
   Overlay items are drawn on top (no depth test).
 - **Move gizmo** (`MoveGizmo`): drei `TransformControls` on an empty object at the mean of the
   selected origins (`api.geomOrigin`). Dragging only offsets the drawn meshes
-  (`useMovePreview`); on release `api.moveGeoms(ids, delta)` → `MirrorMoveGeoms`, which
+  (`usePreview`); on release `api.moveGeoms(ids, delta)` → `MirrorMoveGeoms`, which
   converts the world delta into each geom's abs/rel location frame, skips geoms that follow a
   selected ancestor, and sets the parms inside one undo group. `keepArrowsOutward` patches the
   gizmo so arrows always point +X/+Y/+Z and thickens its axis lines.
 - **Clicks**: a click on a mesh picks it; Shift/Ctrl/Cmd toggles; a click on nothing (not a
   drag, not on the gizmo) deselects.
+- **Blender keys** (`mirror/blenderKeys.ts`): A, Alt+A, H, Shift+H, Alt+H press the Geom
+  Browser's own buttons (Sel All, NoShow, Show Only, Show) or pick nothing, so they act on the
+  whole selection exactly as the buttons do; Alt+H first adds the hidden geoms to the selection,
+  then presses Show. Z / Shift+Z set draw types through `api.setDrawType` (engine `drawType`).
+  The listener runs in the capture phase so that while G / R runs, its keys (X, digits, R...)
+  never reach the view keys or OpenVSP's menu shortcuts; plain R replaces OpenVSP's
+  View > Set Rotation Center shortcut. `viewport/KeysHelp.tsx` lists the keys (the floating
+  keyboard button by the toolbar); keep it in step.
+- **G / R** (`viewport/transform.tsx`): `useTransform` holds the run (mode, ids, their origins,
+  locked axis, typed value, mouse result); `TransformDriver` in the active pane turns mouse moves
+  into a move (in the view plane through the selection, or along the locked axis as drawn on
+  screen) or an angle (around the selection on screen); `TransformAxisLine` draws the locked
+  axis; `TransformHud` shows the value. The preview (`usePreview`, shared with the move gizmo)
+  only moves the drawn meshes (`previewMatrix`), until each geom's new mesh arrives. Applying calls
+  `api.moveGeoms` or `api.rotateGeoms` → `MirrorRotateGeoms`, which turns each model matrix about
+  the geom's own origin and converts it back to its abs/rel location and rotation as
+  `GeomXForm::ComposeModelMatrix` does, in one undo group.
 - **Camera**: `camera.tsx`, shared with the results viewer. View requests wait until the orbit
   controls are bound to the current camera, the camera is of the requested projection and the
   view has a size; a new camera only inherits the pose of one that was framed. Moves to a view
@@ -243,6 +262,7 @@ edges for NGon meshes. Last, a flag per surface (bit 0: a disk, `DISK_SURF`, dra
 - **Grid**: `GroundGrid`, plain line segments rebuilt when the zoom level changes: the finest
   round spacing at least `GRID_MIN_PIXELS` apart plus the next (10x) brighter, the finer fading
   out; red X / green Y axes; fades out from the model's footprint to `GRID_FADE_END` times it.
+  The footprint is every geom's, hidden ones too (`api.bboxAll`, engine `bbox` with a="all").
 - **Menus**: `buildMenu` (`mirror/Window.tsx`) leaves out `HIDDEN_ITEMS` (File > Preferences:
   the page always uses the browser's file pickers).
 
@@ -304,9 +324,9 @@ then deploys to GitHub Pages. Nothing is built or uploaded by hand, so any clone
 
 ## 8. Conventions and traps
 
-- **Repos and branches.** Work on `wasm-dev` (local `web-gui` is kept equal). The public repo is
-  the `webvsp` remote (`MohammadAdib/WebVSP`). `origin` is upstream OpenVSP: **never push to
-  it**. Don't touch the separate `MohammadAdib/OpenVSP` fork.
+- **Repos and branches.** One branch, `main`, tracking `origin` (`MohammadAdib/WebVSP`); pushing
+  it deploys. `upstream` is OpenVSP itself, for pulling its releases: **never push to it** (its
+  push URL is disabled). Don't touch the separate `MohammadAdib/OpenVSP` fork.
 - **Commits**: only when asked; no AI co-author or "Generated with" lines.
 - **Threading.** All OpenVSP calls happen on OpenVSP's pthread in the module. The page reaches
   it only through the exported, thread-safe functions; WebMirror's `PostEvent` and

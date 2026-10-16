@@ -50,7 +50,8 @@ history is in [CHANGELOG.md](CHANGELOG.md).
   view out and in, taking no input meanwhile.
 - A Blender-style ground grid: lines at round spacings that follow the zoom, red X and green Y
   axes, a square under the model that follows it and fades out at 150% of its footprint, and a
-  toolbar switch to hide it.
+  toolbar switch to hide it. It covers the whole model, hidden geoms included, so hiding some
+  doesn't shrink or move it.
 - File > Preferences (only a choice of file chooser) left out of the menu: files always go
   through the browser's.
 - Outlines: each geom draws OpenVSP's feature lines (the desktop's black outline).
@@ -66,6 +67,17 @@ history is in [CHANGELOG.md](CHANGELOG.md).
 - Blank geoms shown as circles at their origins: gray, red when selected, clickable.
 - Click to select a geom in the 3D view; Shift-click or Ctrl-click (Cmd on a Mac) adds it to the
   selection or takes it out; a click on nothing deselects everything.
+- Blender's select and hide keys, acting on every selected geom: A selects all, Alt+A deselects
+  all, H hides the selection, Shift+H hides everything else, Alt+H shows everything (the geoms
+  it reveals join the selection).
+- Blender's G and R: G moves the selection and R rotates it, each geom about its own origin. The
+  mouse drives it; X, Y or Z holds it to that axis (drawn through the selection in the axis's
+  colour); typing a number gives the exact distance or angle (G X 12 moves 12 along X, R Z 90
+  turns 90° about Z); Ctrl snaps. Enter or a click applies it as one Edit > Undo step; Esc or a
+  right click cancels.
+- Z switches the selection between wireframe and shaded; Shift+Z does it for every geom
+  (shaded if every shown geom is wireframe, otherwise wireframe).
+- A keyboard button beside the 3D view's toolbar lists its keys.
 - Move gizmo: Blender-style X/Y/Z arrows on the selection, at the middle of the selected geoms'
   origins. Dragging moves the geoms along that axis, snapped to a 1-unit grid, by setting each
   geom's XForm location (absolute or relative, converted into the frame it's attached to); a geom
