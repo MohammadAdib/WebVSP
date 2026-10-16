@@ -54,6 +54,10 @@ libraries, takes much longer.
   refetches only geoms whose Parms changed and follows each geom's draw type and the GUI's
   selection. Selection boxes, cross sections, the CG and other screens' drawings are mirrored
   from OpenVSP's own draw objects.
+- **Editing from the 3D view.** Blender's keys (G, R, Shift+D, X, A, H, Z...) act on the
+  selection through the Geom Browser's own buttons or a few engine calls (move, rotate,
+  duplicate, draw type), each one undo step where OpenVSP has undo; while G or R runs, only the
+  drawn meshes move, and the model changes once, when it's applied.
 - **Docking.** The Geom Browser sits on the left and the active geom editor on the right; all
   other screens (Group Modifications included) and popups are floating windows.
 

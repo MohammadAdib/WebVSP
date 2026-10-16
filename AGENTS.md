@@ -77,7 +77,7 @@ the work lives in a handful of files.
 | `src/api/wasmEngine.ts` | The engine's page side: loads the module, `wasmRequest(method, path)` → `call`, a polling loop over `take()` delivering results/events/mirror output, file choosers via the browser's pickers, `runProgram` for VSPAERO, `openViewer` for the results viewer. `window.__webvspEngine.request(...)` is exposed for the console. |
 | `src/api/mesh.ts` | Decoder for the `VSPM` mesh payload; the format is documented at its top. |
 | `src/api/types.ts` | Model tree, events, bbox. |
-| `src/mirror/` | The GUI mirror client: `types.ts` (message shapes), `store.ts` (windows, widgets, overlay, dialogs), `Window.tsx` (floating windows, menus, keyboard shortcuts, z-order), `Dock.tsx` (side panels), `Widgets.tsx` (one component per FLTK widget kind), `Custom.tsx` (GL sub-views and images), `Dialogs.tsx` (choice/alert/message prompts), `blenderKeys.ts` (Blender's keys), `fltk.ts` (FLTK constants, symbol labels, shortcuts). |
+| `src/mirror/` | The GUI mirror client: `types.ts` (message shapes), `store.ts` (windows, widgets, overlay, dialogs), `Window.tsx` (floating windows, menus, keyboard shortcuts, z-order), `Dock.tsx` (side panels), `Widgets.tsx` (one component per FLTK widget kind), `Custom.tsx` (GL sub-views and images), `Dialogs.tsx` (choice/alert/message prompts), `DeleteConfirm.tsx` (X / Delete's "are you sure"), `blenderKeys.ts` (Blender's keys), `fltk.ts` (FLTK constants, symbol labels, shortcuts). |
 | `src/viewport/Viewport.tsx` | Main 3D view: `GeomMesh` (surfaces, wireframe, outline), `Overlay` (mirrored draw objects), `BlankMarkers`, `MoveGizmo`, click selection. Tunables at the top (`BBOX_ALPHA`, `SECTION_BOX_ALPHA`, `OUTLINE_COLOR/WIDTH`, `MOVE_SNAP`, `GIZMO_AXIS_RADIUS`). |
 | `src/viewport/camera.tsx` | Camera shared with the results viewer: perspective/ortho with pose carry-over, orbit/pan/zoom-to-cursor, fit, view keys (Blender numpad), view toolbar. |
 | `src/viewport/transform.tsx` | Blender's G / R: the run's state, mouse driver, axis line, status bar, and the preview (`usePreview`) shared with the move gizmo. |
@@ -250,11 +250,14 @@ edges for NGon meshes. Last, a flag per surface (bit 0: a disk, `DISK_SURF`, dra
   controls are bound to the current camera, the camera is of the requested projection and the
   view has a size; a new camera only inherits the pose of one that was framed. Moves to a view
   are animated (`go`, `blendDirection`: elevation and azimuth separately, `VIEW_MOVE_MS`); the
-  first framing snaps, and a mouse drag stops a move. Fitting puts the model's bounding sphere
-  across `FIT_SCALE` of the view's shorter side. Numpad 8 / 2 step the
-  elevation, held within `MAX_ELEVATION` (Z stays up, so the view can't go over a pole). `StableOrbitControls` keeps one set of
-  orbit controls for the life of a pane and hands it the new camera on a projection switch, so
-  a drag carries on across it. An orthographic camera keeps its framing when the view resizes.
+  first framing snaps, and a mouse drag stops a move. Fitting (`fit`, F) puts the model's
+  bounding sphere across `FIT_SCALE` of the view's shorter side; `center` (C, View > Center and
+  Center All through `VIEW_ITEMS` in `mirror/Window.tsx`) only pans to the model, keeping the
+  zoom. Numpad 4 / 6 / 8 / 2 turn `ORBIT_STEP` (30°); 8 / 2 step the elevation, held within
+  `MAX_ELEVATION` (Z stays up, so the view can't go over a pole). `StableOrbitControls` keeps
+  one set of orbit controls for the life of a pane and hands it the new camera on a projection
+  switch, so a drag carries on across it. An orthographic camera keeps its framing when the view
+  resizes.
 - **Auto perspective**: each pane's `autoOrtho` (`withView` in `Viewport.tsx`): axis views
   (`AXIS_VIEWS`) switch to orthographic, turning away (`OFF_AXIS_VIEWS`, or `RotateWatch` as soon
   as the mouse turns the view) goes back to perspective only if it switched automatically; 5 or
