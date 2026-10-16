@@ -150,17 +150,58 @@ function buildWireframe(c: AdbCase, visible: Uint32Array) {
   return geo
 }
 
+/** How far the wakes are drawn past their end, as a multiple of their own length, fading out. */
+const WAKE_FADE_LENGTH = 1
+/** Segments in each wake's faded extension. */
+const WAKE_FADE_STEPS = 12
+
+/**
+ * The wakes as line segments with per-vertex alpha. Instead of the desktop viewer's infinite
+ * wake option, each wake goes on straight from its end, along its last segment, for as long
+ * again as it is, fading out gently.
+ */
 function buildWakes(c: AdbCase, steady: boolean) {
-  const segs: number[] = []
+  const pos: number[] = []
+  const alpha: number[] = []
+  const seg = (a: ArrayLike<number>, b: ArrayLike<number>, aa: number, ab: number) => {
+    pos.push(a[0], a[1], a[2], b[0], b[1], b[2])
+    alpha.push(aa, ab)
+  }
   for (const tr of c.trails) {
     // Steady wakes end at a far-field point; the desktop viewer leaves it out.
     const n = tr.points.length / 3 - (steady && tr.points.length / 3 > 2 ? 1 : 0)
-    for (let j = 0; j + 1 < n; j++) segs.push(...tr.points.subarray(3 * j, 3 * j + 6))
+    const p = (j: number) => tr.points.subarray(3 * j, 3 * j + 3)
+    let length = 0
+    for (let j = 0; j + 1 < n; j++) {
+      seg(p(j), p(j + 1), 1, 1)
+      const a = p(j), b = p(j + 1)
+      length += Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2])
+    }
+    if (n < 2 || length <= 0) continue
+    const end = p(n - 1)
+    const prev = p(n - 2)
+    const dir = new THREE.Vector3(end[0] - prev[0], end[1] - prev[1], end[2] - prev[2])
+    if (dir.lengthSq() === 0) continue
+    dir.normalize().multiplyScalar((length * WAKE_FADE_LENGTH) / WAKE_FADE_STEPS)
+    // Smoothstep from fully drawn at the end to nothing at the far end.
+    const fade = (t: number) => 1 - t * t * (3 - 2 * t)
+    for (let k = 0; k < WAKE_FADE_STEPS; k++) {
+      const a = [end[0] + dir.x * k, end[1] + dir.y * k, end[2] + dir.z * k]
+      const b = [a[0] + dir.x, a[1] + dir.y, a[2] + dir.z]
+      seg(a, b, fade(k / WAKE_FADE_STEPS), fade((k + 1) / WAKE_FADE_STEPS))
+    }
   }
   const geo = new THREE.BufferGeometry()
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(segs, 3))
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
+  // Colour with alpha: the wake colour, faded per vertex.
+  const rgba = new Float32Array(alpha.length * 4)
+  const col = new THREE.Color(WAKE_COLOR)
+  for (let i = 0; i < alpha.length; i++) rgba.set([col.r, col.g, col.b, alpha[i]], 4 * i)
+  geo.setAttribute('color', new THREE.BufferAttribute(rgba, 4))
   return geo
 }
+
+const WAKE_COLOR = '#5aa9ff'
 
 interface SceneProps {
   adb: AdbFile
@@ -212,7 +253,7 @@ function Scene({ adb, c, visible, opts, showCG, showAxes, ortho, request, modelB
           )}
           {wakes && (
             <lineSegments geometry={wakes}>
-              <lineBasicMaterial color="#5aa9ff" transparent opacity={0.8} />
+              <lineBasicMaterial vertexColors transparent opacity={0.8} depthWrite={false} />
             </lineSegments>
           )}
         </group>
@@ -277,7 +318,7 @@ export function ResultsViewer() {
   const { open, name, adb, cases, polar, error, close } = useViewer()
   const [caseIdx, setCaseIdx] = useState(0)
   const [quantity, setQuantity] = useState<Quantity>('cp')
-  const [smooth, setSmooth] = useState(false)
+  const [smooth, setSmooth] = useState(true)
   const [wireframe, setWireframe] = useState(false)
   const [wakes, setWakes] = useState(true)
   const [wakeSurfaces, setWakeSurfaces] = useState(false)

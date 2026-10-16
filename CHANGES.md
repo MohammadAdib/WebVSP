@@ -3,6 +3,19 @@
 What WebVSP adds on top of OpenVSP, newest first. WebVSP is based on **OpenVSP 3.55.0**
 (commit `5240ef210`); OpenVSP's own history is in [CHANGELOG.md](CHANGELOG.md).
 
+## 2026-10-16
+
+- **Save overwrites your file.** Every model you open or save is linked to the file on your
+  disk: File > Save (and Ctrl+S) writes it back in place in Chrome and Edge (which ask once for
+  permission to edit the file), and downloads it in other browsers. Before, only Save As wrote
+  anything back.
+- **Resizable windows.** OpenVSP's windows (VSPAERO's among them) can be resized by their edges
+  and corners, like the desktop's; the real window re-lays itself out, never below its designed
+  size.
+- **VSPAERO results viewer:** the colour legend fills the window's height, Smooth is on by
+  default, and the wakes are drawn twice as long, the added half fading out (instead of the
+  desktop viewer's infinite wake option).
+
 ## 2026-10-15
 
 ### Entirely in the browser

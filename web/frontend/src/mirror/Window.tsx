@@ -57,12 +57,64 @@ export function FloatingWindow({ win, index, origin }: { win: MWindow; index: nu
   const [z, setZ] = useState(() => ++topZ)
   const avail = Math.max(200, window.innerHeight - 120)
   const scale = Math.min(1, avail / win.h)
+
+  // Resizing (windows FLTK lets resize): the real window is resized and re-lays itself out, never
+  // below the size it was designed at. Sent at most every 50 ms while dragging.
+  const sizing = useRef<{ edge: string; x: number; y: number; w: number; h: number; px: number; py: number; sent: number } | null>(null)
+  const beginResize = (edge: string) => (e: React.PointerEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    e.currentTarget.setPointerCapture(e.pointerId)
+    sizing.current = { edge, x: e.clientX, y: e.clientY, w: win.w, h: win.h, px: pos.x, py: pos.y, sent: 0 }
+  }
+  const resizeTo = (e: React.PointerEvent, final: boolean) => {
+    const r = sizing.current
+    if (!r) return
+    const minW = win.dw ?? r.w
+    const minH = win.dh ?? r.h
+    const maxW = Math.max(minW, Math.floor((window.innerWidth - 8) / scale))
+    const maxH = Math.max(minH, Math.floor(avail / scale))
+    const dx = (e.clientX - r.x) / scale
+    const dy = (e.clientY - r.y) / scale
+    let w = r.w
+    let h = r.h
+    if (r.edge.includes('e')) w = r.w + dx
+    if (r.edge.includes('w')) w = r.w - dx
+    if (r.edge.includes('s')) h = r.h + dy
+    if (r.edge.includes('n')) h = r.h - dy
+    w = Math.round(Math.min(maxW, Math.max(minW, w)))
+    h = Math.round(Math.min(maxH, Math.max(minH, h)))
+    // Dragging the left or top edge keeps the opposite edge where it is.
+    if (r.edge.includes('w') || r.edge.includes('n')) {
+      setPos({
+        x: r.edge.includes('w') ? Math.max(0, r.px + (r.w - w) * scale) : r.px,
+        y: r.edge.includes('n') ? Math.max(0, r.py + (r.h - h) * scale) : r.py,
+      })
+    }
+    const now = performance.now()
+    if (final || now - r.sent > 50) {
+      r.sent = now
+      if (w !== win.w || h !== win.h) sendMirror({ op: 'resize', win: win.id, w, h })
+    }
+    if (final) sizing.current = null
+  }
   return (
     <div
       className={'m-float' + (win.closing ? ' closing' : '')}
       style={{ left: pos.x, top: pos.y, zIndex: win.modal ? 1000 + z : z }}
       onPointerDownCapture={() => z !== topZ && setZ(++topZ)}
     >
+      {win.rs &&
+        !win.closing &&
+        ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'].map((edge) => (
+          <div
+            key={edge}
+            className={`results-resize ${edge}`}
+            onPointerDown={beginResize(edge)}
+            onPointerMove={(e) => resizeTo(e, false)}
+            onPointerUp={(e) => resizeTo(e, true)}
+          />
+        ))}
       <div
         className="m-float-title"
         onPointerDown={(e) => {

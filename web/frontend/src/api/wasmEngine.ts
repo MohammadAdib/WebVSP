@@ -114,7 +114,7 @@ function drain(vsp: VspModule) {
     emit({ type: 'mirror', msgs: mirror })
     for (const m of files) void answerFileDialog(vsp, m as unknown as MDialog)
   }
-  watchSaves(vsp)
+  watchLinked(vsp)
 }
 
 async function call(op: string, a = '', b = '', value = 0): Promise<unknown> {
@@ -200,21 +200,36 @@ function filterExts(filter?: string): string[] {
   return exts.filter((e) => e && e !== '*')
 }
 
-interface SaveTarget {
+/**
+ * A file in the module's file system that stands for one on the user's disk: a model the user
+ * opened, or saved through a save dialog. Whenever OpenVSP writes it (Save, Save As, or any
+ * other write), the new contents go back to the user's file: through its handle (Chrome/Edge,
+ * overwriting it in place) or as a download (other browsers).
+ */
+interface LinkedFile {
   path: string
   handle: FileSystemFileHandle | null
-  /** Modification time before the save; then the last one seen, until it stops changing. */
+  name: string
+  /** Modification time and size last seen; a change starts a write-back once they settle. */
   mtime: number
   size: number
-  changed: boolean
-  name: string
+  /** Written since the last write-back, waiting for the file to stop changing */
+  pending: boolean
+  /** Being written back */
+  writing: boolean
 }
-const saves: SaveTarget[] = []
+const linked = new Map<string, LinkedFile>()
+
+function link(vsp: VspModule, path: string, handle: FileSystemFileHandle | null, name: string) {
+  const exists = vsp.FS.analyzePath(path).exists
+  const st = exists ? vsp.FS.stat(path) : null
+  linked.set(path, { path, handle, name, mtime: st ? st.mtime.getTime() : 0, size: st ? st.size : -1, pending: false, writing: false })
+}
 
 /**
  * A GUI file chooser: pick with the browser, then answer with a path in the module's file
- * system. Opened files are copied in first; saved files are copied out once OpenVSP has
- * written them (watchSaves). Chrome/Edge's file pickers remember the last folder.
+ * system. Opened files are copied in first; files OpenVSP writes are copied back out
+ * (watchLinked). Chrome/Edge's file pickers remember the last folder.
  */
 async function answerFileDialog(vsp: VspModule, d: MDialog) {
   const answer = (path: string) => {
@@ -233,8 +248,12 @@ async function answerFileDialog(vsp: VspModule, d: MDialog) {
       const picked = await pickFiles(exts, types)
       if (!picked.length) return answer('')
       for (const f of picked) vsp.FS.writeFile(`${HOME}/${f.name}`, new Uint8Array(await f.arrayBuffer()))
-      const main = picked.find((f) => exts.some((e) => f.name.toLowerCase().endsWith('.' + e.toLowerCase()))) ?? picked[0]
-      return answer(`${HOME}/${main.name}`)
+      const main = picked.find((f) => exts.some((e) => f.file.name.toLowerCase().endsWith('.' + e.toLowerCase()))) ?? picked[0]
+      const path = `${HOME}/${main.name}`
+      // File > Save writes the opened file again: that goes back to the file on disk.
+      link(vsp, path, main.handle, main.name)
+      if (main.handle) void askToWrite(main.handle)
+      return answer(path)
     }
     const suggested = (d.preset || '').split(/[\\/]/).pop() || (exts[0] ? `Unnamed.${exts[0]}` : 'Unnamed')
     const w = window as unknown as { showSaveFilePicker?: (o: unknown) => Promise<FileSystemFileHandle> }
@@ -249,8 +268,7 @@ async function answerFileDialog(vsp: VspModule, d: MDialog) {
       name = handle.name
     }
     const path = `${HOME}/${name}`
-    const before = vsp.FS.analyzePath(path).exists ? vsp.FS.stat(path).mtime.getTime() : 0
-    saves.push({ path, handle, mtime: before, size: -1, changed: false, name })
+    link(vsp, path, handle, name)
     answer(path)
   } catch (err) {
     console.error('WebVSP: file dialog failed', err)
@@ -258,12 +276,25 @@ async function answerFileDialog(vsp: VspModule, d: MDialog) {
   }
 }
 
-function pickFiles(exts: string[], types: unknown): Promise<File[]> {
+interface Picked {
+  file: File
+  name: string
+  handle: FileSystemFileHandle | null
+  arrayBuffer: () => Promise<ArrayBuffer>
+}
+
+function pickFiles(exts: string[], types: unknown): Promise<Picked[]> {
+  const picked = (file: File, handle: FileSystemFileHandle | null): Picked => ({
+    file,
+    name: file.name,
+    handle,
+    arrayBuffer: () => file.arrayBuffer(),
+  })
   const w = window as unknown as { showOpenFilePicker?: (o: unknown) => Promise<FileSystemFileHandle[]> }
   if (w.showOpenFilePicker) {
     return w
       .showOpenFilePicker({ id: 'webvsp', types, excludeAcceptAllOption: false, multiple: true })
-      .then((handles) => Promise.all(handles.map((h) => h.getFile())))
+      .then((handles) => Promise.all(handles.map(async (h) => picked(await h.getFile(), h))))
       .catch(() => [])
   }
   return new Promise((resolve) => {
@@ -271,44 +302,64 @@ function pickFiles(exts: string[], types: unknown): Promise<File[]> {
     input.type = 'file'
     input.multiple = true
     if (exts.length) input.accept = exts.map((e) => '.' + e).join(',')
-    input.onchange = () => resolve([...(input.files ?? [])])
+    input.onchange = () => resolve([...(input.files ?? [])].map((f) => picked(f, null)))
     input.oncancel = () => resolve([])
     input.click()
   })
 }
 
-/** Copy out files OpenVSP has finished writing for a save dialog (written, then unchanged). */
-function watchSaves(vsp: VspModule) {
-  for (let i = saves.length - 1; i >= 0; i--) {
-    const s = saves[i]
-    if (!vsp.FS.analyzePath(s.path).exists) continue
-    const st = vsp.FS.stat(s.path)
-    const mtime = st.mtime.getTime()
-    if (!s.changed) {
-      if (mtime !== s.mtime) Object.assign(s, { changed: true, mtime, size: st.size })
-      continue
-    }
-    if (mtime !== s.mtime || st.size !== s.size) {
-      Object.assign(s, { mtime, size: st.size }) // still being written
-      continue
-    }
-    saves.splice(i, 1)
-    // A copy in an ordinary buffer: the module's memory is shared (threads).
-    const bytes = new Uint8Array(vsp.FS.readFile(s.path))
-    void deliver(s, bytes)
+type PermissionHandle = FileSystemFileHandle & {
+  queryPermission?: (o: { mode: 'readwrite' }) => Promise<PermissionState>
+  requestPermission?: (o: { mode: 'readwrite' }) => Promise<PermissionState>
+}
+
+/** Ask now, while the user is choosing the file, to be allowed to save back to it later. */
+async function askToWrite(handle: FileSystemFileHandle) {
+  const h = handle as PermissionHandle
+  try {
+    if ((await h.queryPermission?.({ mode: 'readwrite' })) !== 'granted') await h.requestPermission?.({ mode: 'readwrite' })
+  } catch {
+    /* asked again when saving */
   }
 }
 
-async function deliver(s: SaveTarget, bytes: Uint8Array<ArrayBuffer>) {
-  if (s.handle) {
-    const out = await s.handle.createWritable()
-    await out.write(bytes)
-    await out.close()
-    return
+/** Copy out linked files OpenVSP has finished writing (changed, then unchanged for a moment). */
+function watchLinked(vsp: VspModule) {
+  for (const f of linked.values()) {
+    if (f.writing || !vsp.FS.analyzePath(f.path).exists) continue
+    const st = vsp.FS.stat(f.path)
+    const mtime = st.mtime.getTime()
+    const changed = mtime !== f.mtime || st.size !== f.size
+    if (changed) {
+      Object.assign(f, { mtime, size: st.size, pending: true })
+      continue
+    }
+    if (!f.pending) continue
+    f.pending = false
+    // A copy in an ordinary buffer: the module's memory is shared (threads).
+    const bytes = new Uint8Array(vsp.FS.readFile(f.path))
+    f.writing = true
+    void deliver(f, bytes).finally(() => (f.writing = false))
+  }
+}
+
+async function deliver(f: LinkedFile, bytes: Uint8Array<ArrayBuffer>) {
+  if (f.handle) {
+    try {
+      const h = f.handle as PermissionHandle
+      if ((await h.queryPermission?.({ mode: 'readwrite' })) !== 'granted') await h.requestPermission?.({ mode: 'readwrite' })
+      const out = await f.handle.createWritable()
+      await out.write(bytes)
+      await out.close()
+      return
+    } catch (err) {
+      // Not allowed to write to it (the user declined): hand it over as a download instead.
+      console.warn(`WebVSP: couldn't save to ${f.name}; downloading it instead`, err)
+    }
   }
   const a = document.createElement('a')
   a.href = URL.createObjectURL(new Blob([bytes]))
-  a.download = s.name
+  a.download = f.name
   a.click()
   setTimeout(() => URL.revokeObjectURL(a.href), 10000)
 }

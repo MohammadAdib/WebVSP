@@ -54,5 +54,6 @@ http://localhost:5173/ using the same output. Hard-refresh after rebuilding the 
   the page's own results viewer instead (`web/frontend/src/viewer/`).
 - **Multithreaded VSPAERO** (no OpenMP) and **CalculiX** (structural analysis, not part of
   OpenVSP).
-- Files are opened and saved through the browser. Chrome and Edge save back to the chosen file
-  and remember the folder; other browsers download the saved file.
+- Files are opened and saved through the browser. In Chrome and Edge, File > Save writes back to
+  the file you opened or saved (after asking once for permission to edit it) and the pickers
+  remember the folder; other browsers download the saved file.

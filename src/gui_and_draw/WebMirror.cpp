@@ -1170,7 +1170,7 @@ void Diff()
         o.Int( "id", wr.id ).Str( "role", wi.role ).Str( "screen", wi.screen ).Int( "si", wi.screen_index )
          .Str( "title", win->label() ? win->label() : "" ).Int( "w", win->w() ).Int( "h", win->h() )
          .Int( "x", win->x() ).Int( "y", win->y() ).Int( "dw", ds.first ).Int( "dh", ds.second )
-         .Bool( "modal", win->modal() != 0 );
+         .Bool( "modal", win->modal() != 0 ).Bool( "rs", win->resizable() != nullptr );
         string json = o.Done();
         if ( wr.json != json || s.want_full )
         {

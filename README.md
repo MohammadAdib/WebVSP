@@ -25,7 +25,8 @@ its own three.js 3D view.
 - Click to select, Shift- or Ctrl-click to select several, click on nothing to deselect.
 - Move arrows on the selection, snapped to a 1-unit grid, with one undo per move.
 - The desktop's selection boxes, cross sections, outlines, CG and other drawings.
-- Files are opened and saved through the browser. Each tab is its own window with its own model.
+- Files are opened and saved through the browser; in Chrome and Edge, Save overwrites the file.
+  Each tab is its own window with its own model.
 
 Not available yet: STEP export, multithreaded VSPAERO.
 

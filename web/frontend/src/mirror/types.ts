@@ -17,6 +17,8 @@ export interface MWindow {
   dw?: number
   dh?: number
   modal: boolean
+  /** The window can be resized (FLTK re-lays it out, as when resizing the desktop window) */
+  rs?: boolean
   /** Set by the client while the window animates out after the GUI closed it */
   closing?: boolean
 }

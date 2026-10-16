@@ -118,7 +118,7 @@ messages, which the page collects with `take()`:
 
 - `{"t":"diff", full, windows, closed, widgets, removed}`: windows (`role` = `main`, `browser`
   for the Geom Browser, `geom` for geom editors, `screen` for other screens, `dialog`; plus
-  designed size `dw/dh`) and widgets (id, parent, kind, rect, label, colours, value, state,
+  designed size `dw/dh` and `rs` when FLTK lets it be resized) and widgets (id, parent, kind, rect, label, colours, value, state,
   bound parm, kind-specific fields like menu items, tree items, browser lines, table cells,
   GL draw objects, SVG for plots). Only changes are sent unless `full`.
 - `{"t":"dialog", seq, kind, ...}`: a prompt (`choice`, `alert`, `message`, `file`). Choices and
@@ -143,7 +143,9 @@ answers), `full`.
 
 `mirror/store.ts` holds windows and widgets by id and children by `win:parent`.
 `Widgets.tsx` draws each widget at its exact FLTK position with a component per `kind`.
-`Window.tsx` draws floating windows and handles menu shortcuts; `Dock.tsx` the side panels. The
+`Window.tsx` draws floating windows (with resize grips when `rs`: resizing sends `resize`, and
+the real window re-lays itself out, never below `dw/dh`) and handles menu shortcuts;
+`Dock.tsx` the side panels. The
 left panel shows the `browser` window and the right one the first docked editor (`isDocked` in
 `App.tsx`: `geom` windows except Group Modifications, and the Vehicle screen). Resizing a panel
 resizes the real FLTK window so it re-lays out.
@@ -171,6 +173,15 @@ Model changes:
 Selection is OpenVSP's: the tree's `active` list comes from `GetActiveGeoms()`. Clicking in the 3D
 view calls `api.pick(id, toggle)` → `MirrorPickGeom` → `ManageGeomScreen::Set` / `Toggle`, so the
 Geom Browser and editors follow.
+
+### Files
+
+The module has an in-memory file system; the user's files live in `/home/web_user`. GUI file
+choosers are answered by `answerFileDialog` (`wasmEngine.ts`) with the browser's pickers: opened
+files are copied in, and every opened or Save-As'd file is **linked** to the file on disk (its
+`FileSystemFileHandle` in Chrome/Edge). `watchLinked` notices whenever OpenVSP writes a linked
+file (Save, Save As, Ctrl+S) and, once it stops changing, writes it back through the handle
+(asking for readwrite permission, which Chrome grants per file) or downloads it.
 
 ### Mesh payload (`VSPM`)
 
@@ -225,7 +236,9 @@ edges for NGon meshes. **Change the writer and the reader together.**
   the exit (`processExit`). The engine creates placeholder files `/bin/vspaero` etc. and calls
   `SetVSPAEROPath("/bin")` so OpenVSP finds them. Single-threaded (no OpenMP).
 - **Results viewer**: `vspviewer` launches are intercepted by `openViewer` in `wasmEngine.ts`,
-  which reads `<base>.adb`, `.adb.cases` and `.polar` and opens `viewer/ResultsViewer.tsx`. The
+  which reads `<base>.adb`, `.adb.cases` and `.polar` and opens `viewer/ResultsViewer.tsx`. Its
+  wakes are drawn past their end and faded out (`WAKE_FADE_LENGTH`, `WAKE_FADE_STEPS` in
+  `buildWakes`) instead of the desktop viewer's infinite wakes. The
   `.adb` layout is checked against the writers in `src/vsp_aero/Solver/VSP_Solver.C` (magic
   `-123789456`, +3 for v3).
 
