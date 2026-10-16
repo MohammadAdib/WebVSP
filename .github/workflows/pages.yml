@@ -27,6 +27,7 @@ concurrency:
 
 env:
   EMSDK_VERSION: 6.0.12
+  CMAKE_VERSION: 4.4.4
 
 jobs:
   engine:
@@ -41,8 +42,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # CMake pinned to the version the engine is developed with: older ones read the type sizes
+      # FLTK's configure checks for out of WebAssembly objects wrongly.
       - name: Tools
-        run: sudo apt-get update && sudo apt-get install -y ninja-build ccache
+        run: |
+          sudo apt-get update && sudo apt-get install -y ninja-build ccache
+          pip install --user cmake==${{ env.CMAKE_VERSION }}
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Tool versions
+        run: cmake --version && ninja --version && ccache --version | head -1
 
       - name: Emscripten (cached)
         id: emsdk-cache
@@ -64,7 +73,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: build/libs-wasm
-          key: libs-wasm-${{ env.EMSDK_VERSION }}-${{ hashFiles('Libraries/**', 'web/wasm/fltk/**', 'web/wasm/toolchain.cmake', 'web/wasm/build_wasm.ps1') }}
+          key: libs-wasm-${{ env.EMSDK_VERSION }}-cmake${{ env.CMAKE_VERSION }}-${{ hashFiles('Libraries/**', 'web/wasm/fltk/**', 'web/wasm/toolchain.cmake', 'web/wasm/build_wasm.ps1') }}
 
       - name: Compiler cache
         uses: actions/cache@v4
