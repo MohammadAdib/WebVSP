@@ -30,7 +30,8 @@ const VIEW_DIRS: Record<AbsoluteView, THREE.Vector3> = {
 
 export const FOV = 35
 export const TAN_HALF_FOV = Math.tan(THREE.MathUtils.degToRad(FOV / 2))
-const ORBIT_STEP = THREE.MathUtils.degToRad(15)
+/** How far numpad 4 / 6 / 8 / 2 turn the view per press. */
+const ORBIT_STEP = THREE.MathUtils.degToRad(30)
 /** Numpad 8 / 2 stop here: straight down / up, as the top and bottom views look. */
 const MAX_ELEVATION = Math.asin(VIEW_DIRS.top.z)
 /** How much of the view's shorter side the model's bounding sphere fills when fitted: under 1,

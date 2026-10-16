@@ -36,7 +36,7 @@ const SECTIONS: { title: string; keys: [string, string][] }[] = [
     keys: [
       ['1 / 3 / 7', 'Front / side / top (Ctrl: the other way)'],
       ['5', 'Perspective / orthographic'],
-      ['2 4 6 8', 'Orbit in steps'],
+      ['2 4 6 8', 'Orbit in 30° steps'],
       ['9', 'Look from the other side'],
       ['F / Home / .', 'Fit the model'],
       ['C', 'Center the model (zoom kept)'],
