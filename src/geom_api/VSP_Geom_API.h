@@ -11533,7 +11533,7 @@ extern void MirrorPostEvent( const std::string & json );
 /*!
     Take the queued mirror output (window and widget changes, prompts) as a JSON array.
     Safe to call from any thread.
-    eturn string JSON array
+    \return string JSON array
 */
 
 extern std::string MirrorTakeOutput();
@@ -11564,7 +11564,7 @@ extern void MirrorPickGeom( const std::string & geom_id, bool toggle = false );
 /*!
     The origin of a Geom in the 3D view (its model matrix translation).
     \param [in] geom_id string Geom ID
-    eturn vec3d origin
+    \return vec3d origin
 */
 
 extern vec3d MirrorGeomOrigin( const std::string & geom_id );
@@ -11576,7 +11576,7 @@ extern vec3d MirrorGeomOrigin( const std::string & geom_id );
     The feature lines the 3D view draws for a Geom (its outline), as line segment end points.
     Empty when the Geom doesn't show them.
     \param [in] geom_id string Geom ID
-    eturn vector<vec3d> Pairs of points, one per segment
+    \return vector<vec3d> Pairs of points, one per segment
 */
 
 extern std::vector< vec3d > MirrorFeatureLines( const std::string & geom_id );
@@ -11608,6 +11608,19 @@ extern void MirrorMoveGeoms( const std::vector< std::string > & geom_ids, const 
 */
 
 extern void MirrorRotateGeoms( const std::vector< std::string > & geom_ids, const vec3d & axis, double angle );
+
+/*!
+    \ingroup Visualization
+*/
+/*!
+    Duplicate Geoms in place, as Blender's Shift+D does: each copy goes under its original's
+    parent (or under the copy of its parent, when that is duplicated too), at the same spot. The
+    clipboard is left alone.
+    \param [in] geom_ids vector<string> Geom IDs
+    \return vector<string> The copies' IDs, in the same order
+*/
+
+extern std::vector< std::string > MirrorDuplicateGeoms( const std::vector< std::string > & geom_ids );
 
 /*!
     \ingroup Geom

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { connectEvents } from './api/client'
 import type { ServerEvent } from './api/types'
 import { useBlenderKeys } from './mirror/blenderKeys'
+import { DeleteConfirm } from './mirror/DeleteConfirm'
 import { DialogHost } from './mirror/Dialogs'
 import { useMirror } from './mirror/store'
 import type { MDialog, MirrorMsg, MWidget, MWindow } from './mirror/types'
@@ -129,6 +130,7 @@ export default function App() {
         <ResultsViewer />
       </div>
       <DialogHost />
+      <DeleteConfirm />
     </div>
   )
 }

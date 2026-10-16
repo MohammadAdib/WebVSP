@@ -169,7 +169,7 @@ const HIDDEN_ITEMS: [string, string][] = [['File', 'Preferences...']]
 // The 3D view is ours, so camera items in the View menu drive our viewport.
 const VIEW_ITEMS: Record<string, ViewName> = {
   Top: 'top', Front: 'front', Left: 'left', 'Left Iso': 'leftiso', Bottom: 'bottom', Rear: 'rear', Right: 'right',
-  'Right Iso': 'rightiso', 'Fit On Screen': 'fit', 'Fit All On Screen': 'fit', Center: 'fit', 'Center All': 'fit',
+  'Right Iso': 'rightiso', 'Fit On Screen': 'fit', 'Fit All On Screen': 'fit', Center: 'center', 'Center All': 'center',
   'Reset All': 'leftiso',
 }
 

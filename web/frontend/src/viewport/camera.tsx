@@ -227,8 +227,10 @@ function CameraRig({ request, getBounds, onBounds, onFrame, clipScale = 3, ortho
         const s = hi.clone().sub(lo)
         onBounds?.({ center: [center.x, center.y, center.z], size: [s.x, s.y, s.z], radius })
         const dir =
-          name === 'fit' ? camera.position.clone().sub(target).normalize() : VIEW_DIRS[name as AbsoluteView].clone()
+          name === 'fit' || name === 'center' ? camera.position.clone().sub(target).normalize() : VIEW_DIRS[name as AbsoluteView].clone()
         if (dir.lengthSq() === 0) dir.copy(VIEW_DIRS.leftiso)
+        // Center: only pan, keeping the zoom.
+        if (name === 'center') return go(dir, center, visibleHeight(camera, target))
         // Fit the bounding sphere in the shorter side of the view.
         const aspect = size.width / Math.max(size.height, 1)
         const height = 2 * radius * 1.05 * Math.max(1, 1 / aspect)

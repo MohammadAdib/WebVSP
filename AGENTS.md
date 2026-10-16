@@ -73,7 +73,7 @@ the work lives in a handful of files.
 | `src/main.tsx` | Makes the page cross-origin isolated (registers the service worker, reloads once), mounts `App`. |
 | `src/App.tsx` | Layout: top bar (mirrored menu, loading hint, errors, OpenVSP version, GitHub link), left panel (Geom Browser), 3D view (with the file name), right panel (geom editor), floating windows, results viewer. `isDocked()` decides docked vs floating. |
 | `src/store.ts` | Model store (zustand): tree, `geomsById`, `meshRev` (bumped per geom on change → mesh refetch), `valuesRev`, view requests, ortho. |
-| `src/api/client.ts` | `api.*` (model, geomTypes, bbox, mesh, pick, geomOrigin, moveGeoms, rotateGeoms, setDrawType) and `connectEvents`. |
+| `src/api/client.ts` | `api.*` (model, geomTypes, bbox, mesh, pick, geomOrigin, moveGeoms, rotateGeoms, duplicateGeoms, setDrawType) and `connectEvents`. |
 | `src/api/wasmEngine.ts` | The engine's page side: loads the module, `wasmRequest(method, path)` → `call`, a polling loop over `take()` delivering results/events/mirror output, file choosers via the browser's pickers, `runProgram` for VSPAERO, `openViewer` for the results viewer. `window.__webvspEngine.request(...)` is exposed for the console. |
 | `src/api/mesh.ts` | Decoder for the `VSPM` mesh payload; the format is documented at its top. |
 | `src/api/types.ts` | Model tree, events, bbox. |
@@ -94,7 +94,8 @@ the work lives in a handful of files.
 | `src/gui_and_draw/MirrorGL.{h,cpp}` | A hidden GL window/context for incidental GL work (backed by the stubs in WebAssembly); excluded from the mirror. |
 | `src/gui_and_draw/CrashTrace.{h,cpp}` | Stack traces on crashes in mirror mode. |
 | `src/gui_and_draw/MainGLWindow`, `SubGLWindow`, `VSPWindow`, `ScreenMgr`, `ManageGeomScreen`, `TreeIconWidget` | Hooks the mirror needs (camera/view state for GL views, hidden windows, `ManageGeomScreen::Toggle` for multi-select). |
-| `src/geom_api/VSP_Geom_API.{h,cpp}`, `GuiInterface.{h,cpp}` | API used by the engine: `Mirror*` (enable, pump, post event, take output, request full, pick), `MirrorGeomOrigin`, `MirrorMoveGeoms`, `MirrorRotateGeoms`, `MirrorFeatureLines`, `GetMeshGeomTriPnts`, `GetActiveGeoms`, `GetParmActiveFlag`. |
+| `src/geom_api/VSP_Geom_API.{h,cpp}`, `GuiInterface.{h,cpp}` | API used by the engine: `Mirror*` (enable, pump, post event, take output, request full, pick), `MirrorGeomOrigin`, `MirrorMoveGeoms`, `MirrorRotateGeoms`, `MirrorDuplicateGeoms`, `MirrorFeatureLines`, `GetMeshGeomTriPnts`, `GetActiveGeoms`, `GetParmActiveFlag`. |
+| `src/geom_core/Vehicle.{h,cpp}` | `DuplicateGeomVec` for Shift+D: copies in place under the originals' parents, clipboard untouched. |
 | `src/geom_core/ParmMgr.{h,cpp}`, `ParmUndo.h` | Undo groups (`BeginUndoGroup`/`EndUndoGroup`): changes in a group are one `UnDo()` step. |
 | `src/geom_core/MeshGeom`, `NGonMeshGeom` | Triangles for drawing Mesh / NGon Mesh geoms (`GetDrawTriPnts`). |
 | `src/geom_core/ScriptCall.h`, `ScriptMgr.cpp` | AngelScript registrations through calling-convention macros (generic wrappers in WebAssembly). |
@@ -158,7 +159,7 @@ resizes the real FLTK window so it re-lays out.
 The page calls `api.*` (`client.ts`) → `wasmRequest(method, path, body)` (`wasmEngine.ts`), which
 maps routes to engine ops (`call(id, op, a, b, value)`); results come back through `take()`
 (JSON) or `takeBinary(id)` (meshes). Engine ops: `model`, `geomTypes`, `bbox`, `mesh`,
-`addGeom`, `deleteGeoms`, `setParm`, `move`, `rotate`, `drawType`, `origin`, `newModel`, `readFile`, `writeFile`,
+`addGeom`, `deleteGeoms`, `setParm`, `move`, `rotate`, `drawType`, `duplicate`, `origin`, `newModel`, `readFile`, `writeFile`,
 `pick`. Most editing happens through the mirrored GUI, not the API.
 
 Model changes:
@@ -227,6 +228,11 @@ edges for NGon meshes. Last, a flag per surface (bit 0: a disk, `DISK_SURF`, dra
   Browser's own buttons (Sel All, NoShow, Show Only, Show) or pick nothing, so they act on the
   whole selection exactly as the buttons do; Alt+H first adds the hidden geoms to the selection,
   then presses Show. Z / Shift+Z set draw types through `api.setDrawType` (engine `drawType`).
+  Shift+D: `api.duplicateGeoms` (engine `duplicate` → `MirrorDuplicateGeoms` →
+  `Vehicle::DuplicateGeomVec`, which copies with `CopyGeomVec` and puts each copy under its
+  original's parent; the clipboard is untouched), then `startTransform('move', copies)`.
+  X / Delete: `askDelete` (`mirror/DeleteConfirm.tsx`, an "are you sure" prompt that holds the
+  keyboard while open), then the Geom Browser's Delete (OpenVSP's own delete and clone prompt).
   The listener runs in the capture phase so that while G / R runs, its keys (X, digits, R...)
   never reach the view keys or OpenVSP's menu shortcuts; plain R replaces OpenVSP's
   View > Set Rotation Center shortcut. `viewport/KeysHelp.tsx` lists the keys (the floating

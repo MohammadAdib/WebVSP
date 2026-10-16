@@ -483,7 +483,7 @@ function withView(p: Pane, name: ViewName): Pane {
 }
 
 /** Views that set a direction (not fits or relative orbits). */
-const isNamedView = (v: ViewName) => !['fit', 'orbit-left', 'orbit-right', 'orbit-up', 'orbit-down', 'flip'].includes(v)
+const isNamedView = (v: ViewName) => !['fit', 'center', 'orbit-left', 'orbit-right', 'orbit-up', 'orbit-down', 'flip'].includes(v)
 
 /** Changing the layout: how long the panes take to fade out, and how long the new ones get to
  *  frame the model before fading in (ms). Keep LAYOUT_FADE_MS in step with the CSS. */

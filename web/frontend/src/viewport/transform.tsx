@@ -120,9 +120,9 @@ useTransform.subscribe((s, prev) => {
   else usePreview.setState({ ids: s.ids, d: ZERO, rot: { axis: r.axis, angle: r.angle, origins: s.origins }, revs })
 })
 
-/** Starts G or R on the selection (nothing selected: nothing happens). */
-export async function startTransform(mode: 'move' | 'rotate') {
-  const ids = useStore.getState().tree?.active ?? []
+/** Starts G or R on the selection, or on these geoms (none: nothing happens). */
+export async function startTransform(mode: 'move' | 'rotate', geoms?: string[]) {
+  const ids = geoms ?? useStore.getState().tree?.active ?? []
   if (!ids.length) return
   const ps = await Promise.all(ids.map((id) => api.geomOrigin(id)))
   const origins = Object.fromEntries(ids.map((id, i) => [id, ps[i]]))

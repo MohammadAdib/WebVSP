@@ -22,6 +22,7 @@
 //   pick(a=geom id, b="1" to toggle)    select as if picked in the 3D view (shift/ctrl-click)
 //   origin(a=geom id)                   [x,y,z] of the geom's origin
 //   move(a=ids, b="dx,dy,dz")           move geoms by an offset (one undo step)
+//   duplicate(a=ids)                    copy geoms in place and select the copies; {ids}
 //   drawType(a=ids, value=type)         geoms' draw type (GEOM_DRAW_WIRE=0 ... NONE=4)
 //   rotate(a=ids, b="ax,ay,az", value=degrees)  rotate geoms about a world axis, each about its
 //                                       own origin (one undo step)
@@ -753,6 +754,18 @@ void Run( const Job &j )
         string err = TakeErrors();
         Watch( "Move", true );
         return Result( j.id, err, "{\"ok\":true}" );
+    }
+    if ( j.op == "duplicate" )
+    {
+        vector< string > copies = vsp::MirrorDuplicateGeoms( SplitCsv( j.a ) );
+        // The copies become the selection, as in Blender.
+        for ( size_t i = 0; i < copies.size(); i++ )
+        {
+            vsp::MirrorPickGeom( copies[i], i > 0 );
+        }
+        string err = TakeErrors();
+        Watch( "Duplicate", true );
+        return Result( j.id, err, "{\"ids\":" + StrArray( copies ) + "}" );
     }
     if ( j.op == "drawType" )
     {

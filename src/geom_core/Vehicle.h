@@ -173,6 +173,10 @@ public:
     vector< string > PasteClipboard();
     bool IDinClipboard( const string & id );
     vector< string > CopyGeomVec( const vector<string> & geom_vec );
+    // Copies these Geoms into the model in place, as Blender's Shift+D does: each copy goes under
+    // its original's parent (or stays under the copy of its parent, when that was copied too),
+    // at the same spot.  The clipboard is left alone.  Returns the copies' IDs.
+    vector< string > DuplicateGeomVec( const vector<string> & geom_vec );
 
     // Replaces a Fuselage with a Stack of the same shape, in the Fuselage's place in the tree
     // and under its ID.  Returns that ID, or an empty string if it cannot be converted.

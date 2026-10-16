@@ -32,6 +32,10 @@ Nothing to install. OpenVSP and all of its functionality, compiled to WebAssembl
   orthographic or perspective views.
 - Click to select, Shift- or Ctrl-click to select several, click on nothing to deselect.
 - Move arrows on the selection, snapped to a 1-unit grid, with one undo per move.
+- Blender's keys for the selection: G to move and R to rotate (X/Y/Z to hold an axis, type a
+  value), Shift+D to duplicate, A / Alt+A to select all or none, H / Shift+H / Alt+H to hide
+  and show, Z / Shift+Z for wireframe or shaded, X / Delete to delete (it asks first). The
+  keyboard button by the 3D view's toolbar lists them all.
 - The desktop's selection boxes, cross sections, outlines, CG and other drawings.
 - Files are opened and saved through the browser; in Chrome and Edge, Save overwrites the file.
   Each tab is its own window with its own model.

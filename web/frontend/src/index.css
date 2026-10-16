@@ -245,6 +245,9 @@ input:focus, select:focus, textarea:focus, button:focus-visible {
 }
 .modal.prompt { height: auto; width: min(460px, 92vw); }
 .prompt-msg { padding: 16px 14px; white-space: pre-wrap; line-height: 1.5; color: var(--fg-0); }
+.prompt-list { margin-top: 6px; color: var(--fg-2); font-size: 12px; max-height: 120px; overflow: auto; }
+.modal-foot button.danger { background: #8f3b3b; border-color: #a64848; color: #fff; }
+.modal-foot button.danger:hover { background: #a64848; }
 .modal-head { padding: 10px 12px; font-weight: 600; border-bottom: 1px solid var(--line); }
 .modal-foot { display: flex; gap: 6px; padding: 10px 12px; border-top: 1px solid var(--line); align-items: center; }
 

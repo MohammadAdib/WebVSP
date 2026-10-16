@@ -3,6 +3,7 @@ import { api } from '../api/client'
 import { useStore } from '../store'
 import { useViewer } from '../viewer/store'
 import { applyTransform, cancelTransform, setTransformAxis, startTransform, typeTransform, useTransform } from '../viewport/transform'
+import { askDelete } from './DeleteConfirm'
 import { labelText } from './fltk'
 import { sendMirror, useMirror } from './store'
 
@@ -16,6 +17,9 @@ import { sendMirror, useMirror } from './store'
  *   Alt+H    show everything; the geoms it reveals join the selection, as in Blender
  *   Z        the selected geoms wireframe, or shaded if they all are already
  *   Shift+Z  the same for every geom (judged by the shown ones)
+ *   X, Del   delete the selection, after asking (then the Geom Browser's Delete, which also
+ *            asks about clones)
+ *   Shift+D  duplicate the selection in place, then move the copies (G); Esc leaves them there
  *   G, R     move or rotate the selection (viewport/transform.tsx), with the keys and clicks
  *            below while it runs
  * They listen ahead of everything else (capture), so while G / R runs its keys (X, digits...)
@@ -29,13 +33,20 @@ export function useBlenderKeys() {
       const t = e.target as HTMLElement | null
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return
       if (e.ctrlKey || e.metaKey || e.repeat || !viewKeysFree()) return
+      if (e.key === 'Delete' && !e.altKey && !e.shiftKey) {
+        e.preventDefault()
+        e.stopPropagation()
+        return askDelete(() => clickBrowser('Delete'))
+      }
       // e.code: with Alt (Option on a Mac) e.key is another character.
-      const key = { KeyA: 'a', KeyH: 'h', KeyZ: 'z', KeyG: 'g', KeyR: 'r' }[e.code]
+      const key = { KeyA: 'a', KeyH: 'h', KeyZ: 'z', KeyG: 'g', KeyR: 'r', KeyD: 'd', KeyX: 'x' }[e.code]
       if (!key) return
       let action: (() => unknown) | null = null
       if (key === 'a') action = e.shiftKey ? null : e.altKey ? () => api.pick('') : () => clickBrowser('Sel All')
       else if (key === 'h') action = e.altKey ? (e.shiftKey ? null : showAll) : () => clickBrowser(e.shiftKey ? 'Show Only' : 'NoShow')
       else if (key === 'z') action = e.altKey ? null : () => toggleWire(!e.shiftKey)
+      else if (key === 'd') action = e.shiftKey && !e.altKey ? duplicate : null
+      else if (key === 'x') action = e.shiftKey || e.altKey ? null : () => askDelete(() => clickBrowser('Delete'))
       else if (!e.altKey && !e.shiftKey) action = () => startTransform(key === 'g' ? 'move' : 'rotate')
       if (!action) return
       e.preventDefault()
@@ -110,6 +121,14 @@ function browserButton(label: string) {
 function clickBrowser(label: string) {
   const button = browserButton(label)
   if (button) sendMirror({ op: 'click', id: button.id })
+}
+
+/** Shift+D: copies of the selection in place, selected and following the mouse (G). */
+async function duplicate() {
+  const sel = useStore.getState().tree?.active ?? []
+  if (!sel.length) return
+  const { ids } = await api.duplicateGeoms(sel)
+  if (ids.length) await startTransform('move', ids)
 }
 
 async function showAll() {

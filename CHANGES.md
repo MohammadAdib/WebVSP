@@ -72,9 +72,15 @@ history is in [CHANGELOG.md](CHANGELOG.md).
   it reveals join the selection).
 - Blender's G and R: G moves the selection and R rotates it, each geom about its own origin. The
   mouse drives it; X, Y or Z holds it to that axis (drawn through the selection in the axis's
-  colour); typing a number gives the exact distance or angle (G X 12 moves 12 along X, R Z 90
+  colour); typing a number gives the exact distance or angle (G X 10 moves 10 along X, R Z 90
   turns 90° about Z); Ctrl snaps. Enter or a click applies it as one Edit > Undo step; Esc or a
   right click cancels.
+- Shift+D duplicates the selection in place (each copy under its original's parent, or under
+  the copy of its parent when that's duplicated too) and starts G on the copies; Esc leaves
+  them where they are.
+- C (View > Center) centers the model without changing the zoom; F still fits it.
+- X or Delete deletes the selection after asking (Enter or Delete to confirm, Esc to keep it);
+  OpenVSP still asks what to do with clones.
 - Z switches the selection between wireframe and shaded; Shift+Z does it for every geom
   (shaded if every shown geom is wireframe, otherwise wireframe).
 - A keyboard button beside the 3D view's toolbar lists its keys.

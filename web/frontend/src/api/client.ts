@@ -33,6 +33,8 @@ export const api = {
   /** A geom's origin in the 3D view, and moving geoms by an offset (the move gizmo; one undo) */
   geomOrigin: (id: string) => request<[number, number, number]>('GET', `/geoms/${enc(id)}/origin`),
   moveGeoms: (ids: string[], delta: [number, number, number]) => request('POST', '/geoms/move', { ids, delta }),
+  /** Copies geoms in place (each under its original's parent) and selects the copies. */
+  duplicateGeoms: (ids: string[]) => request<{ ids: string[] }>('POST', '/geoms/duplicate', { ids }),
   /** Sets geoms' draw type (GEOM_DRAW_WIRE=0, HIDDEN=1, SHADE=2, TEXTURE=3, NONE=4). */
   setDrawType: (ids: string[], type: number) => request('POST', '/geoms/draw-type', { ids, type }),
   /** Rotates each geom about its own origin, about a world axis (degrees). */

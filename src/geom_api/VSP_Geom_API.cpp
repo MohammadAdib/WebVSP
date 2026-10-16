@@ -3942,6 +3942,23 @@ extern void MirrorMoveGeoms( const std::vector< std::string > & geom_ids, const 
     ErrorMgr.NoError();
 }
 
+extern std::vector< std::string > MirrorDuplicateGeoms( const std::vector< std::string > & geom_ids )
+{
+    Vehicle* veh = GetVehicle();
+    for ( const std::string & id : geom_ids )
+    {
+        if ( !veh->FindGeom( id ) )
+        {
+            ErrorMgr.AddError( VSP_INVALID_GEOM_ID, "MirrorDuplicateGeoms::Can't Find Geom " + id );
+            return {};
+        }
+    }
+    std::vector< std::string > copies = veh->DuplicateGeomVec( geom_ids );
+    veh->Update();
+    ErrorMgr.NoError();
+    return copies;
+}
+
 extern void MirrorRotateGeoms( const std::vector< std::string > & geom_ids, const vec3d & axis, double angle )
 {
     Vehicle* veh = GetVehicle();

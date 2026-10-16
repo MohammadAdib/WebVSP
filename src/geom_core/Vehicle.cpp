@@ -38,6 +38,7 @@
 #include "HumanGeom.h"
 #include "GeometryAnalysisMgr.h"
 #include "LinkMgr.h"
+#include <unordered_set>
 #include "MeasureMgr.h"
 #include "MeshGeom.h"
 #include "ModeMgr.h"
@@ -2823,6 +2824,50 @@ vector< string > Vehicle::PasteClipboard()
     }
 
     return pasted_ids;
+}
+
+vector< string > Vehicle::DuplicateGeomVec( const vector< string > & geom_vec )
+{
+    // Each original's parent, before copying: a copy keeps it unless its parent is copied too.
+    std::unordered_map< string, string > parent_of;
+    for ( const string & id : geom_vec )
+    {
+        Geom* g = FindGeom( id );
+        if ( g )
+        {
+            parent_of[ id ] = g->GetParentID();
+        }
+    }
+
+    vector< string > copies = CopyGeomVec( geom_vec );
+    std::unordered_set< string > copied( copies.begin(), copies.end() );
+
+    for ( int i = 0 ; i < ( int )copies.size() && i < ( int )geom_vec.size() ; i++ )
+    {
+        Geom* copy = FindGeom( copies[i] );
+        if ( !copy )
+        {
+            continue;
+        }
+        // Under the copy of its parent already (CopyGeomVec remaps references within the set).
+        if ( copied.count( copy->GetParentID() ) )
+        {
+            continue;
+        }
+        Geom* parent = FindGeom( parent_of[ geom_vec[i] ] );
+        if ( parent )
+        {
+            copy->SetParentID( parent->GetID() );
+            parent->AddChildID( copy->GetID() );
+        }
+        else
+        {
+            copy->SetParentID( "NONE" );
+            m_TopGeom.push_back( copy->GetID() );
+        }
+        copy->Update();
+    }
+    return copies;
 }
 
 //==== Return bool if id found in vehicle clipboard ====//

@@ -8,6 +8,8 @@ export const NO_GEOMS: GeomNode[] = []
 export type DisplayMode = 'shaded' | 'wire' | 'both'
 export type ViewName =
   | 'top' | 'front' | 'left' | 'leftiso' | 'bottom' | 'rear' | 'right' | 'rightiso' | 'fit'
+  // the model in the middle of the view, the zoom and direction kept (View > Center, C)
+  | 'center'
   // relative moves (Blender numpad 2/4/6/8 and 9)
   | 'orbit-left' | 'orbit-right' | 'orbit-up' | 'orbit-down' | 'flip'
 
