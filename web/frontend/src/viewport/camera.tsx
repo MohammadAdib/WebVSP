@@ -3,7 +3,7 @@ import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
-import type { ViewName } from '../store'
+import type { Layout, ViewName } from '../store'
 
 /**
  * 3D navigation shared by the main view and the VSPAERO results viewer: the camera (perspective
@@ -302,19 +302,47 @@ function GridIcon() {
   )
 }
 
-/** The view preset buttons, the projection switch and (if given) the ground grid switch. */
+/** The 3D view's split layouts: one view, two side by side, two stacked, four. */
+function LayoutIcon({ layout }: { layout: Layout }) {
+  const panes = {
+    one: [[1.5, 1.5, 15, 15]],
+    twoH: [[1.5, 1.5, 7, 15], [9.5, 1.5, 7, 15]],
+    twoV: [[1.5, 1.5, 15, 7], [1.5, 9.5, 15, 7]],
+    four: [[1.5, 1.5, 7, 7], [9.5, 1.5, 7, 7], [1.5, 9.5, 7, 7], [9.5, 9.5, 7, 7]],
+  }[layout]
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.2">
+      {panes.map(([x, y, w, h], i) => (
+        <rect key={i} x={x} y={y} width={w} height={h} rx="0.8" />
+      ))}
+    </svg>
+  )
+}
+
+const LAYOUTS: { layout: Layout; label: string }[] = [
+  { layout: 'twoH', label: 'Two side by side' },
+  { layout: 'twoV', label: 'Two stacked' },
+  { layout: 'four', label: 'Four views' },
+]
+
+/** The view preset buttons, the projection switch and (if given) the ground grid switch and
+ *  the split layouts. */
 export function ViewTools({
   onView,
   ortho,
   onToggleOrtho,
   grid,
   onToggleGrid,
+  layout,
+  onLayout,
 }: {
   onView: (v: ViewName) => void
   ortho: boolean
   onToggleOrtho: () => void
   grid?: boolean
   onToggleGrid?: () => void
+  layout?: Layout
+  onLayout?: (l: Layout) => void
 }) {
   return (
     <div className="view-tools">
@@ -345,6 +373,24 @@ export function ViewTools({
         >
           <GridIcon />
         </button>
+      )}
+      {onLayout && (
+        <>
+          <span className="sep" />
+          {LAYOUTS.map((l) => (
+            <button
+              key={l.layout}
+              className={'proj' + (layout === l.layout ? ' on' : ' off')}
+              // Clicking the layout in use goes back to one view.
+              onClick={() => onLayout(layout === l.layout ? 'one' : l.layout)}
+              title={layout === l.layout ? `${l.label} — click for one view` : l.label}
+              aria-label={l.label}
+              aria-pressed={layout === l.layout}
+            >
+              <LayoutIcon layout={l.layout} />
+            </button>
+          ))}
+        </>
       )}
     </div>
   )

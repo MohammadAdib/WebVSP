@@ -12,6 +12,9 @@ export type ViewName =
   | 'orbit-left' | 'orbit-right' | 'orbit-up' | 'orbit-down' | 'flip'
 
 
+/** How the 3D view is split, as in desktop OpenVSP's Window menu. */
+export type Layout = 'one' | 'twoH' | 'twoV' | 'four'
+
 interface State {
   tree: ModelTree | null
   geomsById: Record<string, GeomNode>
@@ -28,10 +31,15 @@ interface State {
   lastAction: string | null
   displayMode: DisplayMode
   viewRequest: { name: ViewName; n: number }
+  /** Bumped when every pane should frame the model again, each from its own view (a model
+   *  loaded or replaced). View choices (viewRequest) go to the active pane only. */
+  fitAll: number
   /** Orthographic (true) or perspective camera */
   ortho: boolean
   /** The ground grid is shown (remembered) */
   grid: boolean
+  /** The 3D view's split (remembered) */
+  layout: Layout
   /** Bounding sphere of the shown model, set when the view is fitted. */
   bounds: { center: [number, number, number]; size: [number, number, number]; radius: number } | null
 
@@ -41,8 +49,11 @@ interface State {
   run: <T>(fn: () => Promise<T>) => Promise<T | undefined>
   setDisplayMode: (m: DisplayMode) => void
   requestView: (name: ViewName) => void
+  /** Frame the model again in every pane. */
+  refitAll: () => void
   toggleOrtho: () => void
   toggleGrid: () => void
+  setLayout: (l: Layout) => void
   setConnected: (c: boolean) => void
   setBounds: (b: State['bounds']) => void
   clearError: () => void
@@ -61,6 +72,7 @@ export const useStore = create<State>((set, get) => ({
   lastAction: null,
   displayMode: 'both',
   viewRequest: { name: 'fit', n: 0 },
+  fitAll: 0,
   ortho: (() => {
     try {
       return localStorage.getItem('webvsp-ortho') === '1'
@@ -84,7 +96,7 @@ export const useStore = create<State>((set, get) => ({
       ...(types ? { geomTypes: types } : {}),
       selectedId: sel && geomsById[sel] ? sel : null,
     })
-    if (refit) get().requestView('fit')
+    if (refit) get().refitAll()
   },
 
   select: (id) => set({ selectedId: id }),
@@ -123,6 +135,7 @@ export const useStore = create<State>((set, get) => ({
 
   setDisplayMode: (displayMode) => set({ displayMode }),
   requestView: (name) => set({ viewRequest: { name, n: get().viewRequest.n + 1 } }),
+  refitAll: () => set({ fitAll: get().fitAll + 1 }),
   grid: (() => {
     try {
       return localStorage.getItem('webvsp-grid') !== '0'
@@ -130,6 +143,22 @@ export const useStore = create<State>((set, get) => ({
       return true
     }
   })(),
+  layout: (() => {
+    try {
+      const l = localStorage.getItem('webvsp-layout')
+      return l === 'twoH' || l === 'twoV' || l === 'four' ? l : 'one'
+    } catch {
+      return 'one'
+    }
+  })(),
+  setLayout: (layout) => {
+    try {
+      localStorage.setItem('webvsp-layout', layout)
+    } catch {
+      /* storage unavailable */
+    }
+    set({ layout })
+  },
   toggleGrid: () => {
     const grid = !get().grid
     try {

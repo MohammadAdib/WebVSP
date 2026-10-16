@@ -54,7 +54,8 @@ export default function App() {
   useEffect(() => {
     void run(async () => {
       await loadTree()
-      useStore.getState().requestView('leftiso')
+      // Every pane frames the model it starts with, from its own direction.
+      useStore.getState().refitAll()
     })
     const conn = connectEvents(
       (msg) => {

@@ -1,12 +1,12 @@
 import { Html, Line, TransformControls } from '@react-three/drei'
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import type { TransformControls as TransformControlsImpl } from 'three-stdlib'
 import { create } from 'zustand'
 import { api } from '../api/client'
 import { decodeMesh, gridLineIndices } from '../api/mesh'
-import { NO_GEOMS, useStore } from '../store'
+import { NO_GEOMS, useStore, type Layout, type ViewName } from '../store'
 import { useViewer } from '../viewer/store'
 import { useMirror } from '../mirror/store'
 import type { GlDrawObj } from '../mirror/types'
@@ -43,10 +43,27 @@ const LINE_SEL = new THREE.Color('#f2f2f2')
 export const OUTLINE_COLOR = '#000000'
 export const OUTLINE_WIDTH = 1
 
-/** Per-frame view state written by CameraRig, read by meshes (avoids React re-renders). */
-const view = {
+/** Per-frame view state of one pane, written by its camera rig, read by its meshes (avoids
+ *  React re-renders). */
+interface PaneView {
   /** 1 when close, 0 when zoomed far out: dense wireframe on a tiny model reads as noise. */
-  wireFade: 1,
+  wireFade: number
+}
+const PaneViewContext = createContext<PaneView>({ wireFade: 1 })
+
+/** A geom's mesh fetched once for the panes asking for it together (the same revision, within
+ *  a moment of each other); asked again later, it's fetched fresh, so a pane never gets one
+ *  that's out of date (a reopened model reuses its geoms' IDs, and revisions start over). */
+const meshFetches = new Map<string, { rev: number; at: number; buf: Promise<ArrayBuffer> }>()
+function fetchMesh(id: string, rev: number) {
+  const have = meshFetches.get(id)
+  if (have && have.rev === rev && performance.now() - have.at < 2000) return have.buf
+  const buf = api.mesh(id)
+  meshFetches.set(id, { rev, at: performance.now(), buf })
+  buf.catch(() => {
+    if (meshFetches.get(id)?.buf === buf) meshFetches.delete(id)
+  })
+  return buf
 }
 
 interface Built {
@@ -87,6 +104,7 @@ function buildGeometry(buf: ArrayBuffer): Built {
 }
 
 function GeomMesh({ id }: { id: string }) {
+  const paneView = useContext(PaneViewContext)
   const rev = useStore((s) => s.meshRev[id] ?? 0)
   const selected = useStore((s) => s.tree?.active?.includes(id) ?? false)
   // Each geom's own draw type, as set in the Geom Browser (Wire / Hidden / Shade / Texture / None).
@@ -99,8 +117,7 @@ function GeomMesh({ id }: { id: string }) {
 
   useEffect(() => {
     let cancelled = false
-    api
-      .mesh(id)
+    fetchMesh(id, rev)
       .then((buf) => {
         if (!cancelled) setBuilt({ ...buildGeometry(buf), rev })
       })
@@ -173,7 +190,7 @@ function GeomMesh({ id }: { id: string }) {
     // Pure wire mode keeps its lines; over shading they fade out as the model gets small.
     // Shaded geoms show their wireframe only when selected, as in the FLTK view.
     const base = mode === 'shaded' ? (selected ? 0.9 : 0) : 1
-    const fade = mode === 'shaded' ? view.wireFade : 1
+    const fade = mode === 'shaded' ? paneView.wireFade : 1
     lineMat.opacity = base * fade
     lineMat.visible = lineMat.opacity > 0.02
     for (const m of tagMats) {
@@ -338,16 +355,15 @@ function GroundGrid({ center, size }: { center: [number, number]; size: number }
   )
 }
 
-function Scene() {
-  const geoms = useStore((s) => s.tree?.geoms ?? NO_GEOMS)
-  const shown = geoms.filter((g) => g.shown)
+interface GridPlace {
+  center: [number, number]
+  size: number
+}
+
+/** Where the ground grid goes: under the model's footprint, square on its longest side in plan.
+ *  Read again whenever the model changes (not only when the view is fitted). */
+function useGridPlace(): GridPlace {
   const bounds = useStore((s) => s.bounds)
-  const ortho = useStore((s) => s.ortho)
-  const request = useStore((s) => s.viewRequest)
-  const setBounds = useStore((s) => s.setBounds)
-  const showGrid = useStore((s) => s.grid)
-  // The grid follows the model: its bounds are read again whenever the model changes (not
-  // only when the view is fitted), and the grid rebuilt when they moved.
   const valuesRev = useStore((s) => s.valuesRev)
   const [gridKey, setGridKey] = useState('')
   useEffect(() => {
@@ -363,8 +379,7 @@ function Scene() {
       window.clearTimeout(t)
     }
   }, [valuesRev])
-  // Where the grid goes: under the model's footprint, square on its longest side in plan.
-  const gridPlace = useMemo(() => {
+  return useMemo(() => {
     const b = gridKey
       ? (JSON.parse(gridKey) as { min: [number, number, number]; max: [number, number, number] })
       : bounds
@@ -376,9 +391,17 @@ function Scene() {
     const center: [number, number] = [(b.min[0] + b.max[0]) / 2, (b.min[1] + b.max[1]) / 2]
     return { center, size: Math.max(b.max[0] - b.min[0], b.max[1] - b.min[1]) }
   }, [gridKey, bounds])
+}
 
+/** One pane's 3D scene: its own camera (view and projection), the shared model. */
+function Scene({ ortho, request, gridPlace }: { ortho: boolean; request: { name: ViewName; n: number }; gridPlace: GridPlace }) {
+  const geoms = useStore((s) => s.tree?.geoms ?? NO_GEOMS)
+  const shown = geoms.filter((g) => g.shown)
+  const setBounds = useStore((s) => s.setBounds)
+  const showGrid = useStore((s) => s.grid)
+  const paneView = useMemo<PaneView>(() => ({ wireFade: 1 }), [])
   return (
-    <>
+    <PaneViewContext.Provider value={paneView}>
       <color attach="background" args={['#161616']} />
       <hemisphereLight args={['#ffffff', '#3a3a3a', 0.9]} />
       <Navigation
@@ -387,7 +410,7 @@ function Scene() {
         getBounds={api.bbox}
         onBounds={setBounds}
         // Fade dense wireframe as the model gets small on screen.
-        onFrame={(radii) => (view.wireFade = THREE.MathUtils.clamp((14 - radii) / 8, 0, 1))}
+        onFrame={(radii) => (paneView.wireFade = THREE.MathUtils.clamp((14 - radii) / 8, 0, 1))}
       />
       {showGrid && <GroundGrid center={gridPlace.center} size={gridPlace.size} />}
       {shown.map((g) => (
@@ -395,41 +418,142 @@ function Scene() {
       ))}
       <Overlay />
       <MoveGizmo />
-    </>
+    </PaneViewContext.Provider>
   )
 }
 
+/** Each pane: its camera's view requests and projection. */
+interface Pane {
+  request: { name: ViewName; n: number }
+  /** The last view chosen for it (top, front, iso...): what it frames a new model from */
+  view: ViewName
+  ortho: boolean
+}
+
+/** Views that set a direction (not fits or relative orbits). */
+const isNamedView = (v: ViewName) => !['fit', 'orbit-left', 'orbit-right', 'orbit-up', 'orbit-down', 'flip'].includes(v)
+
+/** The panes of each layout and the views they open with. */
+const LAYOUT_VIEWS: Record<Layout, ViewName[]> = {
+  one: ['leftiso'],
+  twoH: ['leftiso', 'top'],
+  twoV: ['leftiso', 'top'],
+  four: ['top', 'leftiso', 'front', 'left'],
+}
+
+/**
+ * The 3D view: one pane, or two or four (Window > One / Two Horizontal / Two Vertical / Four in
+ * desktop OpenVSP), each with its own camera. The toolbar, view keys and the View menu act on
+ * the active pane (outlined; click a pane to make it active).
+ */
 export function Viewport() {
-  const ortho = useStore((s) => s.ortho)
-  const requestView = useStore((s) => s.requestView)
-  const toggleOrtho = useStore((s) => s.toggleOrtho)
+  const layout = useStore((s) => s.layout)
+  const setLayout = useStore((s) => s.setLayout)
+  const storeOrtho = useStore((s) => s.ortho)
+  const storeToggleOrtho = useStore((s) => s.toggleOrtho)
+  const viewRequest = useStore((s) => s.viewRequest)
+  const fitAll = useStore((s) => s.fitAll)
   const grid = useStore((s) => s.grid)
   const toggleGrid = useStore((s) => s.toggleGrid)
+  const gridPlace = useGridPlace()
+  const count = LAYOUT_VIEWS[layout].length
+
+  // Splitting gives every pane its layout's view; going back to one view keeps the camera of
+  // the pane that was active.
+  const [panes, setPanes] = useState<Pane[]>(() =>
+    LAYOUT_VIEWS[layout].map((name) => ({ request: { name, n: 1 }, view: name, ortho: storeOrtho })),
+  )
+  const [active, setActive] = useState(0)
+  const firstLayout = useRef(true)
+  useEffect(() => {
+    if (firstLayout.current) {
+      firstLayout.current = false
+      return
+    }
+    setPanes((prev) => {
+      const n = Math.max(...prev.map((p) => p.request.n)) + 1
+      if (layout === 'one') {
+        const kept = prev[active] ?? prev[0]
+        return [{ ...kept, request: { ...kept.request, n: kept.request.n } }]
+      }
+      return LAYOUT_VIEWS[layout].map((name, i) => ({ request: { name, n: n + i }, view: name, ortho: prev[i]?.ortho ?? storeOrtho }))
+    })
+    setActive(0)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [layout])
+
+  const requestView = useCallback(
+    (name: ViewName) =>
+      setPanes((prev) =>
+        prev.map((p, i) => (i === active ? { ...p, request: { name, n: p.request.n + 1 }, view: isNamedView(name) ? name : p.view } : p)),
+      ),
+    [active],
+  )
+  // The View menu, and anything else asking the store for a view: the active pane.
+  const lastStoreRequest = useRef(viewRequest.n)
+  useEffect(() => {
+    if (viewRequest.n === lastStoreRequest.current) return
+    lastStoreRequest.current = viewRequest.n
+    requestView(viewRequest.name)
+  }, [viewRequest, requestView])
+  // A model loaded or replaced: every pane frames it again from its own view (top, front,
+  // iso...). Its view rather than 'fit' (keep the current direction): at startup a pane may not
+  // have reached its view yet when the model arrives.
+  const lastFitAll = useRef(fitAll)
+  useEffect(() => {
+    if (fitAll === lastFitAll.current) return
+    lastFitAll.current = fitAll
+    setPanes((prev) => prev.map((p) => ({ ...p, request: { name: p.view, n: p.request.n + 1 } })))
+  }, [fitAll])
+  const toggleOrtho = useCallback(() => {
+    setPanes((prev) => prev.map((p, i) => (i === active ? { ...p, ortho: !p.ortho } : p)))
+    if (layout === 'one') storeToggleOrtho() // remembered for the single view
+  }, [active, layout, storeToggleOrtho])
+
   // The keys are the results viewer's while it's open (it covers this view).
-  const active = useCallback(
+  const keysActive = useCallback(
     () => !document.querySelector('.modal-backdrop') && !useViewer.getState().open,
     [],
   )
-  useViewKeys(requestView, toggleOrtho, active)
+  useViewKeys(requestView, toggleOrtho, keysActive)
   const down = useRef<[number, number] | null>(null)
+  const current = panes[active] ?? panes[0]
   return (
     <div className="viewport">
-      <ViewTools onView={requestView} ortho={ortho} onToggleOrtho={toggleOrtho} grid={grid} onToggleGrid={toggleGrid} />
-      {/* Resize on every frame while the side panels slide: the default (debounced) resize
-          stretches the old frame for the whole animation and then snaps. */}
-      <Canvas
-        dpr={[1, 2]}
-        resize={{ scroll: false, debounce: 0 }}
-        onPointerDown={(e) => (down.current = [e.clientX, e.clientY])}
-        onPointerMissed={(e) => {
-          // A click on nothing deselects everything; an orbit or pan drag doesn't.
-          const d = down.current
-          if (performance.now() - gizmoPressedAt < 1000) return
-          if (e.button === 0 && !isToggleClick(e) && d && Math.hypot(e.clientX - d[0], e.clientY - d[1]) <= 4) void api.pick('')
-        }}
-      >
-        <Scene />
-      </Canvas>
+      <ViewTools
+        onView={requestView}
+        ortho={current?.ortho ?? storeOrtho}
+        onToggleOrtho={toggleOrtho}
+        grid={grid}
+        onToggleGrid={toggleGrid}
+        layout={layout}
+        onLayout={setLayout}
+      />
+      <div className={`viewport-panes ${layout}`}>
+        {panes.slice(0, count).map((pane, i) => (
+          <div
+            key={i}
+            className={'viewport-pane' + (count > 1 && i === active ? ' active' : '')}
+            onPointerDownCapture={() => setActive(i)}
+          >
+            {/* Resize on every frame while the side panels slide: the default (debounced) resize
+                stretches the old frame for the whole animation and then snaps. */}
+            <Canvas
+              dpr={[1, 2]}
+              resize={{ scroll: false, debounce: 0 }}
+              onPointerDown={(e) => (down.current = [e.clientX, e.clientY])}
+              onPointerMissed={(e) => {
+                // A click on nothing deselects everything; an orbit or pan drag doesn't.
+                const d = down.current
+                if (performance.now() - gizmoPressedAt < 1000) return
+                if (e.button === 0 && !isToggleClick(e) && d && Math.hypot(e.clientX - d[0], e.clientY - d[1]) <= 4) void api.pick('')
+              }}
+            >
+              <Scene ortho={pane.ortho} request={pane.request} gridPlace={gridPlace} />
+            </Canvas>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

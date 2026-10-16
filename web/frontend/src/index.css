@@ -96,6 +96,15 @@ input:focus, select:focus, textarea:focus, button:focus-visible {
 /* Always fill the box: while the panels slide, the drawing buffer catches up a frame later,
    and stretching that frame by a few pixels is invisible where a gap at the edge is not. */
 .viewport canvas { width: 100% !important; height: 100% !important; }
+/* Split views (Window > One / Two / Four on the desktop): panes with a thin gap between them. */
+.viewport-panes { position: absolute; inset: 0; display: grid; gap: 2px; background: var(--line-strong); }
+.viewport-panes.one { grid-template: 1fr / 1fr; }
+.viewport-panes.twoH { grid-template: 1fr / 1fr 1fr; }
+.viewport-panes.twoV { grid-template: 1fr 1fr / 1fr; }
+.viewport-panes.four { grid-template: 1fr 1fr / 1fr 1fr; }
+.viewport-pane { position: relative; min-width: 0; min-height: 0; background: var(--bg-0); }
+.viewport-pane.active::after { content: ''; position: absolute; inset: 0; border: 1px solid #6a8fb8; pointer-events: none; }
+.view-tools .proj.on { background: var(--bg-4); color: var(--fg-0); }
 
 /* Side panels: always full height; slide open/closed by animating their width. */
 .side-panel {
