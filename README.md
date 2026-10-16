@@ -1,15 +1,21 @@
-# WebVSP
+<table width="100%">
+<tr>
+<td valign="middle" width="220">
+
+<img width="200" height="200" alt="WebVSP" src="https://github.com/user-attachments/assets/3aa57595-c653-4c14-b44d-802d2e1f70d5" />
+
+</td>
+<td valign="middle">
 
 [OpenVSP](https://openvsp.org), NASA's parametric aircraft geometry tool, in a web browser.
 
 **Open it: https://mohammadadib.github.io/WebVSP/**
 
-Nothing to install. OpenVSP itself, compiled to WebAssembly, runs in the browser tab.
+Nothing to install. OpenVSP and all of its functionality, compiled to WebAssembly, runs in the browser tab on any device that can access the webpage!
 
-WebVSP is OpenVSP's own GUI, not a reimplementation. OpenVSP runs with its real FLTK GUI kept
-off screen, and every window, tab, button, menu and prompt is mirrored into the page, so every
-screen behaves exactly as it does on the desktop. The page draws them in a dark theme next to
-its own three.js 3D view.
+</td>
+</tr>
+</table>
 
 <img width="2880" height="1728" alt="Screenshot 2026-10-15 235821" src="https://github.com/user-attachments/assets/f74faf3c-2825-41e4-8649-8769eedb5f1e" />
 <img width="2880" height="1728" alt="Screenshot 2026-10-15 235857" src="https://github.com/user-attachments/assets/3accdc2e-48e7-4e4a-9bf4-4ac7a8e979aa" />
