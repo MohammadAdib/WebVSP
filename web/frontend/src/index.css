@@ -86,7 +86,6 @@ input:focus, select:focus, textarea:focus, button:focus-visible {
   position: relative;
   z-index: 30;
 }
-.topbar .brand { font-weight: 600; color: var(--fg-1); padding: 0 10px 0 4px; letter-spacing: 0.02em; }
 .topbar .hint { color: var(--fg-3); margin-left: 12px; }
 .topbar .spacer { flex: 1; }
 .topbar .err {
@@ -94,6 +93,11 @@ input:focus, select:focus, textarea:focus, button:focus-visible {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer;
 }
 .topbar .version { color: var(--fg-3); font-size: 11px; padding: 0 6px 0 10px; white-space: nowrap; }
+.topbar .repo-link {
+  display: grid; place-items: center; width: 26px; height: 26px; margin-right: 2px; border-radius: 4px;
+  color: var(--fg-3); transition: color 120ms, background 120ms, filter 120ms;
+}
+.topbar .repo-link:hover { color: #fff; background: var(--bg-4); filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.35)); }
 
 /* The model's file name, bottom-left over the 3D view. */
 .viewer-file {

@@ -71,7 +71,7 @@ the work lives in a handful of files.
 | `public/program.worker.js` | Runs one vspaero/vsploads per run, with copies of the working files. |
 | `vite.config.ts` | Relative base path (works under `/WebVSP/`), isolation headers for dev/preview. |
 | `src/main.tsx` | Makes the page cross-origin isolated (registers the service worker, reloads once), mounts `App`. |
-| `src/App.tsx` | Layout: top bar (mirrored menu, loading hint, errors, OpenVSP version), left panel (Geom Browser), 3D view (with the file name), right panel (geom editor), floating windows, results viewer. `isDocked()` decides docked vs floating. |
+| `src/App.tsx` | Layout: top bar (mirrored menu, loading hint, errors, OpenVSP version, GitHub link), left panel (Geom Browser), 3D view (with the file name), right panel (geom editor), floating windows, results viewer. `isDocked()` decides docked vs floating. |
 | `src/store.ts` | Model store (zustand): tree, `geomsById`, `meshRev` (bumped per geom on change → mesh refetch), `valuesRev`, view requests, ortho. |
 | `src/api/client.ts` | `api.*` (model, geomTypes, bbox, mesh, pick, geomOrigin, moveGeoms) and `connectEvents`. |
 | `src/api/wasmEngine.ts` | The engine's page side: loads the module, `wasmRequest(method, path)` → `call`, a polling loop over `take()` delivering results/events/mirror output, file choosers via the browser's pickers, `runProgram` for VSPAERO, `openViewer` for the results viewer. `window.__webvspEngine.request(...)` is exposed for the console. |

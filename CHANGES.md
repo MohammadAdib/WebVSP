@@ -42,6 +42,8 @@ history is in [CHANGELOG.md](CHANGELOG.md).
 - Disks (propellers in disk mode) are drawn see-through (25%) when shaded.
 - No footer: the OpenVSP version is at the right of the top bar (with any error), and the model's
   file name at the bottom left of the 3D view.
+- The top bar starts with the menus (no "WebVSP" label) and ends with a link to WebVSP's GitHub
+  repository.
 - Split views like desktop OpenVSP's Window menu: one, two side by side, two stacked or four
   panes (toolbar icons), each with its own camera; the toolbar, keys and View menu act on the
   active pane, and a newly loaded model is framed in every pane. Changing the layout fades the
