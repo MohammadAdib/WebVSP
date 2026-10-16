@@ -11,15 +11,6 @@ export type ViewName =
   // relative moves (Blender numpad 2/4/6/8 and 9)
   | 'orbit-left' | 'orbit-right' | 'orbit-up' | 'orbit-down' | 'flip'
 
-export interface FileDialogRequest {
-  mode: 'open' | 'save'
-  title: string
-  defaultName?: string
-  /** FLTK-style filter, e.g. "*.vsp3" or "*.{af,dat}" */
-  filter?: string
-  dir?: string
-  resolve: (path: string | null) => void
-}
 
 interface State {
   tree: ModelTree | null
@@ -39,7 +30,6 @@ interface State {
   viewRequest: { name: ViewName; n: number }
   /** Orthographic (true) or perspective camera */
   ortho: boolean
-  fileDialog: FileDialogRequest | null
   /** Bounding sphere of the shown model, set when the view is fitted. */
   bounds: { center: [number, number, number]; size: [number, number, number]; radius: number } | null
 
@@ -51,7 +41,6 @@ interface State {
   requestView: (name: ViewName) => void
   toggleOrtho: () => void
   setConnected: (c: boolean) => void
-  setFileDialog: (d: FileDialogRequest | null) => void
   setBounds: (b: State['bounds']) => void
   clearError: () => void
 }
@@ -76,7 +65,6 @@ export const useStore = create<State>((set, get) => ({
       return false
     }
   })(),
-  fileDialog: null,
   bounds: null,
 
   loadTree: async () => {
@@ -142,7 +130,6 @@ export const useStore = create<State>((set, get) => ({
     set({ ortho })
   },
   setConnected: (connected) => set({ connected }),
-  setFileDialog: (fileDialog) => set({ fileDialog }),
   setBounds: (bounds) => set({ bounds }),
   clearError: () => set({ error: null }),
 }))

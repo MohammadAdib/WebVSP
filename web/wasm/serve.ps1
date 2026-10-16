@@ -1,6 +1,6 @@
-# Serve WebVSP with the in-browser engine for local testing:
+# Serve WebVSP for local testing:
 #   web\wasm\build_wasm.ps1     (once, and after C++ changes: builds web\frontend\public\wasm)
-#   web\wasm\serve.ps1          then open http://localhost:4173/?engine=wasm
+#   web\wasm\serve.ps1          then open http://localhost:4173/
 # Builds the UI and serves it with Vite's preview server (which sends the cross-origin
 # isolation headers the engine's threads need).
 param([int]$Port = 4173, [switch]$NoBuild, [switch]$Open)
@@ -17,8 +17,8 @@ try {
         npm run build
         if ($LASTEXITCODE -ne 0) { throw 'UI build failed' }
     }
-    $url = "http://localhost:$Port/?engine=wasm"
-    Write-Host "== WebVSP (in-browser engine): $url"
+    $url = "http://localhost:$Port/"
+    Write-Host "== WebVSP: $url"
     if ($Open) { Start-Process $url }
     npx vite preview --port $Port --strictPort
 } finally {

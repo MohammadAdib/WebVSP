@@ -1,11 +1,10 @@
 /**
- * The in-browser engine: OpenVSP compiled to WebAssembly (web/wasm/engine/engine.cpp), running
- * in this tab instead of a local engine process. Open the UI with ?engine=wasm.
+ * The engine: OpenVSP compiled to WebAssembly (web/wasm/engine/engine.cpp), running in this tab.
  *
- * It stands in for the local engine's HTTP API and WebSocket:
- *   - requests (the same paths as web/backend/vspweb/app.py) are queued to OpenVSP's thread;
+ *   - requests (method + path, e.g. GET /geoms/{id}/mesh; see wasmRequest) are queued to
+ *     OpenVSP's thread;
  *   - a fast loop collects their results, model-change events and the mirrored GUI's output,
- *     and hands the events to the UI exactly as the WebSocket would;
+ *     and hands the events to the page (wasmConnect);
  *   - GUI input and dialog answers go straight to the mirror.
  * File choosers in the GUI use the browser's file pickers; files live in the module's
  * in-memory file system (see answerFileDialog below).
@@ -34,43 +33,6 @@ interface VspModule {
     readdir(path: string): string[]
     isFile(mode: number): boolean
   }
-}
-
-/** The page's address under /local/ (the local-engine copy of the page, see vite.config.ts). */
-const LOCAL_PATH = /\/local\/?$/
-
-/**
- * Which engine this page uses, from its address alone:
- *   - hosted (e.g. GitHub Pages), or the Vite dev server: the in-browser engine; under /local/
- *     (or with ?engine=local) the engine on this computer instead;
- *   - served by an engine (localhost): that engine, unless ?engine=wasm;
- *   - ?engine=http://localhost:PORT: that engine (File > New Window).
- */
-function chooseWasm(): boolean {
-  try {
-    localStorage.removeItem('webvsp-engine-mode') // an earlier version remembered the choice
-  } catch {
-    /* storage unavailable */
-  }
-  const q = new URLSearchParams(window.location.search).get('engine')
-  if (q === 'wasm') return true
-  if (q) return false // ?engine=local, or a specific engine address
-  if (LOCAL_PATH.test(window.location.pathname)) return false
-  // The Vite dev server isn't an engine: like the hosted page (its /local/ proxies to one).
-  if (import.meta.env.DEV) return true
-  return !['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname)
-}
-
-export const isWasmEngine = chooseWasm()
-
-/** This page with the other engine (the switch in the status bar): / <-> /local/. */
-export function otherEngineUrl(): string {
-  const url = new URL(window.location.href)
-  url.searchParams.delete('engine')
-  url.hash = ''
-  const base = url.pathname.replace(LOCAL_PATH, '/').replace(/[^/]*$/, '')
-  url.pathname = isWasmEngine ? base + 'local/' : base
-  return url.toString()
 }
 
 export class WasmEngineError extends Error {
@@ -189,7 +151,7 @@ export async function wasmRequest(method: string, path: string, body?: unknown):
 }
 
 // For the browser console and tests: __webvspEngine.request('POST', '/geoms', { type: 'WING' })
-if (isWasmEngine) (window as unknown as Record<string, unknown>).__webvspEngine = { request: wasmRequest }
+(window as unknown as Record<string, unknown>).__webvspEngine = { request: wasmRequest }
 
 /** Stand-in for the WebSocket: "connected" once OpenVSP has started, then its events. */
 export function wasmConnect(onEvent: (e: SocketMessage) => void, onStatus: (connected: boolean) => void) {
@@ -212,7 +174,7 @@ export function wasmConnect(onEvent: (e: SocketMessage) => void, onStatus: (conn
     send: (msg: unknown) => {
       const m = msg as { type?: string; event?: Record<string, unknown> }
       if (m.type !== 'mirror_event' || !m.event) return
-      // The mirror reads flat JSON: numbers and strings only (as the Python relay sends).
+      // The mirror reads flat JSON: numbers and strings only.
       const flat: Record<string, string | number> = {}
       for (const [k, v] of Object.entries(m.event)) flat[k] = typeof v === 'number' || typeof v === 'string' ? v : String(v)
       void load().then((vsp) => vsp.mirrorEvent(JSON.stringify(flat)))

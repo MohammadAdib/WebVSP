@@ -125,7 +125,6 @@ VSPWindow.cpp
 VspDialogs.cpp
 CrashTrace.cpp
 MirrorGL.cpp
-NativeFileDialog.cpp
 WebMirror.cpp
 WaveDragScreen.cpp
 WingScreen.cpp

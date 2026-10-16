@@ -1,6 +1,6 @@
 import { useStore } from './store'
 
-/** While the in-browser engine (?engine=wasm) downloads and starts. */
+/** While OpenVSP downloads and starts. */
 export function WasmToolbar() {
   const connected = useStore((s) => s.connected)
   if (connected) return null

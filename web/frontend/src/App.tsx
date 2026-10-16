@@ -1,15 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { connectEvents, isHostedUI } from './api/client'
-import { isWasmEngine, otherEngineUrl } from './api/wasmEngine'
+import { connectEvents } from './api/client'
 import type { ServerEvent } from './api/types'
-import { EngineGate } from './EngineGate'
 import { DialogHost } from './mirror/Dialogs'
 import { useMirror } from './mirror/store'
 import type { MDialog, MirrorMsg, MWidget, MWindow } from './mirror/types'
 import { SidePanel, usePanelHeight, ViewerOverlay } from './mirror/Dock'
 import { FloatingWindow, MirrorMenuBar } from './mirror/Window'
-import { FileDialog } from './panels/FileDialog'
-import { setWindowTitle } from './platform'
 import { useStore } from './store'
 import { Viewport } from './viewport/Viewport'
 import { ResultsViewer } from './viewer/ResultsViewer'
@@ -30,26 +26,8 @@ function StatusBar() {
         </span>
       )}
       <span className="spacer" />
-      <EngineSwitch />
       <span>WebVSP · {tree?.version?.replace(/^OpenVSP\s*/, 'VSP ')}</span>
     </div>
-  )
-}
-
-/** Which engine runs OpenVSP, and a link to the other one (where there's a choice). */
-function EngineSwitch() {
-  if (isWasmEngine) {
-    return (
-      <span title="OpenVSP runs in this browser tab. The local engine runs VSPAERO faster (multi-threaded) and adds STEP export and the VSPAERO viewer.">
-        In-browser engine · <a href={otherEngineUrl()}>Use local engine</a>
-      </span>
-    )
-  }
-  if (!isHostedUI) return null
-  return (
-    <span title="OpenVSP runs on this computer (the downloaded WebVSP engine).">
-      Local engine · <a href={otherEngineUrl()}>Run in browser instead</a>
-    </span>
   )
 }
 
@@ -102,7 +80,7 @@ export default function App() {
 
   useEffect(() => {
     const file = tree?.fileName?.split(/[\\/]/).pop() || 'Unnamed.vsp3'
-    setWindowTitle(`${file} — WebVSP`)
+    document.title = `${file} — WebVSP`
   }, [tree?.fileName])
 
   const all = Object.values(windows).sort((a, b) => a.id - b.id)
@@ -116,7 +94,7 @@ export default function App() {
       <div className="topbar">
         <span className="brand">WebVSP</span>
         <MirrorMenuBar />
-        {isWasmEngine && <WasmToolbar />}
+        <WasmToolbar />
         {!mirrorEnabled && connected && <span className="hint">GUI mirror unavailable (engine built without the GUI)</span>}
       </div>
       <div className="main" ref={mainRef}>
@@ -133,8 +111,6 @@ export default function App() {
       </div>
       <StatusBar />
       <DialogHost />
-      <EngineGate />
-      <FileDialog />
     </div>
   )
 }

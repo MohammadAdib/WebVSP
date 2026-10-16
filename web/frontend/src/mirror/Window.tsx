@@ -201,7 +201,7 @@ export function MirrorMenuBar() {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT')) return
-      if (useMirror.getState().dialogs.length || useStore.getState().fileDialog) return
+      if (useMirror.getState().dialogs.length) return
       const sc = shortcutOf(e)
       if (!sc) return
       const hit = flat.find((f) => f.node.item.sc === sc && !(f.node.item.flags & (MENU.INACTIVE | MENU.SUBMENU)))

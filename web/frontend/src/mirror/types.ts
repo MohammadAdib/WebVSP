@@ -160,7 +160,7 @@ export interface MDialog {
   mode?: number
   preset?: string
   dir?: string
-  /** The engine is showing the desktop's own dialog for this one */
+  /** Answered by the engine with the browser's file pickers, not drawn by the page */
   native?: boolean
 }
 

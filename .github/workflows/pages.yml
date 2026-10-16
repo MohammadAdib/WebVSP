@@ -1,8 +1,5 @@
-# Builds the WebVSP web UI (web/frontend) and deploys it to GitHub Pages.
-# The hosted UI connects to the WebVSP engine running on the user's machine
-# (web/vsp-web.cmd, http://localhost:8765). The engine only accepts requests from
-# trusted UI origins; see WEB_ORIGINS in web/backend/vspweb/app.py.
-# The in-browser engine (?engine=wasm, web/wasm) is built locally with web/wasm/build_wasm.ps1
+# Builds WebVSP (web/frontend) and deploys it to GitHub Pages.
+# OpenVSP compiled to WebAssembly (web/wasm) is built locally with web/wasm/build_wasm.ps1
 # and published as the wasm-latest release; it's added to the site here.
 name: Deploy web UI to GitHub Pages
 

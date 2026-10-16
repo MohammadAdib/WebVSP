@@ -1,4 +1,18 @@
-/** Decoder for the backend's binary mesh format (see web/backend/vspweb/tess.py). */
+/**
+ * Decoder for the engine's binary mesh payload (MeshBytes in web/wasm/engine/engine.cpp).
+ * Little-endian, every field 4-byte aligned:
+ *
+ *   char[4]  "VSPM"
+ *   uint32   number of surfaces
+ *   per surface:
+ *     uint32   nu, nw       grid dimensions (vertex k = i*nw + j); nw = 0 means a plain
+ *                           triangle list of nu vertices (Mesh Geoms have no u/w grid)
+ *     uint32   nidx         number of triangle indices
+ *     float32  positions[nv*3], normals[nv*3]   (nv = nu*nw, or nu when nw = 0)
+ *     uint32   indices[nidx]
+ *   uint32   number of outline points (OpenVSP's feature lines, MirrorFeatureLines)
+ *   float32  outline[n*3]   pairs of points, one pair per line segment
+ */
 
 export interface SurfaceMesh {
   /** Grid dimensions; nw = 0 means a plain triangle list of nu vertices (Mesh Geoms). */

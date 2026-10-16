@@ -1,7 +1,7 @@
-// Makes the page cross-origin isolated, which the in-browser engine needs for its threads
+// Makes the page cross-origin isolated, which OpenVSP needs for its threads
 // (SharedArrayBuffer). Static hosts like GitHub Pages can't send the headers themselves, so
-// this service worker adds them to the site's own responses. Registered by main.tsx only
-// for ?engine=wasm. Requests to other origins pass through untouched.
+// this service worker adds them to the site's own responses. Registered by main.tsx.
+// Requests to other origins pass through untouched.
 self.addEventListener('install', () => self.skipWaiting())
 self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()))
 

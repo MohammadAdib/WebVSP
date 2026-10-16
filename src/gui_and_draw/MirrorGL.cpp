@@ -31,7 +31,7 @@ void MirrorCreateGLContext()
     }
     Fl_Group *cur = Fl_Group::current();
     Fl_Group::current( nullptr ); // top-level, not a child of whatever group is open
-    s_ctx = new Fl_Gl_Window( -32000, -32000, 16, 16, "vspweb gl context" );
+    s_ctx = new Fl_Gl_Window( -32000, -32000, 16, 16, "webvsp gl context" );
     s_ctx->mode( FL_RGB | FL_ALPHA | FL_DEPTH | FL_DOUBLE );
     s_ctx->end();
     Fl_Group::current( cur );

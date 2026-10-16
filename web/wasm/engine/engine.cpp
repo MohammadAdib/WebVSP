@@ -1,21 +1,20 @@
-// In-browser OpenVSP engine: the OpenVSP core (and, in the GUI build, its FLTK GUI mirrored
-// to the page) compiled to WebAssembly.
+// WebVSP's engine: the OpenVSP core (and, in the GUI build, its FLTK GUI mirrored to the page)
+// compiled to WebAssembly, running in the browser tab.
 //
-// This is the WebAssembly counterpart of the local Python engine (web/backend/vspweb):
 //   - OpenVSP runs on its own thread (main() runs on a pthread: -sPROXY_TO_PTHREAD), which owns
-//     the model and the GUI, like runtime.py's OpenVSP thread.
+//     the model and the GUI.
 //   - The page calls in from the browser's main thread through a few thread-safe functions:
-//       call( id, op, a, b, value )   queue a request (the HTTP API's operations, below)
+//       call( id, op, a, b, value )   queue a request (the operations below)
 //       mirrorEvent( json )           input for the mirrored GUI (WebMirror's event JSON)
 //       take()                        everything produced since the last take(), as JSON:
 //                                       {"out":[results and model events],"mirror":[GUI output]}
 //       takeBinary( id )              a request's binary result (meshes), as a Uint8Array
 //   - Between requests the engine pumps the GUI and watches the model for changes made in the
-//     GUI, emitting the same "model_changed" events as session.py.
+//     GUI, emitting "model_changed" events.
 //
-// Requests (op, a, b, value) and their results mirror web/backend/vspweb/app.py:
+// Requests (op, a, b, value) and their results (the page's side is wasmRequest, wasmEngine.ts):
 //   model, geomTypes, bbox              JSON
-//   mesh(a=geom id)                     binary "VSPM" mesh (see tess.py)
+//   mesh(a=geom id)                     binary "VSPM" mesh (format: web/frontend/src/api/mesh.ts)
 //   addGeom(a=type, b=parent)           {"id":...}
 //   deleteGeoms(a=comma-separated ids)
 //   setParm(a=parm id, value)
@@ -230,7 +229,7 @@ string BBoxJson()
            Num( hi[0] ) + "," + Num( hi[1] ) + "," + Num( hi[2] ) + "]}";
 }
 
-//==== Meshes (port of web/backend/vspweb/tess.py) ====//
+//==== Meshes: the GUI's own u/w tessellation, as a binary payload ====//
 
 struct Surface
 {
@@ -393,7 +392,7 @@ vector< uint8_t > MeshBytes( const string &id )
     return b;
 }
 
-//==== Change detection (port of session.py's watcher) ====//
+//==== Change detection: which geoms changed, from parm fingerprints ====//
 
 int g_Rev = 0;
 bool g_Dirty = false;

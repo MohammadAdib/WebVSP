@@ -22,7 +22,7 @@ double Ms( std::chrono::steady_clock::time_point t0 )
     return std::chrono::duration< double, std::milli >( std::chrono::steady_clock::now() - t0 ).count();
 }
 
-// Same sampling as web/backend/vspweb/tess.py: the GUI's u/w tessellation of every surface.
+// Same sampling as the engine's meshes: the GUI's u/w tessellation of every surface.
 int CountTessPoints( const string &geom_id )
 {
     int total = 0;

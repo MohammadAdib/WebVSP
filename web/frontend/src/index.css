@@ -226,18 +226,7 @@ input:focus, select:focus, textarea:focus, button:focus-visible {
 .modal.prompt { height: auto; width: min(460px, 92vw); }
 .prompt-msg { padding: 16px 14px; white-space: pre-wrap; line-height: 1.5; color: var(--fg-0); }
 .modal-head { padding: 10px 12px; font-weight: 600; border-bottom: 1px solid var(--line); }
-.modal-filter { margin-left: 10px; font-weight: 400; color: var(--fg-3); font-size: 12px; }
-.modal-path { display: flex; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--line); }
-.modal-path input { flex: 1; font-family: var(--mono); font-size: 12px; }
-.modal-list { flex: 1; overflow: auto; padding: 4px 0; }
-.modal-list .entry { display: flex; gap: 8px; padding: 3px 14px; cursor: default; user-select: none; }
-.modal-list .entry:hover { background: var(--bg-3); }
-.modal-list .entry.sel { background: var(--bg-5); }
-.modal-list .entry .ico { color: var(--fg-3); width: 14px; }
-.modal-list .entry.dim { color: var(--fg-3); }
 .modal-foot { display: flex; gap: 6px; padding: 10px 12px; border-top: 1px solid var(--line); align-items: center; }
-.modal-foot input { flex: 1; }
-.empty { color: var(--fg-3); padding: 16px 12px; }
 
 /* -------------------------------------------------- mirrored FLTK widgets */
 
@@ -368,19 +357,6 @@ input:focus, select:focus, textarea:focus, button:focus-visible {
   background: var(--bg-0); border: 1px dashed var(--line-strong); color: var(--fg-3); font-size: 11px;
 }
 
-/* ----------------------------------------------------- hosted UI: engine gate */
-
-.engine-gate .modal { width: min(520px, 92vw); }
-.engine-gate .prompt-msg p { margin: 0 0 10px; }
-.engine-gate ol { margin: 0 0 12px; padding-left: 20px; display: grid; gap: 6px; color: var(--fg-1); }
-.engine-gate a { color: var(--fg-0); }
-.engine-gate code { font-family: var(--mono); font-size: 12px; background: var(--bg-1); border: 1px solid var(--line); border-radius: 3px; padding: 1px 5px; }
-.engine-wait { display: flex; align-items: center; gap: 8px; color: var(--fg-2); }
-.engine-alt { margin: 10px 0 0; color: var(--fg-2); }
-.engine-alt a { color: var(--fg-0); }
-.engine-dot { width: 8px; height: 8px; border-radius: 50%; background: #9a9a9a; animation: engine-pulse 1.2s ease-in-out infinite; }
-@keyframes engine-pulse { 0%, 100% { opacity: 0.25; } 50% { opacity: 1; } }
-
 /* ------------------------------------------------------- viewer view tools */
 
 .view-tools {
@@ -395,14 +371,6 @@ input:focus, select:focus, textarea:focus, button:focus-visible {
 .view-tools .proj { width: 30px; padding: 0; display: grid; place-items: center; color: var(--fg-0); }
 
 .m-sym { display: inline-block; line-height: 1; font-size: 0.85em; letter-spacing: -0.2em; padding-right: 0.2em; }
-.engine-download {
-  display: flex; align-items: center; justify-content: center; gap: 8px;
-  margin: 4px 0 14px; padding: 9px 14px; border-radius: 4px;
-  background: #d6d6d6; color: #161616 !important; font-weight: 600; text-decoration: none;
-  transition: background 120ms;
-}
-.engine-download:hover { background: #ececec; }
-
 /* ------------------------------------------------------------ VSPAERO results viewer */
 .results-viewer {
   position: absolute; display: flex; flex-direction: column; min-width: 0; min-height: 0;

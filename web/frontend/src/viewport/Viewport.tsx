@@ -222,7 +222,7 @@ export function Viewport() {
   const toggleOrtho = useStore((s) => s.toggleOrtho)
   // The keys are the results viewer's while it's open (it covers this view).
   const active = useCallback(
-    () => !useStore.getState().fileDialog && !document.querySelector('.modal-backdrop') && !useViewer.getState().open,
+    () => !document.querySelector('.modal-backdrop') && !useViewer.getState().open,
     [],
   )
   useViewKeys(requestView, toggleOrtho, active)

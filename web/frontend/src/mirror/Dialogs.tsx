@@ -1,24 +1,12 @@
-import { useEffect, useRef } from 'react'
-import { pickOpenFile, pickSaveFile } from '../platform'
 import { sendMirror, useMirror } from './store'
 import type { MDialog } from './types'
 
-/** Prompts raised by the GUI (fl_choice / fl_alert / fl_message / file choosers). */
+/**
+ * Prompts raised by the GUI (fl_choice / fl_alert / fl_message). File choosers are answered
+ * with the browser's file pickers by the engine (wasmEngine.ts).
+ */
 export function DialogHost() {
   const dialog = useMirror((s) => s.dialogs[0])
-  const handled = useRef<number | null>(null)
-
-  // File choosers use the app's file browser, then answer the GUI with the path.
-  useEffect(() => {
-    if (!dialog || dialog.kind !== 'file' || dialog.native || handled.current === dialog.seq) return
-    handled.current = dialog.seq
-    const title = dialog.title || (dialog.mode ? 'Save' : 'Open')
-    const pick = dialog.mode
-      ? pickSaveFile(title, dialog.preset || '', dialog.filter, dialog.dir)
-      : pickOpenFile(title, dialog.filter, dialog.dir)
-    void pick.then((path) => answer(dialog, { path: path ?? '' }))
-  }, [dialog])
-
   if (!dialog || dialog.kind === 'file') return null
   const buttons = dialog.kind === 'choice' ? [dialog.b0, dialog.b1, dialog.b2] : ['OK']
   return (

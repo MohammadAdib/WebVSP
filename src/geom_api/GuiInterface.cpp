@@ -20,7 +20,6 @@
 #ifdef VSP_USE_FLTK
 #include "ScreenMgr.h"
 #include "WebMirror.h"
-#include "NativeFileDialog.h"
 #endif
 
 #include "MainThreadIDMgr.h"
@@ -204,16 +203,6 @@ void GuiInterface::MirrorPickGeom( const std::string & geom_id, bool toggle )
 {
 #ifdef VSP_USE_FLTK
     WebMirror::PickGeom( geom_id, toggle );
-#endif
-}
-
-std::string GuiInterface::MirrorNativeFileDialog( const std::string & title, bool save, const std::string & types,
-                                                 const std::string & dir, const std::string & file, const std::string & defext )
-{
-#ifdef VSP_USE_FLTK
-    return NativeFileDialog::Show( title, save, types, dir, file, defext );
-#else
-    return std::string( "*error built without the GUI" );
 #endif
 }
 

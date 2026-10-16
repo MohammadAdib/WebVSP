@@ -1,50 +1,3 @@
-export type ParmType = 'double' | 'int' | 'bool' | 'fraction'
-
-export interface ChoiceOption {
-  value: number
-  label: string
-}
-
-export interface ParmInfo {
-  id: string
-  name: string
-  group: string
-  displayGroup: string
-  descript: string
-  type: ParmType
-  min: number | null
-  max: number | null
-  value: number
-  /** False when OpenVSP drives this Parm itself; edits to it have no lasting effect. */
-  active: boolean
-  choice?: { kind: 'choice' | 'flags'; options: ChoiceOption[] }
-}
-
-export interface ParmValues {
-  values: Record<string, number>
-  inactive: string[]
-}
-
-export interface ParmGroup {
-  name: string
-  parms: ParmInfo[]
-}
-
-export interface XSecInfo {
-  id: string
-  surf: number
-  surfId: string
-  index: number
-  shape: number
-  groups: ParmGroup[]
-}
-
-export interface GeomSchema {
-  geomId: string
-  groups: ParmGroup[]
-  xsecs: XSecInfo[]
-}
-
 export interface GeomNode {
   id: string
   name: string
@@ -97,11 +50,4 @@ export type ServerEvent = ModelChangedEvent | SavedEvent
 export interface BBox {
   min: [number, number, number]
   max: [number, number, number]
-}
-
-export interface DirListing {
-  path: string
-  parent: string | null
-  home: string
-  entries: { name: string; path: string; dir: boolean }[]
 }

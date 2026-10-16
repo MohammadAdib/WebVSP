@@ -5,6 +5,11 @@ What WebVSP adds on top of OpenVSP, newest first. WebVSP is based on **OpenVSP 3
 
 ## 2026-10-15
 
+### Entirely in the browser
+- WebVSP runs entirely in the browser tab: OpenVSP, its GUI and VSPAERO compiled to
+  WebAssembly. There is nothing to install.
+- File > New Window opens another tab, each with its own model.
+
 ### 3D view: moving, selecting, highlighting
 - **Move gizmo.** Blender-style X/Y/Z arrows on the selection, at the middle of the selected
   geoms' origins. Dragging moves the geoms along that axis, snapped to a 1-unit grid. While
@@ -26,39 +31,31 @@ What WebVSP adds on top of OpenVSP, newest first. WebVSP is based on **OpenVSP 3
 - **Blank geoms** show as circles at their origins: gray, red when selected, clickable.
 - **Overlay of the screens' 3D drawings**: Mass Properties' CG (red point), and anything else a
   screen adds to the main view, mirrored from OpenVSP.
-- **NGon meshes** (e.g. from Mesh Geom conversion) are drawn.
+- **Mesh and NGon Mesh geoms** (CompGeom results, imported STL/TRI, NGon conversions) are drawn.
 
 ### VSPAERO
+- **VSPAERO runs in the browser.** `vspaero` and `vsploads` are compiled to WebAssembly and run
+  in workers, one fresh instance per run (single-threaded).
 - **Results viewer in the page.** VSPAERO > Launch Viewer opens a floating viewer for the
   `.adb` results: Cp, steady/unsteady Cp, vorticity or shaded, per solution case, with wakes,
   a desktop-style colour legend, the case's coefficients from the `.polar` file and the
-  reference values. (The in-browser engine; the local engine runs the desktop viewer.)
-- **VSPAERO in the in-browser engine.** `vspaero` and `vsploads` are compiled to WebAssembly
-  and run in workers, one fresh instance per run (single-threaded).
+  reference values.
 - File choosers accept several files at once (a model together with its results).
 
-### Engines
-- **The address chooses the engine:** the hosted page at `/` runs OpenVSP in the browser tab;
-  `/local/` uses the engine on this computer. Nothing is remembered. The status bar links to
-  the other one.
-- **In-browser engine.** OpenVSP and its FLTK GUI compiled to WebAssembly: a headless FLTK
-  platform, OpenVSP on its own thread, a service worker for cross-origin isolation.
+### OpenVSP in WebAssembly
+- OpenVSP and its FLTK GUI compiled to WebAssembly: a headless FLTK platform, OpenVSP on its own
+  thread, a service worker for cross-origin isolation, the browser's file pickers for file
+  choosers, plots captured as SVG.
 - Portability fixes so the OpenVSP core builds for WebAssembly (AngelScript calling
   conventions, NACA 6-series signatures, `VSP_NO_STEP`).
-- **File > New Window** starts another engine, so each window has its own model.
-- Native Windows file dialogs for the local engine, remembering the last folder.
-- Mesh Geoms are drawn in the 3D view.
 
 ## 2026-10-14
 
-- **First version.** A browser GUI for OpenVSP: a local Python engine (FastAPI) runs OpenVSP
-  with its real FLTK GUI off screen and mirrors every window, widget, menu and prompt to a
-  React page, in a dark theme next to a three.js 3D view. Input goes back to the real widgets,
-  so every screen's own logic runs unchanged.
-- Hosted on GitHub Pages, talking to a local engine; a portable Windows engine zip built by
-  GitHub Actions.
+- **First version.** OpenVSP's real FLTK GUI kept off screen and mirrored, window by window and
+  widget by widget, into a React page in a dark theme next to a three.js 3D view. Input goes
+  back to the real widgets, so every screen's own logic runs unchanged.
+- Hosted on GitHub Pages.
 - 3D view toolbar (front, side, top, iso, fit), orthographic/perspective switch, Blender
   numpad keys.
 - VSPAERO's solver consoles and result plots mirrored.
 - Resizable side panels that re-lay out the real FLTK windows.
-- Renamed from TitanVSP to WebVSP.
