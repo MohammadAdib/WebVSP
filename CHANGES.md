@@ -20,7 +20,8 @@ history is in [CHANGELOG.md](CHANGELOG.md).
 - Plot widgets captured as SVG.
 - VSPAERO's solver consoles and result plots mirrored.
 - File > New Window opens another tab, each with its own model.
-- Hosted on GitHub Pages.
+- Hosted on GitHub Pages; a push to `main` builds the engine and the page in CI and deploys them,
+  with nothing built or uploaded by hand.
 - The Geom Browser docked on the left and the geom editor on the right; other screens and popups
   are floating windows.
 - Resizable side panels that re-lay out the real FLTK windows; the 3D view follows them smoothly.

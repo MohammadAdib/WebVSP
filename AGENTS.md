@@ -48,7 +48,7 @@ the work lives in a handful of files.
 |---|---|
 | `web/frontend/` | The page: Vite + React 19 + TypeScript, three.js via @react-three/fiber and drei, zustand stores. |
 | `web/wasm/` | The engine: OpenVSP compiled to WebAssembly, headless FLTK, build scripts. |
-| `.github/workflows/pages.yml` | Builds the page, adds the engine from the `wasm-latest` release, deploys to GitHub Pages. |
+| `.github/workflows/pages.yml` | On every push to `main`: builds the engine, then the page with it, and deploys to GitHub Pages. |
 
 ### The engine: `web/wasm/`
 
@@ -263,13 +263,21 @@ the engine directly.
 
 ### Releasing
 
-- Push to WebVSP `main` (`git push webvsp wasm-dev:main`) → `pages.yml` deploys the page.
-- The **engine is not built by CI**. Upload a local build to the `wasm-latest` release before
-  (or right after) pushing page changes that need it:
-  `gh release upload wasm-latest web/frontend/public/wasm/* -R MohammadAdib/WebVSP --clobber`.
-  `pages.yml` downloads `vsp*.js` and `vsp*.wasm` from it. If the page and the engine don't
-  match, new features quietly fail on the site, so re-run the Pages workflow after uploading if
-  it already deployed.
+A push to `main` that touches `src/`, `Libraries/`, `web/` or the workflow is the whole release:
+`pages.yml` builds the engine (Linux; Emscripten and CMake pinned in `EMSDK_VERSION` and
+`CMAKE_VERSION`; `build_wasm.ps1` under PowerShell 7), then the page with that engine in it,
+then deploys to GitHub Pages. Nothing is built or uploaded by hand, so any clone can release.
+
+- The libraries and FLTK are cached (keyed on `Libraries/`, `web/wasm/fltk/`, the toolchain and
+  the build script); OpenVSP compiles through ccache. A first or library-changing run rebuilds
+  everything (about 10 minutes); an ordinary push rebuilds only what changed.
+- Building on Linux turned up library quirks the Windows build never hit, now handled for
+  WebAssembly builds: delabella adds `-mfma` on x86-64 hosts (so it also gets `-msimd128`), and
+  Eigen builds a Fortran LAPACK when a Fortran compiler is around (so only its headers are
+  installed). Older CMake versions read FLTK's type-size checks wrongly, hence the pinned CMake.
+- `workflow_dispatch` runs it on any branch (builds everything; only `main` deploys).
+- Changing the Emscripten version: update `EMSDK_VERSION` (and `CCACHE_COMPILERCHECK`) in the
+  workflow, and the version in `build_wasm.ps1`'s comment.
 
 ---
 

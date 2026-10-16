@@ -6,12 +6,17 @@ own. Nothing is installed and nothing runs outside the browser.
 
 ## Build
 
-Needs the Emscripten SDK and Ninja next to the repo (paths are parameters of the scripts), plus
-Node LTS for the page:
+You don't need to build it to deploy: pushing to `main` builds it in CI
+(`.github/workflows/pages.yml`). To build it yourself, for local development:
+
+Needs the Emscripten SDK (version 6.0.12) and CMake 4.4.4, as CI uses, and Ninja next to the repo (paths are
+parameters of the script; an emsdk environment that's already set up, and ninja or ccache on
+PATH, are used as they are), plus Node LTS for the page. The script also runs on Linux and
+macOS with PowerShell 7 (`pwsh`):
 
 ```powershell
 # once: tools (outside the repo)
-git clone https://github.com/emscripten-core/emsdk ..\emsdk; ..\emsdk\emsdk.bat install latest; ..\emsdk\emsdk.bat activate latest
+git clone https://github.com/emscripten-core/emsdk ..\emsdk; ..\emsdk\emsdk.bat install 6.0.12; ..\emsdk\emsdk.bat activate 6.0.12
 python -m pip install ninja --target ..\tools\ninja
 
 web\wasm\build_wasm.ps1    # libraries, FLTK, OpenVSP, VSPAERO -> web\frontend\public\wasm\

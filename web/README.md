@@ -28,15 +28,12 @@ cd web\frontend; npm ci; npm run dev   # http://localhost:5173/ with hot reload
 
 ## Deploy
 
-`.github/workflows/pages.yml` builds the page and deploys it to GitHub Pages on every push to
-`main` that touches `web/frontend`. The engine isn't built in CI: upload a local build to the
-`wasm-latest` release, which the workflow downloads into the site:
-
-```powershell
-gh release upload wasm-latest web/frontend/public/wasm/* -R MohammadAdib/WebVSP --clobber
-```
-
-If the page already deployed before the upload, re-run the workflow.
+Push to `main`; that's all. `.github/workflows/pages.yml` builds the engine (OpenVSP for
+WebAssembly, on Linux), builds the page with it, and deploys both to GitHub Pages, on every push
+that touches `src/`, `Libraries/`, `web/` or the workflow. Nothing needs building or uploading
+by hand, so it works from any clone. The libraries are cached and OpenVSP compiles through
+ccache, so ordinary pushes rebuild only what changed; the first run, or one that changes the
+libraries, takes much longer.
 
 ## Design notes
 
