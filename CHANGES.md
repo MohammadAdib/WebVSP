@@ -105,6 +105,8 @@ history is in [CHANGELOG.md](CHANGELOG.md).
 
 - VSPAERO runs in the browser: `vspaero` and `vsploads` compiled to WebAssembly and run in workers,
   one fresh instance per run (single-threaded).
+- The VSPAERO window's title bar times the solver: counting while it runs, then how long the
+  last run took and whether it finished, failed or was stopped.
 - VSPAERO results viewer in the page (VSPAERO > Launch Viewer), in a movable, resizable window:
   Cp, steady/unsteady Cp, vorticity or shaded, per solution case, with wakes and wake surfaces, a
   desktop-style colour legend filling the window's height, smooth shading on by default, the

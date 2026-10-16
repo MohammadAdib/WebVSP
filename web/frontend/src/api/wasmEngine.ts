@@ -15,6 +15,7 @@
 import type { SocketMessage } from './client'
 import type { MDialog } from '../mirror/types'
 import { useViewer } from '../viewer/store'
+import { solverExited, solverSpawned } from './solverRun'
 
 interface VspModule {
   call(id: number, op: string, a: string, b: string, value: number): void
@@ -413,10 +414,12 @@ function runProgram(vsp: VspModule, r: ProcRequest) {
 
   const worker = new Worker(new URL(`${import.meta.env.BASE_URL}program.worker.js`, window.location.href), { type: 'module' })
   programs.set(r.id, worker)
+  if (cmd === 'vspaero') solverSpawned()
   const finish = (code: number) => {
     if (!programs.has(r.id)) return
     programs.delete(r.id)
     worker.terminate()
+    if (cmd === 'vspaero') solverExited(code)
     vsp.processExit(r.id, code)
   }
   worker.onmessage = ({ data }) => {
@@ -441,6 +444,7 @@ function killProgram(vsp: VspModule, id: number) {
   if (!worker) return
   programs.delete(id)
   worker.terminate()
+  solverExited(143)
   vsp.processOutput(id, 'Stopped.\n')
   vsp.processExit(id, 143)
 }

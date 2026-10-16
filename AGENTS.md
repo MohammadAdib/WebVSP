@@ -287,6 +287,10 @@ edges for NGon meshes. Last, a flag per surface (bit 0: a disk, `DISK_SURF`, dra
   working files in, streams output back (`processOutput`), copies written files back and reports
   the exit (`processExit`). The engine creates placeholder files `/bin/vspaero` etc. and calls
   `SetVSPAEROPath("/bin")` so OpenVSP finds them. Single-threaded (no OpenMP).
+- **Run timer**: `api/solverRun.ts`. A run lasts while the VSPAERO window's Kill Solver button
+  is active (watched in `mirror/Window.tsx`, `setSolverRunning`) and counts only if `vspaero` was
+  launched during it (the button flickers on as the window appears); `vspaero`'s exit code says
+  how it ended. `SolverTimer` shows it in that window's title bar.
 - **Results viewer**: `vspviewer` launches are intercepted by `openViewer` in `wasmEngine.ts`,
   which reads `<base>.adb`, `.adb.cases` and `.polar` and opens `viewer/ResultsViewer.tsx`. Its
   wakes are drawn past their end and faded out (`WAKE_FADE_LENGTH`, `WAKE_FADE_STEPS` in

@@ -223,6 +223,13 @@ input:focus, select:focus, textarea:focus, button:focus-visible {
   cursor: move; user-select: none;
 }
 .m-float-title button { padding: 0 8px; font-size: 12px; }
+/* VSPAERO's run time, at the right of its window's title bar */
+.solver-timer {
+  margin-left: auto; margin-right: 8px; font-weight: 400; color: var(--fg-2);
+  font-variant-numeric: tabular-nums;
+}
+.solver-timer.running { color: #8fc97a; }
+.solver-timer.failed { color: var(--danger); }
 
 /* ----------------------------------------------------------------- modal */
 

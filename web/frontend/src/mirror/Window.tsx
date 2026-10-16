@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { setSolverRunning, useSolverRun } from '../api/solverRun'
 import { useStore, type ViewName } from '../store'
 import { MENU, labelText, shortcutOf, shortcutText } from './fltk'
 import { sendMirror, useMirror } from './store'
@@ -128,6 +129,7 @@ export function FloatingWindow({ win, index, origin }: { win: MWindow; index: nu
         onPointerUp={() => (drag.current = null)}
       >
         <span>{win.title || win.screen}</span>
+        {win.screen === 'VSPAERO' && <SolverTimer />}
         <button className="ghost" title="Close" onClick={() => sendMirror({ op: 'close', win: win.id })}>
           ✕
         </button>
@@ -135,6 +137,44 @@ export function FloatingWindow({ win, index, origin }: { win: MWindow; index: nu
       <MirrorWindow win={win} scale={scale} />
     </div>
   )
+}
+
+// A VSPAERO run lasts while its window's Kill Solver button is active (OpenVSP's own idea of it).
+useMirror.subscribe((s, prev) => {
+  if (s.widgets === prev.widgets) return
+  let running = false
+  for (const w of Object.values(s.widgets)) {
+    if (w.k === 'button' && w.act && w.vis && labelText(w.label ?? '') === 'Kill Solver') {
+      running = true
+      break
+    }
+  }
+  setSolverRunning(running)
+})
+
+/** The last VSPAERO run's time, in the VSPAERO window's title bar: counting while it runs, then
+ *  how long it took and how it ended. */
+function SolverTimer() {
+  const { start, end, code } = useSolverRun()
+  const [, tick] = useState(0)
+  useEffect(() => {
+    if (start === null || end !== null) return
+    const t = window.setInterval(() => tick((n) => n + 1), 1000)
+    return () => window.clearInterval(t)
+  }, [start, end])
+  if (start === null) return null
+  const time = formatDuration((end ?? Date.now()) - start)
+  if (end === null) return <span className="solver-timer running" title="VSPAERO is running">Running {time}</span>
+  const how = code === 0 ? 'Done in' : code === 143 ? 'Stopped after' : 'Failed after'
+  return <span className={'solver-timer' + (code === 0 ? '' : ' failed')} title="The last VSPAERO run">{how} {time}</span>
+}
+
+/** m:ss, or h:mm:ss from an hour. */
+function formatDuration(ms: number) {
+  const s = Math.max(0, Math.floor(ms / 1000))
+  const two = (n: number) => String(n).padStart(2, '0')
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60)
+  return h ? `${h}:${two(m)}:${two(s % 60)}` : `${m}:${two(s % 60)}`
 }
 
 // ------------------------------------------------------------------ menus
