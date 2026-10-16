@@ -15,6 +15,8 @@ its own three.js 3D view.
 <img width="2880" height="1728" alt="Screenshot 2026-10-15 235857" src="https://github.com/user-attachments/assets/3accdc2e-48e7-4e4a-9bf4-4ac7a8e979aa" />
 <img width="2880" height="1728" alt="Screenshot 2026-10-15 234700" src="https://github.com/user-attachments/assets/3758dd3d-7011-41f6-9a17-62bcf8d1a093" />
 <img width="2880" height="1728" alt="Screenshot 2026-10-15 235703" src="https://github.com/user-attachments/assets/8db805a8-62f6-42b8-b0c4-8d93a876a07b" />
+<img width="2880" height="1728" alt="image" src="https://github.com/user-attachments/assets/f67095bf-092b-400b-8d92-4d28aac9df14" />
+
 
 ## What you get
 
