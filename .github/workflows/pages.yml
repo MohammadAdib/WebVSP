@@ -1,13 +1,18 @@
-# Builds WebVSP (web/frontend) and deploys it to GitHub Pages.
-# OpenVSP compiled to WebAssembly (web/wasm) is built locally with web/wasm/build_wasm.ps1
-# and published as the wasm-latest release; it's added to the site here.
-name: Deploy web UI to GitHub Pages
+# Builds WebVSP and deploys it to GitHub Pages: one push to main and it's live.
+#   engine  OpenVSP, its GUI and VSPAERO compiled to WebAssembly (web/wasm/build_wasm.ps1)
+#   page    the web app (web/frontend), with the engine in it
+#   deploy  to GitHub Pages
+# The third-party libraries and FLTK change rarely: they're cached, keyed on their sources.
+# OpenVSP itself compiles through ccache, so a push rebuilds only what it changed.
+name: Build and deploy WebVSP
 
 on:
   push:
     branches: [main]
     paths:
-      - 'web/frontend/**'
+      - 'src/**'
+      - 'Libraries/**'
+      - 'web/**'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
@@ -17,11 +22,81 @@ permissions:
   id-token: write
 
 concurrency:
-  group: pages
+  group: pages-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  EMSDK_VERSION: 6.0.12
+
 jobs:
-  build:
+  engine:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      # A fresh emsdk install has new file times: identify the compiler by its version instead.
+      CCACHE_COMPILERCHECK: string:emscripten-6.0.12
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_MAXSIZE: 2G
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tools
+        run: sudo apt-get update && sudo apt-get install -y ninja-build ccache
+
+      - name: Emscripten (cached)
+        id: emsdk-cache
+        uses: actions/cache@v4
+        with:
+          path: emsdk
+          key: emsdk-${{ env.EMSDK_VERSION }}
+
+      - name: Emscripten (install)
+        if: steps.emsdk-cache.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 https://github.com/emscripten-core/emsdk.git emsdk
+          emsdk/emsdk install ${{ env.EMSDK_VERSION }}
+          emsdk/emsdk activate ${{ env.EMSDK_VERSION }}
+
+      # Libraries and FLTK: rebuilt only when their sources or the build setup change.
+      - name: Libraries and FLTK (cached)
+        id: libs-cache
+        uses: actions/cache@v4
+        with:
+          path: build/libs-wasm
+          key: libs-wasm-${{ env.EMSDK_VERSION }}-${{ hashFiles('Libraries/**', 'web/wasm/fltk/**', 'web/wasm/toolchain.cmake', 'web/wasm/build_wasm.ps1') }}
+
+      - name: Compiler cache
+        uses: actions/cache@v4
+        with:
+          path: .ccache
+          key: ccache-${{ env.EMSDK_VERSION }}-${{ github.sha }}
+          restore-keys: ccache-${{ env.EMSDK_VERSION }}-
+
+      - name: Build the engine
+        shell: bash
+        run: |
+          source emsdk/emsdk_env.sh > /dev/null
+          ccache --zero-stats
+          if [ "${{ steps.libs-cache.outputs.cache-hit }}" != "true" ]; then
+            pwsh -NoProfile -File web/wasm/build_wasm.ps1 -Stage libs
+            pwsh -NoProfile -File web/wasm/build_wasm.ps1 -Stage fltk
+          fi
+          pwsh -NoProfile -File web/wasm/build_wasm.ps1 -Stage vsp
+          ccache --show-stats
+          ls -l web/frontend/public/wasm
+          for f in vsp vspaero vsploads; do
+            test -s web/frontend/public/wasm/$f.wasm || { echo "::error::$f.wasm was not built"; exit 1; }
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: engine
+          path: web/frontend/public/wasm
+          retention-days: 7
+
+  page:
+    needs: engine
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -34,20 +109,16 @@ jobs:
           cache: npm
           cache-dependency-path: web/frontend/package-lock.json
 
-      - name: Install
-        working-directory: web/frontend
-        run: npm ci
-
-      - name: In-browser engine module
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          mkdir -p web/frontend/public/wasm
-          gh release download wasm-latest -R ${{ github.repository }} -p 'vsp*.js' -p 'vsp*.wasm' -D web/frontend/public/wasm --clobber             || echo "::warning::No wasm-latest release: the site has no in-browser engine"
+      - uses: actions/download-artifact@v4
+        with:
+          name: engine
+          path: web/frontend/public/wasm
 
       - name: Build
         working-directory: web/frontend
-        run: npm run build
+        run: |
+          npm ci
+          npm run build
 
       - uses: actions/configure-pages@v5
 
@@ -56,7 +127,8 @@ jobs:
           path: web/frontend/dist
 
   deploy:
-    needs: build
+    needs: page
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
