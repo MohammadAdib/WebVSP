@@ -72,7 +72,7 @@ input:focus, select:focus, textarea:focus, button:focus-visible {
 
 .app {
   display: grid;
-  grid-template-rows: 34px 1fr 24px;
+  grid-template-rows: 34px 1fr;
   height: 100%;
 }
 
@@ -89,6 +89,19 @@ input:focus, select:focus, textarea:focus, button:focus-visible {
 .topbar .brand { font-weight: 600; color: var(--fg-1); padding: 0 10px 0 4px; letter-spacing: 0.02em; }
 .topbar .hint { color: var(--fg-3); margin-left: 12px; }
 .topbar .spacer { flex: 1; }
+.topbar .err {
+  color: var(--danger); font-size: 11px; max-width: 40%; padding: 0 8px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer;
+}
+.topbar .version { color: var(--fg-3); font-size: 11px; padding: 0 6px 0 10px; white-space: nowrap; }
+
+/* The model's file name, bottom-left over the 3D view. */
+.viewer-file {
+  position: absolute; left: 10px; bottom: 8px; z-index: 3; max-width: 50%;
+  font-size: 11px; color: var(--fg-2); pointer-events: none;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
 
 .main { position: relative; display: flex; min-height: 0; overflow: hidden; }
 .viewer { position: relative; flex: 1; min-width: 0; display: flex; }
@@ -97,7 +110,9 @@ input:focus, select:focus, textarea:focus, button:focus-visible {
    and stretching that frame by a few pixels is invisible where a gap at the edge is not. */
 .viewport canvas { width: 100% !important; height: 100% !important; }
 /* Split views (Window > One / Two / Four on the desktop): panes with a thin gap between them. */
-.viewport-panes { position: absolute; inset: 0; display: grid; gap: 2px; background: var(--line-strong); }
+.viewport-panes { position: absolute; inset: 0; display: grid; gap: 2px; background: var(--line-strong); transition: opacity 160ms ease; }
+/* Changing the layout: hidden, and taking no input, until the new panes have framed the model. */
+.viewport-panes.swapping { opacity: 0; pointer-events: none; }
 .viewport-panes.one { grid-template: 1fr / 1fr; }
 .viewport-panes.twoH { grid-template: 1fr / 1fr 1fr; }
 .viewport-panes.twoV { grid-template: 1fr 1fr / 1fr; }
@@ -159,14 +174,6 @@ input:focus, select:focus, textarea:focus, button:focus-visible {
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
-.statusbar {
-  display: flex; align-items: center; gap: 16px; padding: 0 10px;
-  font-size: 11px; color: var(--fg-2); background: var(--bg-2); border-top: 1px solid var(--line);
-  white-space: nowrap; overflow: hidden;
-}
-.statusbar .err { color: var(--danger); overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
-.statusbar .spacer { flex: 1; }
-.statusbar a { color: var(--fg-0); }
 
 /* ------------------------------------------------------------------ menus */
 

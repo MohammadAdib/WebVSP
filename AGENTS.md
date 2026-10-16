@@ -71,7 +71,7 @@ the work lives in a handful of files.
 | `public/program.worker.js` | Runs one vspaero/vsploads per run, with copies of the working files. |
 | `vite.config.ts` | Relative base path (works under `/WebVSP/`), isolation headers for dev/preview. |
 | `src/main.tsx` | Makes the page cross-origin isolated (registers the service worker, reloads once), mounts `App`. |
-| `src/App.tsx` | Layout: top bar (mirrored menu + loading hint), left panel (Geom Browser), 3D view, right panel (geom editor), floating windows, results viewer, status bar. `isDocked()` decides docked vs floating. |
+| `src/App.tsx` | Layout: top bar (mirrored menu, loading hint, errors, OpenVSP version), left panel (Geom Browser), 3D view (with the file name), right panel (geom editor), floating windows, results viewer. `isDocked()` decides docked vs floating. |
 | `src/store.ts` | Model store (zustand): tree, `geomsById`, `meshRev` (bumped per geom on change → mesh refetch), `valuesRev`, view requests, ortho. |
 | `src/api/client.ts` | `api.*` (model, geomTypes, bbox, mesh, pick, geomOrigin, moveGeoms) and `connectEvents`. |
 | `src/api/wasmEngine.ts` | The engine's page side: loads the module, `wasmRequest(method, path)` → `call`, a polling loop over `take()` delivering results/events/mirror output, file choosers via the browser's pickers, `runProgram` for VSPAERO, `openViewer` for the results viewer. `window.__webvspEngine.request(...)` is exposed for the console. |
@@ -190,7 +190,8 @@ line segments from `MirrorFeatureLines`), then per-surface parts for Mesh / NGon
 Those come from the geom's own wire/shade draw objects (`TagSurfaces` in `engine.cpp`, which
 includes geom_core headers directly): one surface per tag, its colour-wheel colour when the
 desktop colours it (always for NGon meshes; Mesh geoms drawn by tag), and the tag's polygon
-edges for NGon meshes. **Change the writer and the reader together.**
+edges for NGon meshes. Last, a flag per surface (bit 0: a disk, `DISK_SURF`, drawn at
+`DISK_ALPHA` when shaded). **Change the writer and the reader together.**
 
 ---
 
@@ -221,13 +222,24 @@ edges for NGon meshes. **Change the writer and the reader together.**
 - **Clicks**: a click on a mesh picks it; Shift/Ctrl/Cmd toggles; a click on nothing (not a
   drag, not on the gizmo) deselects.
 - **Camera**: `camera.tsx`, shared with the results viewer. View requests wait until the orbit
-  controls are bound to the current camera; a new camera only inherits the pose of one that was
-  framed.
+  controls are bound to the current camera, the camera is of the requested projection and the
+  view has a size; a new camera only inherits the pose of one that was framed. Moves to a view
+  are animated (`go`, `blendDirection`: elevation and azimuth separately, `VIEW_MOVE_MS`); the
+  first framing snaps, and a mouse drag stops a move. `StableOrbitControls` keeps one set of
+  orbit controls for the life of a pane and hands it the new camera on a projection switch, so
+  a drag carries on across it. An orthographic camera keeps its framing when the view resizes.
+- **Auto perspective**: each pane's `autoOrtho` (`withView` in `Viewport.tsx`): axis views
+  (`AXIS_VIEWS`) switch to orthographic, turning away (`OFF_AXIS_VIEWS`, or `RotateWatch` as soon
+  as the mouse turns the view) goes back to perspective only if it switched automatically; 5 or
+  the projection button clears it. The orientation gizmo's balls go through `onAxisView` (our
+  views, not drei's animation).
 - **Panes**: `Viewport` splits into one, two or four panes (`layout` in the store, remembered),
   each its own `<Canvas>` with its own camera and `Scene`. View choices (toolbar, keys, the View
   menu through `viewRequest`) go to the active pane; `refitAll` (a model loaded or replaced)
   frames the model in every pane from its own view. Meshes are fetched once for panes asking
-  together (`fetchMesh`); per-pane frame state goes through `PaneViewContext`.
+  together (`fetchMesh`); per-pane frame state goes through `PaneViewContext`. Changing the
+  layout fades the panes out and in (`changeLayout`, `LAYOUT_FADE_MS`, `LAYOUT_SETTLE_MS`), with
+  no input meanwhile.
 - **Grid**: `GroundGrid`, plain line segments rebuilt when the zoom level changes: the finest
   round spacing at least `GRID_MIN_PIXELS` apart plus the next (10x) brighter, the finer fading
   out; red X / green Y axes; fades out from the model's footprint to `GRID_FADE_END` times it.

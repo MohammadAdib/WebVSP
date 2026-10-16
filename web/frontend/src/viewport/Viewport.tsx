@@ -34,6 +34,9 @@ const useMovePreview = create<{ ids: readonly string[]; d: [number, number, numb
   () => ({ ids: [], d: ZERO, revs: {} }),
 )
 
+/** Opacity of disks (propellers in disk mode) when shaded. */
+const DISK_ALPHA = 0.25
+
 const SHADE = new THREE.Color('#a6a6a6')
 const SHADE_SEL = new THREE.Color('#dedede')
 const LINE_ON_SHADE = new THREE.Color('#202020')
@@ -74,6 +77,8 @@ interface Built {
     lines: THREE.BufferGeometry
     /** The desktop's colour for this surface (a Mesh / NGon Mesh tag) */
     color?: THREE.Color
+    /** A disk (a propeller in disk mode): see-through when shaded */
+    disk?: boolean
   }[]
   /** The outline (feature lines) as segment end points, x,y,z flat */
   outline: number[]
@@ -98,7 +103,7 @@ function buildGeometry(buf: ArrayBuffer): Built {
         lines.setAttribute('position', pos)
         lines.setIndex(new THREE.BufferAttribute(gridLineIndices(s.nu, s.nw), 1))
       }
-      return { mesh, lines, color: s.color ? new THREE.Color(...s.color) : undefined }
+      return { mesh, lines, color: s.color ? new THREE.Color(...s.color) : undefined, disk: s.disk }
     }),
   }
 }
@@ -155,6 +160,15 @@ function GeomMesh({ id }: { id: string }) {
     shadeMat.dispose()
     lineMat.dispose()
   }, [shadeMat, lineMat])
+  // Disks (propellers in disk mode) are shaded see-through, so what's behind them shows.
+  const diskMat = useMemo(() => {
+    const m = shadeMat.clone()
+    m.transparent = true
+    m.opacity = DISK_ALPHA
+    m.depthWrite = false
+    return m
+  }, [shadeMat])
+  useEffect(() => () => diskMat.dispose(), [diskMat])
   // Surfaces the desktop colours (Mesh / NGon Mesh tags) get materials of their own.
   const tagMats = useMemo(
     () =>
@@ -177,6 +191,8 @@ function GeomMesh({ id }: { id: string }) {
     shadeMat.emissive.set(selected ? '#262626' : '#000000')
   }
   lineMat.color.copy(selected ? LINE_SEL : mode === 'shaded' ? LINE_ON_SHADE : LINE_WIRE)
+  diskMat.color.copy(shadeMat.color)
+  diskMat.emissive.copy(shadeMat.emissive)
   for (const m of tagMats) {
     if (!m) continue
     // Like the desktop's tag colours: shaded in a tint of the colour, edges in the colour.
@@ -211,7 +227,7 @@ function GeomMesh({ id }: { id: string }) {
     <group onClick={onClick} position={offset ?? ZERO}>
       {built.surfaces.map((s, i) => (
         <group key={i}>
-          {(mode === 'shaded' || mode === 'hidden') && <mesh geometry={s.mesh} material={tagMats[i]?.shade ?? shadeMat} />}
+          {(mode === 'shaded' || mode === 'hidden') && <mesh geometry={s.mesh} material={s.disk && mode === 'shaded' ? diskMat : (tagMats[i]?.shade ?? shadeMat)} />}
           <lineSegments geometry={s.lines} material={tagMats[i]?.line ?? lineMat} />
           {mode === 'wire' && (
             // invisible surface so wireframe geoms remain clickable
@@ -394,7 +410,19 @@ function useGridPlace(): GridPlace {
 }
 
 /** One pane's 3D scene: its own camera (view and projection), the shared model. */
-function Scene({ ortho, request, gridPlace }: { ortho: boolean; request: { name: ViewName; n: number }; gridPlace: GridPlace }) {
+function Scene({
+  ortho,
+  request,
+  gridPlace,
+  onRotate,
+  onAxisView,
+}: {
+  ortho: boolean
+  request: { name: ViewName; n: number }
+  gridPlace: GridPlace
+  onRotate: () => void
+  onAxisView: (view: ViewName) => void
+}) {
   const geoms = useStore((s) => s.tree?.geoms ?? NO_GEOMS)
   const shown = geoms.filter((g) => g.shown)
   const setBounds = useStore((s) => s.setBounds)
@@ -407,6 +435,8 @@ function Scene({ ortho, request, gridPlace }: { ortho: boolean; request: { name:
       <Navigation
         ortho={ortho}
         request={request}
+        onRotate={onRotate}
+        onAxisView={onAxisView}
         getBounds={api.bbox}
         onBounds={setBounds}
         // Fade dense wireframe as the model gets small on screen.
@@ -428,10 +458,34 @@ interface Pane {
   /** The last view chosen for it (top, front, iso...): what it frames a new model from */
   view: ViewName
   ortho: boolean
+  /** Orthographic only because an axis view switched it (it was perspective): turning away
+   *  from the axis goes back to perspective, as Blender's auto perspective does. */
+  autoOrtho: boolean
+}
+
+/** Views along an axis: they switch the pane to orthographic. */
+const AXIS_VIEWS: ViewName[] = ['top', 'bottom', 'front', 'rear', 'left', 'right']
+/** Views that turn away from an axis: back to perspective if an axis view made it orthographic. */
+const OFF_AXIS_VIEWS: ViewName[] = ['leftiso', 'rightiso', 'orbit-left', 'orbit-right', 'orbit-up', 'orbit-down']
+
+/** A pane given a view: its request, and Blender's auto perspective. */
+function withView(p: Pane, name: ViewName): Pane {
+  const next: Pane = { ...p, request: { name, n: p.request.n + 1 }, view: isNamedView(name) ? name : p.view }
+  if (AXIS_VIEWS.includes(name)) {
+    if (!p.ortho) Object.assign(next, { ortho: true, autoOrtho: true })
+  } else if (OFF_AXIS_VIEWS.includes(name) && p.autoOrtho) {
+    Object.assign(next, { ortho: false, autoOrtho: false })
+  }
+  return next
 }
 
 /** Views that set a direction (not fits or relative orbits). */
 const isNamedView = (v: ViewName) => !['fit', 'orbit-left', 'orbit-right', 'orbit-up', 'orbit-down', 'flip'].includes(v)
+
+/** Changing the layout: how long the panes take to fade out, and how long the new ones get to
+ *  frame the model before fading in (ms). Keep LAYOUT_FADE_MS in step with the CSS. */
+const LAYOUT_FADE_MS = 160
+const LAYOUT_SETTLE_MS = 450
 
 /** The panes of each layout and the views they open with. */
 const LAYOUT_VIEWS: Record<Layout, ViewName[]> = {
@@ -461,7 +515,7 @@ export function Viewport() {
   // Splitting gives every pane its layout's view; going back to one view keeps the camera of
   // the pane that was active.
   const [panes, setPanes] = useState<Pane[]>(() =>
-    LAYOUT_VIEWS[layout].map((name) => ({ request: { name, n: 1 }, view: name, ortho: storeOrtho })),
+    LAYOUT_VIEWS[layout].map((name) => withView({ request: { name: 'fit', n: 0 }, view: name, ortho: storeOrtho, autoOrtho: false }, name)),
   )
   const [active, setActive] = useState(0)
   const firstLayout = useRef(true)
@@ -476,7 +530,9 @@ export function Viewport() {
         const kept = prev[active] ?? prev[0]
         return [{ ...kept, request: { ...kept.request, n: kept.request.n } }]
       }
-      return LAYOUT_VIEWS[layout].map((name, i) => ({ request: { name, n: n + i }, view: name, ortho: prev[i]?.ortho ?? storeOrtho }))
+      return LAYOUT_VIEWS[layout].map((name, i) =>
+        withView({ request: { name: 'fit', n: n + i - 1 }, view: name, ortho: prev[i]?.ortho ?? storeOrtho, autoOrtho: prev[i]?.autoOrtho ?? false }, name),
+      )
     })
     setActive(0)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -484,9 +540,7 @@ export function Viewport() {
 
   const requestView = useCallback(
     (name: ViewName) =>
-      setPanes((prev) =>
-        prev.map((p, i) => (i === active ? { ...p, request: { name, n: p.request.n + 1 }, view: isNamedView(name) ? name : p.view } : p)),
-      ),
+      setPanes((prev) => prev.map((p, i) => (i === active ? withView(p, name) : p))),
     [active],
   )
   // The View menu, and anything else asking the store for a view: the active pane.
@@ -503,16 +557,40 @@ export function Viewport() {
   useEffect(() => {
     if (fitAll === lastFitAll.current) return
     lastFitAll.current = fitAll
-    setPanes((prev) => prev.map((p) => ({ ...p, request: { name: p.view, n: p.request.n + 1 } })))
+    setPanes((prev) => prev.map((p) => withView(p, p.view)))
   }, [fitAll])
   const toggleOrtho = useCallback(() => {
-    setPanes((prev) => prev.map((p, i) => (i === active ? { ...p, ortho: !p.ortho } : p)))
-    if (layout === 'one') storeToggleOrtho() // remembered for the single view
-  }, [active, layout, storeToggleOrtho])
+    // Chosen by hand: no longer automatic.
+    const ortho = !(panes[active] ?? panes[0]).ortho
+    setPanes((prev) => prev.map((p, i) => (i === active ? { ...p, ortho, autoOrtho: false } : p)))
+    // Remembered for the single view (the store keeps the last projection chosen by hand).
+    if (layout === 'one' && ortho !== useStore.getState().ortho) storeToggleOrtho()
+  }, [panes, active, layout, storeToggleOrtho])
+
+  // Changing the layout: the panes fade out, the layout changes while they're hidden, the new
+  // panes get a moment to frame the model, and they fade back in. The view takes no input
+  // meanwhile (and another layout click waits).
+  const [swapping, setSwapping] = useState(false)
+  const swappingRef = useRef(false)
+  const changeLayout = useCallback(
+    (l: Layout) => {
+      if (swappingRef.current || l === useStore.getState().layout) return
+      swappingRef.current = true
+      setSwapping(true)
+      window.setTimeout(() => {
+        setLayout(l)
+        window.setTimeout(() => {
+          swappingRef.current = false
+          setSwapping(false)
+        }, LAYOUT_SETTLE_MS)
+      }, LAYOUT_FADE_MS)
+    },
+    [setLayout],
+  )
 
   // The keys are the results viewer's while it's open (it covers this view).
   const keysActive = useCallback(
-    () => !document.querySelector('.modal-backdrop') && !useViewer.getState().open,
+    () => !swappingRef.current && !document.querySelector('.modal-backdrop') && !useViewer.getState().open,
     [],
   )
   useViewKeys(requestView, toggleOrtho, keysActive)
@@ -527,9 +605,9 @@ export function Viewport() {
         grid={grid}
         onToggleGrid={toggleGrid}
         layout={layout}
-        onLayout={setLayout}
+        onLayout={changeLayout}
       />
-      <div className={`viewport-panes ${layout}`}>
+      <div className={`viewport-panes ${layout}` + (swapping ? ' swapping' : '')} aria-busy={swapping}>
         {panes.slice(0, count).map((pane, i) => (
           <div
             key={i}
@@ -549,7 +627,18 @@ export function Viewport() {
                 if (e.button === 0 && !isToggleClick(e) && d && Math.hypot(e.clientX - d[0], e.clientY - d[1]) <= 4) void api.pick('')
               }}
             >
-              <Scene ortho={pane.ortho} request={pane.request} gridPlace={gridPlace} />
+              <Scene
+                ortho={pane.ortho}
+                request={pane.request}
+                gridPlace={gridPlace}
+                // Turning a pane with the mouse leaves its axis view: back to perspective if
+                // the axis view made it orthographic.
+                onRotate={() =>
+                  setPanes((prev) => prev.map((p, k) => (k === i && p.autoOrtho ? { ...p, ortho: false, autoOrtho: false } : p)))
+                }
+                // The orientation gizmo's balls: that axis view in this pane, as the keys give it.
+                onAxisView={(view) => setPanes((prev) => prev.map((p, k) => (k === i ? withView(p, view) : p)))}
+              />
             </Canvas>
           </div>
         ))}

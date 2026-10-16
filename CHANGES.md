@@ -33,9 +33,19 @@ history is in [CHANGELOG.md](CHANGELOG.md).
   draw type (wire, hidden, shade, none) and the GUI's selection.
 - 3D view toolbar (front, side, top, bottom, iso, fit), orthographic/perspective switch keeping
   the view, Blender numpad keys, orbit, pan and zoom to the cursor.
+- Moving to a view is animated (keys, F5-F12, toolbar, orbit steps, the orientation gizmo's
+  balls), turning in elevation and compass direction so top and bottom views arrive the right
+  way round. The side view (3) has the nose on the left, as in Blender.
+- Blender's auto perspective: axis views (front, side, top, bottom, rear) switch to
+  orthographic, and turning away (orbit keys, Iso, the mouse, as soon as it starts turning)
+  goes back to perspective if it was perspective before; 5 chooses by hand.
+- Disks (propellers in disk mode) are drawn see-through (25%) when shaded.
+- No footer: the OpenVSP version is at the right of the top bar (with any error), and the model's
+  file name at the bottom left of the 3D view.
 - Split views like desktop OpenVSP's Window menu: one, two side by side, two stacked or four
   panes (toolbar icons), each with its own camera; the toolbar, keys and View menu act on the
-  active pane, and a newly loaded model is framed in every pane.
+  active pane, and a newly loaded model is framed in every pane. Changing the layout fades the
+  view out and in, taking no input meanwhile.
 - A Blender-style ground grid: lines at round spacings that follow the zoom, red X and green Y
   axes, a square under the model that follows it and fades out at 150% of its footprint, and a
   toolbar switch to hide it.

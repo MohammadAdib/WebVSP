@@ -1,8 +1,8 @@
-import { GizmoHelper, GizmoViewport, OrbitControls, OrthographicCamera, PerspectiveCamera } from '@react-three/drei'
+import { GizmoHelper, GizmoViewport, OrthographicCamera, PerspectiveCamera } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
-import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
+import { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import type { Layout, ViewName } from '../store'
 
 /**
@@ -31,6 +31,22 @@ const VIEW_DIRS: Record<AbsoluteView, THREE.Vector3> = {
 export const FOV = 35
 export const TAN_HALF_FOV = Math.tan(THREE.MathUtils.degToRad(FOV / 2))
 const ORBIT_STEP = THREE.MathUtils.degToRad(15)
+/**
+ * A viewing direction part of the way (e) from one to another, as elevation and compass
+ * direction (azimuth, the shorter way round). Z is up.
+ */
+function blendDirection(from: THREE.Vector3, to: THREE.Vector3, e: number) {
+  const elev = (d: THREE.Vector3) => Math.asin(THREE.MathUtils.clamp(d.z / Math.max(d.length(), 1e-12), -1, 1))
+  const az = (d: THREE.Vector3) => Math.atan2(d.y, d.x)
+  let dAz = az(to) - az(from)
+  dAz = Math.atan2(Math.sin(dAz), Math.cos(dAz)) // shortest way round
+  const el = THREE.MathUtils.lerp(elev(from), elev(to), e)
+  const a = az(from) + dAz * e
+  return new THREE.Vector3(Math.cos(el) * Math.cos(a), Math.cos(el) * Math.sin(a), Math.sin(el))
+}
+
+/** How long moving to a view takes (ms). */
+const VIEW_MOVE_MS = 320
 
 export interface ViewRequest {
   name: ViewName
@@ -60,9 +76,12 @@ interface RigProps {
   onFrame?: (distanceInRadii: number) => void
   /** Depth kept visible around the model, in model radii (more for long wakes). Default 3. */
   clipScale?: number
+  /** The projection asked for: a view request waits for a camera of that kind, so a request
+   *  that comes with a switch lands on the new camera, not the one being replaced. */
+  ortho?: boolean
 }
 
-function CameraRig({ request, getBounds, onBounds, onFrame, clipScale = 3 }: RigProps) {
+function CameraRig({ request, getBounds, onBounds, onFrame, clipScale = 3, ortho }: RigProps) {
   const { camera, controls, size } = useThree()
   const light = useRef<THREE.DirectionalLight>(null)
   // Bounding sphere of the model; drives clip planes and zoom limits.
@@ -82,8 +101,9 @@ function CameraRig({ request, getBounds, onBounds, onFrame, clipScale = 3 }: Rig
     framed.current.add(camera)
     const r = sphere.current.radius
     if (isOrtho) {
+      // The orthographic frustum spans the view in pixels: zoom so `height` fills it.
       const o = camera as THREE.OrthographicCamera
-      o.zoom = (o.top - o.bottom) / Math.max(height, 1e-6)
+      o.zoom = Math.max(size.height, 1) / Math.max(height, 1e-6)
       o.position.copy(target).addScaledVector(dir, r * 4)
       o.updateProjectionMatrix()
     } else {
@@ -105,6 +125,38 @@ function CameraRig({ request, getBounds, onBounds, onFrame, clipScale = 3 }: Rig
     }
   }
 
+  // Moving to a view is animated: the viewing direction moves in elevation and compass
+  // direction separately (so a view onto the pole, top or bottom, turns round smoothly on the
+  // way and ends already turned the right way, rather than spinning at the very end), and the
+  // target and the framed height glide (the height in log space, so zooms feel even). A camera not yet
+  // framed (a pane's first view) snaps. Grabbing the view with the mouse stops the move.
+  const anim = useRef<{
+    from: { dir: THREE.Vector3; target: THREE.Vector3; height: number }
+    to: { dir: THREE.Vector3; target: THREE.Vector3; height: number }
+    start: number
+  } | null>(null)
+  const go = (dir: THREE.Vector3, target: THREE.Vector3, height: number) => {
+    if (!framed.current.has(camera) || !ctl) {
+      anim.current = null
+      place(dir, target, height)
+      return
+    }
+    const t0 = ctl.target.clone()
+    const d0 = camera.position.clone().sub(t0).normalize()
+    anim.current = {
+      from: { dir: d0, target: t0, height: visibleHeight(camera, t0) },
+      to: { dir: dir.clone().normalize(), target: target.clone(), height },
+      start: performance.now(),
+    }
+  }
+  useEffect(() => {
+    const c = controls as unknown as THREE.EventDispatcher<{ start: object }> | null
+    if (!c) return
+    const stop = () => (anim.current = null)
+    c.addEventListener('start', stop)
+    return () => c.removeEventListener('start', stop)
+  }, [controls])
+
   // Switched camera type: keep looking at the same thing at the same scale. The orbit
   // controls are rebuilt for the new camera a render later, so wait until they're bound to it
   // (otherwise the new controls re-aim the camera from their defaults).
@@ -122,12 +174,30 @@ function CameraRig({ request, getBounds, onBounds, onFrame, clipScale = 3 }: Rig
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [camera, controls])
 
+  // The view resized (a split, the side panels, the window): an orthographic camera keeps
+  // showing the same height of the model, as a perspective one does by itself (its frustum is
+  // in pixels, so its zoom scales with the view's height).
+  const lastHeight = useRef(size.height)
+  useEffect(() => {
+    const before = lastHeight.current
+    lastHeight.current = size.height
+    if (!isOrtho || before <= 0 || size.height <= 0 || before === size.height) return
+    const o = camera as THREE.OrthographicCamera
+    o.zoom *= size.height / before
+    o.updateProjectionMatrix()
+    ctl?.update()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [size.height])
+
   // A view request waits for the mouse controls (they're created after the camera on the
   // first render); otherwise the first fit is lost and the camera starts inside the model.
   const applied = useRef(-1)
   const bound = !!ctl && (ctl as unknown as { object: THREE.Camera }).object === camera
+  // ...and for the view to have a size: a pane just created can be 0 x 0 for a moment, and a
+  // view fitted then is lost (an orthographic one zooms to nothing).
+  const ready = bound && (ortho === undefined || ortho === isOrtho) && size.width > 0 && size.height > 0
   useEffect(() => {
-    if (!ctl || !bound || applied.current === request.n) return
+    if (!ctl || !ready || applied.current === request.n) return
     applied.current = request.n
     const target = ctl.target
     const name = request.name
@@ -142,8 +212,7 @@ function CameraRig({ request, getBounds, onBounds, onFrame, clipScale = 3 }: Rig
       } else {
         offset.negate() // Blender numpad 9: the opposite view
       }
-      camera.position.copy(target).add(offset)
-      ctl.update()
+      go(offset.normalize(), target.clone(), visibleHeight(camera, target))
       return
     }
     let cancelled = false
@@ -163,16 +232,30 @@ function CameraRig({ request, getBounds, onBounds, onFrame, clipScale = 3 }: Rig
         // Fit the bounding sphere in the shorter side of the view.
         const aspect = size.width / Math.max(size.height, 1)
         const height = 2 * radius * 1.05 * Math.max(1, 1 / aspect)
-        place(dir, center, height)
+        go(dir, center, height)
       })
       .catch(() => {})
     return () => {
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [request, controls, camera, bound])
+  }, [request, controls, camera, ready])
 
   useFrame(() => {
+    const a = anim.current
+    if (a) {
+      const t = Math.min(1, (performance.now() - a.start) / VIEW_MOVE_MS)
+      const e = t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2 // ease in-out (cubic)
+      const dir = blendDirection(a.from.dir, a.to.dir, e)
+      const target = a.from.target.clone().lerp(a.to.target, e)
+      const height = Math.exp(THREE.MathUtils.lerp(Math.log(a.from.height), Math.log(a.to.height), e))
+      if (t >= 1) {
+        anim.current = null
+        place(a.to.dir, a.to.target, a.to.height)
+      } else {
+        place(dir, target, height)
+      }
+    }
     const target = ctl?.target ?? sphere.current.center
     const r = sphere.current.radius
     const height = visibleHeight(camera, target)
@@ -203,25 +286,140 @@ function CameraRig({ request, getBounds, onBounds, onFrame, clipScale = 3 }: Rig
 }
 
 /** The camera, its rig, the mouse controls and the axes gizmo. Put inside a <Canvas>. */
-export function Navigation({ ortho, ...rig }: RigProps & { ortho: boolean }) {
+/** Calls onRotate as soon as the user starts turning the view with the mouse (not panning or
+ *  zooming): once per drag. The camera can switch mid-drag (see StableOrbitControls). */
+function RotateWatch({ onRotate }: { onRotate: () => void }) {
+  const { camera, controls } = useThree()
+  const cb = useRef(onRotate)
+  cb.current = onRotate
+  useEffect(() => {
+    const ctl = controls as unknown as THREE.EventDispatcher<{ start: object; change: object; end: object }> | null
+    if (!ctl) return
+    const from = new THREE.Vector3()
+    const now = new THREE.Vector3()
+    let dragging = false
+    let turned = false
+    const start = () => {
+      dragging = true
+      turned = false
+      camera.getWorldDirection(from)
+    }
+    const change = () => {
+      if (dragging && !turned && camera.getWorldDirection(now).angleTo(from) > 0.01) {
+        turned = true
+        cb.current()
+      }
+    }
+    const end = () => (dragging = false)
+    ctl.addEventListener('start', start)
+    ctl.addEventListener('change', change)
+    ctl.addEventListener('end', end)
+    return () => {
+      ctl.removeEventListener('start', start)
+      ctl.removeEventListener('change', change)
+      ctl.removeEventListener('end', end)
+    }
+  }, [camera, controls])
+  return null
+}
+
+/**
+ * The mouse controls (orbit, pan, zoom to cursor), kept for the life of the view: switching
+ * between perspective and orthographic hands them the new camera instead of making new ones,
+ * so a drag goes on across the switch (Blender's auto perspective switches mid-turn).
+ */
+function StableOrbitControls() {
+  const { camera, gl, set, get } = useThree()
+  const ctl = useMemo(() => {
+    const c = new OrbitControlsImpl(camera, gl.domElement)
+    c.enableDamping = false
+    c.zoomToCursor = true
+    return c
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gl])
+  // The default controls, as drei's makeDefault would make them.
+  useEffect(() => {
+    const before = get().controls
+    set({ controls: ctl })
+    return () => {
+      if (get().controls === ctl) set({ controls: before })
+      ctl.dispose()
+    }
+  }, [ctl, set, get])
+  // Bound to the new camera as it's rendered (this renders before the camera rig, which checks
+  // the binding while rendering to carry the pose over and apply view requests).
+  if (ctl.object !== camera) ctl.object = camera
+  useEffect(() => {
+    ctl.update()
+  }, [ctl, camera])
+  useFrame(() => ctl.update(), -1)
+  return null
+}
+
+/** The axis view each of the orientation gizmo's balls stands for: the camera on that side. */
+const AXIS_BALLS: { at: [number, number, number]; view: ViewName }[] = [
+  { at: [1, 0, 0], view: 'rear' },
+  { at: [-1, 0, 0], view: 'front' },
+  { at: [0, 1, 0], view: 'right' },
+  { at: [0, -1, 0], view: 'left' },
+  { at: [0, 0, 1], view: 'top' },
+  { at: [0, 0, -1], view: 'bottom' },
+]
+
+export function Navigation({
+  ortho,
+  onRotate,
+  onAxisView,
+  ...rig
+}: RigProps & {
+  ortho: boolean
+  onRotate?: () => void
+  /** Clicking a ball of the orientation gizmo: that axis view, as the view keys give it (snapped,
+   *  orthographic). Without it, drei's own camera animation. */
+  onAxisView?: (view: ViewName) => void
+}) {
   return (
     <>
+      <StableOrbitControls />
+      {onRotate && <RotateWatch onRotate={onRotate} />}
       {ortho ? (
         <OrthographicCamera makeDefault position={[-20, -24, 18]} zoom={20} />
       ) : (
         <PerspectiveCamera makeDefault fov={FOV} position={[-20, -24, 18]} />
       )}
-      <CameraRig {...rig} />
-      <OrbitControls makeDefault enableDamping={false} zoomToCursor />
+      <CameraRig {...rig} ortho={ortho} />
       <GizmoHelper alignment="bottom-right" margin={[64, 64]}>
-        <GizmoViewport axisColors={['#b5b5b5', '#8a8a8a', '#d9d9d9']} labelColor="#161616" axisHeadScale={0.9} />
+        <GizmoViewport
+          axisColors={['#b5b5b5', '#8a8a8a', '#d9d9d9']}
+          labelColor="#161616"
+          axisHeadScale={0.9}
+          // Our own click targets instead (below): drei's animation doesn't land well in perspective.
+          disabled={!!onAxisView}
+        />
+        {onAxisView && (
+          <group scale={40}>
+            {AXIS_BALLS.map((b) => (
+              <mesh
+                key={b.view}
+                position={b.at}
+                onPointerDown={(e) => {
+                  e.stopPropagation()
+                  onAxisView(b.view)
+                }}
+              >
+                <sphereGeometry args={[0.25, 12, 8]} />
+                <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+              </mesh>
+            ))}
+          </group>
+        )}
       </GizmoHelper>
     </>
   )
 }
 
 /**
- * Blender numpad navigation (top-row digits work too). Ctrl flips 1/3/7 to rear/left/bottom.
+ * Blender numpad navigation (top-row digits work too). Ctrl flips 1/3/7 to rear/other side/bottom.
  * Home, numpad . and F fit the model.
  */
 function viewForKey(e: KeyboardEvent): ViewName | 'ortho' | null {
@@ -230,7 +428,7 @@ function viewForKey(e: KeyboardEvent): ViewName | 'ortho' | null {
   const ctrl = e.ctrlKey || e.metaKey
   switch (k) {
     case '1': return ctrl ? 'rear' : 'front'
-    case '3': return ctrl ? 'left' : 'right'
+    case '3': return ctrl ? 'right' : 'left' // from port: the nose on the left, as in Blender
     case '7': return ctrl ? 'bottom' : 'top'
     case '5': return 'ortho'
     case '9': return 'flip'
@@ -264,7 +462,7 @@ export function useViewKeys(onView: (v: ViewName) => void, onToggleOrtho: () => 
 
 const VIEW_BUTTONS: { view: ViewName; label: string; key: string }[] = [
   { view: 'front', label: 'Front', key: '1' },
-  { view: 'right', label: 'Side', key: '3' },
+  { view: 'left', label: 'Side', key: '3' },
   { view: 'top', label: 'Top', key: '7' },
   { view: 'bottom', label: 'Bottom', key: 'Ctrl+7' },
   { view: 'leftiso', label: 'Iso', key: '' },

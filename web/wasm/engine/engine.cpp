@@ -467,12 +467,18 @@ vector< uint8_t > MeshBytes( const string &id )
     // The viewer can ask for a Geom that has just been deleted: an empty mesh, quietly.
     vector< string > geoms = vsp::FindGeoms();
     int nsurf = std::find( geoms.begin(), geoms.end(), id ) == geoms.end() ? 0 : vsp::GetTotalNumSurfs( id );
+    // Per surface: 1 for a disk (a propeller in disk mode), drawn see-through when shaded.
+    vector< uint32_t > flags;
+    Vehicle *veh = VehicleMgr.GetVehicle();
+    Geom *geom = veh && nsurf > 0 ? veh->FindGeom( id ) : nullptr;
     for ( int s = 0; s < nsurf; s++ )
     {
         Surface sf;
         if ( GridSurface( id, s, sf ) )
         {
             surfs.push_back( std::move( sf ) );
+            const VspSurf *vs = geom ? geom->GetSurfPtr( s ) : nullptr;
+            flags.push_back( vs && vs->GetSurfType() == vsp::DISK_SURF ? 1u : 0u );
         }
     }
     if ( surfs.empty() && nsurf == 0 && std::find( geoms.begin(), geoms.end(), id ) != geoms.end() &&
@@ -518,6 +524,10 @@ vector< uint8_t > MeshBytes( const string &id )
         Put32( b, ( uint32_t ) ( p.edges.size() / 3 ) );
         PutVec( b, p.edges );
     }
+    // Then a flag per surface (bit 0: a disk); 0 or the number of surfaces.
+    flags.resize( flags.empty() ? 0 : surfs.size(), 0 );
+    Put32( b, ( uint32_t ) flags.size() );
+    PutVec( b, flags );
     return b;
 }
 

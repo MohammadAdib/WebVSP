@@ -11,24 +11,28 @@ import { Viewport } from './viewport/Viewport'
 import { ResultsViewer } from './viewer/ResultsViewer'
 import { WasmToolbar } from './WasmToolbar'
 
-function StatusBar() {
+/** The right end of the top bar: the last error (click to dismiss) and the OpenVSP version. */
+function TopBarStatus() {
   const tree = useStore((s) => s.tree)
-  const connected = useStore((s) => s.connected)
   const error = useStore((s) => s.error)
   const clearError = useStore((s) => s.clearError)
   return (
-    <div className="statusbar">
-      <span>{connected ? 'Connected' : 'Disconnected'}</span>
-      <span>File Name: {tree?.fileName ?? ''}</span>
+    <>
+      <span className="spacer" />
       {error && (
-        <span className="err" title={error} onClick={clearError}>
+        <span className="err" title={`${error} (click to dismiss)`} onClick={clearError}>
           {error}
         </span>
       )}
-      <span className="spacer" />
-      <span>WebVSP · {tree?.version?.replace(/^OpenVSP\s*/, 'VSP ')}</span>
-    </div>
+      {tree?.version && <span className="version">{tree.version.replace(/^OpenVSP\s*/, 'VSP ')}</span>}
+    </>
   )
+}
+
+/** The model's file name, in the bottom-left corner of the 3D view. */
+function FileName() {
+  const name = useStore((s) => s.tree?.fileName)
+  return name ? <div className="viewer-file" title={name}>{name}</div> : null
 }
 
 // The Geom Browser docks left and the geom editors right. Group Modifications (several geoms
@@ -92,16 +96,19 @@ export default function App() {
 
   return (
     <div className="app">
-      <div className="topbar">
+      {/* data-ready: OpenVSP has started (tests wait for it) */}
+      <div className="topbar" data-ready={connected ? '1' : '0'}>
         <span className="brand">WebVSP</span>
         <MirrorMenuBar />
         <WasmToolbar />
         {!mirrorEnabled && connected && <span className="hint">GUI mirror unavailable (engine built without the GUI)</span>}
+        <TopBarStatus />
       </div>
       <div className="main" ref={mainRef}>
         <SidePanel side="left" win={browserWin} open={!fullscreen} height={panelHeight} />
         <div className="viewer">
           <Viewport />
+          <FileName />
           <ViewerOverlay fullscreen={fullscreen} onToggle={() => setFullscreen(!fullscreen)} />
         </div>
         <SidePanel side="right" win={editorWin} open={!fullscreen} height={panelHeight} />
@@ -110,7 +117,6 @@ export default function App() {
         ))}
         <ResultsViewer />
       </div>
-      <StatusBar />
       <DialogHost />
     </div>
   )

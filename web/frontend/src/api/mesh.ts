@@ -18,6 +18,8 @@
  *     uint32   number of edge points
  *     float32  edges[n*3]   the tag's polygon edges as segment pairs (NGon faces), drawn
  *                           instead of the triangles' edges; none: the triangles' edges
+ *   uint32   number of surface flags (0, or the number of surfaces)
+ *   uint32   flags[n]       per surface; bit 0: a disk (a propeller in disk mode)
  */
 
 export interface SurfaceMesh {
@@ -31,6 +33,8 @@ export interface SurfaceMesh {
   color?: [number, number, number]
   /** Polygon edges to draw instead of the triangles' (NGon faces), as segment end points */
   edges?: Float32Array
+  /** A disk (a propeller in disk mode): drawn see-through when shaded */
+  disk?: boolean
 }
 
 /** A geom's surfaces, and its outline (feature lines) as segment end points. */
@@ -71,6 +75,14 @@ export function decodeMesh(buf: ArrayBuffer): SurfaceMesh[] & { features?: Float
       if (ne > 0) out[s].edges = new Float32Array(buf, off + 16, ne * 3)
       off += 16 + ne * 12
     }
+  }
+  if (off + 4 <= buf.byteLength) {
+    const nflags = view.getUint32(off, true)
+    off += 4
+    for (let s = 0; s < nflags && s < out.length; s++) {
+      if (view.getUint32(off + 4 * s, true) & 1) out[s].disk = true
+    }
+    off += 4 * nflags
   }
   return res
 }
