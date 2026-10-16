@@ -135,6 +135,9 @@ export interface MWidget {
   img?: string
   /** The drawing as SVG, instead of img pixels (in-browser engine) */
   svg?: string
+  /** A plot (Vsp_Canvas): pannable and zoomable; pcb: it handles clicks itself */
+  plot?: number
+  pcb?: number
   iw?: number
   ih?: number
   draw?: GlDraw

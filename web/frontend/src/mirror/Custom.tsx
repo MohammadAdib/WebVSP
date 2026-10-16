@@ -102,6 +102,80 @@ export function GlBody({ w }: { w: MWidget }) {
   )
 }
 
+/** How much one wheel notch zooms a plot. */
+const PLOT_ZOOM_STEP = 1.2
+/** Pan steps are sent at most this often (ms); the plot is redrawn by the engine each time. */
+const PLOT_PAN_MS = 40
+
+/**
+ * A plot (a Vsp_Canvas): the wheel zooms about the cursor, dragging pans, a double-click goes back
+ * to the screen's own view. The engine narrows the plot's axes (WebMirror's PlotEvent), so the axis
+ * numbers follow. Plots that use clicks themselves (the curve editor) pan with the right or middle
+ * button and get their left-button input as before.
+ */
+function PlotImage({ w, src, input }: { w: MWidget; src: string; input: ReturnType<typeof useRawInput> }) {
+  const ref = useRef<HTMLImageElement>(null)
+  const pan = useRef<{ x: number; y: number; dx: number; dy: number; timer: number } | null>(null)
+  const fraction = (e: { clientX: number; clientY: number }) => {
+    const r = ref.current!.getBoundingClientRect()
+    return { fx: (e.clientX - r.left) / r.width, fy: 1 - (e.clientY - r.top) / r.height, r }
+  }
+  // Not React's onWheel: that listener is passive, and the window around would scroll too.
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault()
+      const { fx, fy } = fraction(e)
+      sendMirror({ op: 'plot', id: w.id, zoom: e.deltaY > 0 ? PLOT_ZOOM_STEP : 1 / PLOT_ZOOM_STEP, fx, fy })
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [w.id])
+  const flush = () => {
+    const p = pan.current
+    if (!p) return
+    p.timer = 0
+    if (p.dx || p.dy) sendMirror({ op: 'plot', id: w.id, dx: p.dx, dy: p.dy })
+    p.dx = p.dy = 0
+  }
+  const pans = (e: React.PointerEvent) => (w.pcb ? e.button === 1 || e.button === 2 : e.button === 0)
+  return (
+    <img
+      ref={ref}
+      className="m-image m-plot"
+      src={src}
+      alt=""
+      draggable={false}
+      title="Scroll to zoom, drag to pan, double-click to reset"
+      style={{ width: w.w, height: w.h }}
+      onPointerDown={(e) => {
+        if (!pans(e)) return input.onPointerDown(e)
+        e.currentTarget.setPointerCapture(e.pointerId)
+        pan.current = { x: e.clientX, y: e.clientY, dx: 0, dy: 0, timer: 0 }
+      }}
+      onPointerMove={(e) => {
+        const p = pan.current
+        if (!p) return input.onPointerMove(e)
+        const { r } = fraction(e)
+        p.dx += (e.clientX - p.x) / r.width
+        p.dy -= (e.clientY - p.y) / r.height
+        p.x = e.clientX
+        p.y = e.clientY
+        if (!p.timer) p.timer = window.setTimeout(flush, PLOT_PAN_MS)
+      }}
+      onPointerUp={(e) => {
+        if (!pan.current) return input.onPointerUp(e)
+        window.clearTimeout(pan.current.timer)
+        flush()
+        pan.current = null
+      }}
+      onDoubleClick={() => sendMirror({ op: 'plot', id: w.id, reset: 1 })}
+      onContextMenu={(e) => e.preventDefault()}
+    />
+  )
+}
+
 /** Plots and tables: pixels rendered by the real widget, inverted to suit the dark theme. */
 export function ImageBody({ w }: { w: MWidget }) {
   const input = useRawInput()
@@ -123,8 +197,11 @@ export function ImageBody({ w }: { w: MWidget }) {
   }, [w.img, w.iw, w.ih])
   // The in-browser engine sends the drawing as SVG (it doesn't rasterize).
   const svgUrl = useMemo(() => (w.svg ? 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(w.svg) : null), [w.svg])
+  if (svgUrl && w.plot) return <PlotImage w={w} src={svgUrl} input={input} />
   if (svgUrl) {
-    return <img className="m-image" src={svgUrl} alt="" draggable={false} style={{ width: w.w, height: w.h }} {...input} />
+    // A canvas that isn't a plot is one of a plot's axes.
+    const cls = 'm-image' + (w.k === 'canvas' ? ' m-axis' : '')
+    return <img className={cls} src={svgUrl} alt="" draggable={false} style={{ width: w.w, height: w.h }} {...input} />
   }
   if (!w.img) return <div className="m-placeholder" />
   return <canvas ref={ref} className="m-image" style={{ width: w.w, height: w.h }} {...input} />

@@ -381,7 +381,12 @@ input:focus, select:focus, textarea:focus, button:focus-visible {
 .m-progress > div { position: absolute; left: 0; top: 0; bottom: 0; background: #5a5a5a; }
 
 .m-gl { position: absolute; inset: 0; background: var(--bg-0); border: 1px solid var(--line); cursor: crosshair; touch-action: none; }
+/* The filter turns captures dark; WebMirror.cpp's AXIS_BACKGROUND is the gray it turns into --bg-2. */
 .m-image { position: absolute; inset: 0; filter: invert(0.88) hue-rotate(180deg); border: 1px solid var(--line); touch-action: none; }
+.m-image.m-plot { cursor: grab; }
+.m-image.m-plot:active { cursor: grabbing; }
+/* A plot's axis (with its numbers): part of the plot, no frame of its own */
+.m-image.m-axis { border: none; }
 .m-placeholder {
   position: absolute; inset: 0; display: grid; place-items: center;
   background: var(--bg-0); border: 1px dashed var(--line-strong); color: var(--fg-3); font-size: 11px;

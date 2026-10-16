@@ -123,6 +123,13 @@ messages, which the page collects with `take()`:
   designed size `dw/dh` and `rs` when FLTK lets it be resized) and widgets (id, parent, kind, rect, label, colours, value, state,
   bound parm, kind-specific fields like menu items, tree items, browser lines, table cells,
   GL draw objects, SVG for plots). Only changes are sent unless `full`.
+- Plots (`Vsp_Canvas`) and their axes (`Ca_Axis_`, kind `canvas` too) are captured as SVG. A
+  plot carries `plot: 1` (and `pcb: 1` if it handles clicks itself); the page's `plot` event
+  (`PlotImage` in `mirror/Custom.tsx`) pans, zooms or resets it. `PlotEvent` / `ApplyPlotView` in
+  WebMirror.cpp keep a window per plot as fractions of the ranges its screen sets, reapplied
+  before each capture (screens set their axis ranges again whenever they update). Axes have no
+  box of their own; they're captured on `AXIS_BACKGROUND`, the gray the page's `.m-image`
+  filter turns into the window background (keep the two in step).
 - `{"t":"dialog", seq, kind, ...}`: a prompt (`choice`, `alert`, `message`, `file`). Choices and
   file choosers block OpenVSP's thread (still pumping) until the page answers. File choosers
   are answered by `wasmEngine.ts` with the browser's pickers (marked `native`); the others are
@@ -138,8 +145,8 @@ requested when the page connects (`requestFull`).
 `sendMirror(event)` (`mirror/store.ts`) posts flat JSON events (numbers and strings) through
 `mirrorEvent`, applied by `ApplyEvent()` in WebMirror.cpp. Ops: `set` (value + callback),
 `click`, `check`, `pick` (menu item), `tab`, `browser`, `tree_icon`, `text`, `key`, `mouse`
-(replayed mouse events, for trees/canvases/GL views), `resize`, `close`, `dialog` (prompt
-answers), `full`.
+(replayed mouse events, for trees/canvases/GL views), `plot` (pan, zoom or reset a plot),
+`resize`, `close`, `dialog` (prompt answers), `full`.
 
 ### Page side
 

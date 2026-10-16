@@ -26,7 +26,11 @@ history is in [CHANGELOG.md](CHANGELOG.md).
 - The top bar: OpenVSP's menus, then any error, the OpenVSP version and a link to WebVSP's GitHub
   repository. The model's file name is at the bottom left of the 3D view.
 - Prompts (`fl_choice`, `fl_alert`, `fl_message`) shown as page dialogs.
-- Plot widgets captured as SVG; VSPAERO's solver consoles and result plots mirrored.
+- Plot widgets captured as SVG, axes and their numbers included; VSPAERO's solver consoles and
+  result plots mirrored.
+- Plots pan and zoom: the wheel zooms about the cursor, dragging pans (the right or middle
+  button on plots that use clicks, like the curve editor), a double-click resets. The axes
+  re-scale, so their numbers follow.
 - FLTK symbol labels drawn with the right direction, size and flips (e.g. the Geom Browser's move
   up/down buttons).
 

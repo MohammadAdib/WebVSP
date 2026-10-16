@@ -93,6 +93,8 @@
 #include <cstdlib>
 #include <deque>
 #include <functional>
+#include <algorithm>
+#include <cmath>
 #include <map>
 #include <unordered_set>
 #include <mutex>
@@ -302,6 +304,12 @@ string GetStr( const std::map< string, string > &m, const char *k )
     return it == m.end() ? string() : it->second;
 }
 
+double GetDouble( const std::map< string, string > &m, const char *k, double def = 0 )
+{
+    auto it = m.find( k );
+    return it == m.end() || it->second.empty() ? def : atof( it->second.c_str() );
+}
+
 //==== Pixels of custom-drawn widgets (GL views, plots, tables) ====//
 string Base64( const unsigned char *data, size_t n )
 {
@@ -329,6 +337,10 @@ string Base64( const unsigned char *data, size_t n )
     return out;
 }
 
+// The page shows captures through invert(0.88) for its dark theme (index.css, .m-image): gray
+// v comes out as 224.4 - 0.76 v, so 245 becomes 38, its window background (#262626, --bg-2).
+const Fl_Color AXIS_BACKGROUND = fl_rgb_color( 245, 245, 245 );
+
 struct Capture
 {
     string b64;         // tightly packed RGB rows
@@ -341,6 +353,135 @@ std::unordered_map< Fl_Widget*, Capture > &Captures()
 {
     static std::unordered_map< Fl_Widget*, Capture > c;
     return c;
+}
+
+//==== Plot pan and zoom ====//
+// The page pans and zooms a plot (Vsp_Canvas) by narrowing its axes to a window of the ranges the
+// screen gave them, as fractions 0..1 of each range. Screens set their axes' ranges again whenever
+// they update, so the window is applied to whatever range the screen set last, just before the
+// plot is captured; the axis numbers follow, since the axes really change.
+struct AxisView
+{
+    double autoMin = 0, autoMax = 1;      // the screen's range
+    double shownMin = 0, shownMax = 0;    // last applied: anything else means the screen set it again
+    bool known = false;
+};
+
+struct PlotView
+{
+    double x0 = 0, x1 = 1, y0 = 0, y1 = 1;  // the window, as fractions of the screen's ranges
+    std::map< Ca_Axis_*, AxisView > axes;
+};
+
+std::unordered_map< const Fl_Widget*, PlotView > &PlotViews()
+{
+    static std::unordered_map< const Fl_Widget*, PlotView > v;
+    return v;
+}
+
+// A plot's axes along x (dim 0) or y (dim 1): its current ones, and both of Vsp_Canvas's y axes.
+vector< Ca_Axis_* > PlotAxes( Vsp_Canvas *c, int dim )
+{
+    vector< Ca_Axis_* > all = dim == 0 ? vector< Ca_Axis_* >{ c->current_x() }
+                                       : vector< Ca_Axis_* >{ c->current_y(), c->m_Ymain, c->m_Ysecondary };
+    vector< Ca_Axis_* > out;
+    for ( Ca_Axis_ *a : all )
+    {
+        if ( a && std::find( out.begin(), out.end(), a ) == out.end() )
+        {
+            out.push_back( a );
+        }
+    }
+    return out;
+}
+
+void ApplyPlotView( Vsp_Canvas *c )
+{
+    auto it = PlotViews().find( c );
+    if ( it == PlotViews().end() )
+    {
+        return;
+    }
+    PlotView &v = it->second;
+    for ( int dim = 0; dim < 2; dim++ )
+    {
+        double f0 = dim == 0 ? v.x0 : v.y0;
+        double f1 = dim == 0 ? v.x1 : v.y1;
+        for ( Ca_Axis_ *a : PlotAxes( c, dim ) )
+        {
+            AxisView &av = v.axes[a];
+            if ( !av.known || a->minimum() != av.shownMin || a->maximum() != av.shownMax )
+            {
+                av.autoMin = a->minimum();
+                av.autoMax = a->maximum();
+                av.known = true;
+            }
+            // A log axis pans and zooms in decades.
+            bool lg = ( a->scale() & CA_LOG ) && av.autoMin > 0 && av.autoMax > 0;
+            double lo = lg ? log10( av.autoMin ) : av.autoMin;
+            double hi = lg ? log10( av.autoMax ) : av.autoMax;
+            double mn = lo + f0 * ( hi - lo );
+            double mx = lo + f1 * ( hi - lo );
+            if ( lg )
+            {
+                mn = pow( 10.0, mn );
+                mx = pow( 10.0, mx );
+            }
+            if ( mn != a->minimum() )
+            {
+                a->minimum( mn );
+            }
+            if ( mx != a->maximum() )
+            {
+                a->maximum( mx );
+            }
+            av.shownMin = a->minimum();
+            av.shownMax = a->maximum();
+        }
+    }
+}
+
+// The page's pan / zoom / reset of a plot: zoom by a factor about (fx, fy), or pan by (dx, dy),
+// all as fractions of the plot (from its left and bottom); reset goes back to the screen's view.
+void PlotEvent( Vsp_Canvas *c, const std::map< string, string > &ev )
+{
+    PlotView &v = PlotViews()[c];
+    if ( GetInt( ev, "reset" ) )
+    {
+        v.x0 = v.y0 = 0;
+        v.x1 = v.y1 = 1;
+    }
+    else if ( double zoom = GetDouble( ev, "zoom" ); zoom > 0 )
+    {
+        auto about = [zoom]( double &f0, double &f1, double p ) {
+            double t = f0 + p * ( f1 - f0 );
+            double span = std::clamp( ( f1 - f0 ) * zoom, 1e-6, 1e6 );
+            f0 = t - p * span;
+            f1 = f0 + span;
+        };
+        about( v.x0, v.x1, GetDouble( ev, "fx", 0.5 ) );
+        about( v.y0, v.y1, GetDouble( ev, "fy", 0.5 ) );
+    }
+    else
+    {
+        double dx = GetDouble( ev, "dx" ) * ( v.x1 - v.x0 );
+        double dy = GetDouble( ev, "dy" ) * ( v.y1 - v.y0 );
+        v.x0 -= dx;
+        v.x1 -= dx;
+        v.y0 -= dy;
+        v.y1 -= dy;
+    }
+    ApplyPlotView( c );
+    // Captured again at once, axes too, rather than when the 250 ms cache runs out.
+    Captures().erase( c );
+    for ( int dim = 0; dim < 2; dim++ )
+    {
+        for ( Ca_Axis_ *a : PlotAxes( c, dim ) )
+        {
+            Captures().erase( a );
+        }
+    }
+    c->redraw();
 }
 
 // Capture a widget's pixels at most every 250 ms (or at once when its size changed).
@@ -381,9 +522,25 @@ const Capture *CaptureWidget( Fl_Widget *w )
     {
         Fl_SVG_File_Surface surf( w->w(), w->h(), f, []( FILE * ) { return 0; } ); // close() leaves f open
         Fl_Surface_Device::push_current( &surf );
-        fl_color( FL_WHITE );
+        // A plot's axis (no box of its own: it fills with its parent's color) is drawn on
+        // AXIS_BACKGROUND, the gray that the page's dark-theme inversion turns into its window
+        // background, so the axis numbers sit on the window's gray.
+        bool axis = dynamic_cast< Ca_Axis_* >( w ) != nullptr;
+        fl_color( axis ? AXIS_BACKGROUND : FL_WHITE );
         fl_rectf( 0, 0, w->w(), w->h() );
+        Fl_Color was_color = w->color();
+        Fl_Boxtype was_box = w->box();
+        if ( axis )
+        {
+            w->box( FL_FLAT_BOX );
+            w->color( AXIS_BACKGROUND );
+        }
         surf.draw( w );
+        if ( axis )
+        {
+            w->box( was_box );
+            w->color( was_color );
+        }
         Fl_Surface_Device::pop_current();
         surf.close();
     }
@@ -692,6 +849,7 @@ const char *KindOf( Fl_Widget *w )
     if ( dynamic_cast< Fl_Text_Display* >( w ) ) return "text_display";
     if ( dynamic_cast< Fl_Table* >( w ) ) return "table";
     if ( dynamic_cast< Vsp_Canvas* >( w ) ) return "canvas";
+    if ( dynamic_cast< Ca_Axis_* >( w ) ) return "canvas";   // a plot's axis, with its numbers
     if ( dynamic_cast< Fl_Input_Choice* >( w ) ) return "input_choice";
     if ( dynamic_cast< Fl_Menu_Bar* >( w ) ) return "menubar";
     if ( dynamic_cast< Fl_Choice* >( w ) ) return "choice";
@@ -932,6 +1090,12 @@ string SerializeWidget( Fl_Widget *w, int win_id, int parent_id, int order, int 
     }
     if ( k == "table" || k == "canvas" || k == "gl" )
     {
+        if ( Vsp_Canvas *plot = dynamic_cast< Vsp_Canvas* >( w ) )
+        {
+            // Pannable and zoomable; "pcb": the plot handles clicks itself (e.g. the curve editor).
+            ApplyPlotView( plot );
+            o.Int( "plot", 1 ).Int( "pcb", plot->callback() != Fl_Widget::default_callback ? 1 : 0 );
+        }
         // The main 3D view is replaced by the client's own renderer.
         VspScreen *main = S().mgr ? S().mgr->GetScreen( vsp::VSP_MAIN_SCREEN ) : nullptr;
         bool in_main = main && main->GetFlWindow() && w->top_window() == main->GetFlWindow();
@@ -1209,6 +1373,7 @@ void Diff()
             }
             s.by_id.erase( it->second.id );
             Captures().erase( it->first );
+            PlotViews().erase( it->first );
             it = s.widgets.erase( it );
         }
         else
@@ -1383,6 +1548,13 @@ void ApplyEvent( const std::map< string, string > &ev )
             return;
         }
         w->do_callback();
+    }
+    else if ( op == "plot" )
+    {
+        if ( Vsp_Canvas *plot = dynamic_cast< Vsp_Canvas* >( w ) )
+        {
+            PlotEvent( plot, ev );
+        }
     }
     else if ( op == "click" )
     {
