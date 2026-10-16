@@ -30,6 +30,8 @@ interface State {
   viewRequest: { name: ViewName; n: number }
   /** Orthographic (true) or perspective camera */
   ortho: boolean
+  /** The ground grid is shown (remembered) */
+  grid: boolean
   /** Bounding sphere of the shown model, set when the view is fitted. */
   bounds: { center: [number, number, number]; size: [number, number, number]; radius: number } | null
 
@@ -40,6 +42,7 @@ interface State {
   setDisplayMode: (m: DisplayMode) => void
   requestView: (name: ViewName) => void
   toggleOrtho: () => void
+  toggleGrid: () => void
   setConnected: (c: boolean) => void
   setBounds: (b: State['bounds']) => void
   clearError: () => void
@@ -120,6 +123,22 @@ export const useStore = create<State>((set, get) => ({
 
   setDisplayMode: (displayMode) => set({ displayMode }),
   requestView: (name) => set({ viewRequest: { name, n: get().viewRequest.n + 1 } }),
+  grid: (() => {
+    try {
+      return localStorage.getItem('webvsp-grid') !== '0'
+    } catch {
+      return true
+    }
+  })(),
+  toggleGrid: () => {
+    const grid = !get().grid
+    try {
+      localStorage.setItem('webvsp-grid', grid ? '1' : '0')
+    } catch {
+      /* storage unavailable */
+    }
+    set({ grid })
+  },
   toggleOrtho: () => {
     const ortho = !get().ortho
     try {

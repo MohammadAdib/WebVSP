@@ -1,5 +1,5 @@
 import { Html, Line, TransformControls } from '@react-three/drei'
-import { Canvas, useFrame, type ThreeEvent } from '@react-three/fiber'
+import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import type { TransformControls as TransformControlsImpl } from 'three-stdlib'
@@ -209,6 +209,135 @@ function GeomMesh({ id }: { id: string }) {
   )
 }
 
+/** The ground grid's colours: its lines (fine, and every 10th brighter), and the X (red) and
+ *  Y (green) axes. */
+const GRID_COLOR = '#424242'
+const GRID_MAJOR_COLOR = '#575757'
+const GRID_X_AXIS = '#b04646'
+const GRID_Y_AXIS = '#5f9a3e'
+/** The finest grid spacing drawn, in pixels on screen; finer lines fade out (Blender-style). */
+const GRID_MIN_PIXELS = 14
+/** Where the grid has faded out, as a multiple of the model's footprint (fully drawn up to 1). */
+const GRID_FADE_END = 1.5
+/** At most this many lines each way per level: zoomed far in, only a window of them around the
+ *  point the view orbits is drawn, following it. */
+const GRID_MAX_LINES = 1500
+
+interface GridLines {
+  pos: number[]
+  col: number[]
+}
+
+/**
+ * Adds a line to `out` in pieces, each end with alpha fading out from the model's footprint
+ * (`half` around cx, cy) to GRID_FADE_END times it, so the fade along it is smooth.
+ */
+function fadedLine(out: GridLines, cx: number, cy: number, half: number, x0: number, y0: number, x1: number, y1: number, c: THREE.Color) {
+  const alpha = (x: number, y: number) => {
+    const u = THREE.MathUtils.clamp((Math.max(Math.abs(x - cx), Math.abs(y - cy)) / half - 1) / (GRID_FADE_END - 1), 0, 1)
+    return 1 - u * u * (3 - 2 * u)
+  }
+  const pieces = 32
+  for (let k = 0; k < pieces; k++) {
+    const a = k / pieces
+    const b = (k + 1) / pieces
+    const ax = x0 + (x1 - x0) * a, ay = y0 + (y1 - y0) * a
+    const bx = x0 + (x1 - x0) * b, by = y0 + (y1 - y0) * b
+    const fa = alpha(ax, ay), fb = alpha(bx, by)
+    if (fa <= 0 && fb <= 0) continue
+    out.pos.push(ax, ay, 0, bx, by, 0)
+    out.col.push(c.r, c.g, c.b, fa, c.r, c.g, c.b, fb)
+  }
+}
+
+/**
+ * One level of the grid: lines every `step`, aligned to the origin, over the square
+ * GRID_FADE_END times the footprint around the center, limited to GRID_MAX_LINES lines each way around (wx, wy). The
+ * axes are left out: they're drawn on their own.
+ */
+function gridLevel(cx: number, cy: number, half: number, step: number, wx: number, wy: number, color: THREE.Color): GridLines {
+  const reach = (GRID_MAX_LINES / 2) * step
+  const ext = GRID_FADE_END * half
+  const x0 = Math.max(cx - ext, wx - reach), x1 = Math.min(cx + ext, wx + reach)
+  const y0 = Math.max(cy - ext, wy - reach), y1 = Math.min(cy + ext, wy + reach)
+  const out: GridLines = { pos: [], col: [] }
+  if (x0 >= x1 || y0 >= y1) return out
+  for (let i = Math.ceil(x0 / step); i * step <= x1; i++) if (i !== 0) fadedLine(out, cx, cy, half, i * step, y0, i * step, y1, color)
+  for (let j = Math.ceil(y0 / step); j * step <= y1; j++) if (j !== 0) fadedLine(out, cx, cy, half, x0, j * step, x1, j * step, color)
+  return out
+}
+
+function toGeometry(parts: GridLines[]) {
+  const geo = new THREE.BufferGeometry()
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(parts.flatMap((p) => p.pos), 3))
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(parts.flatMap((p) => p.col), 4))
+  return geo
+}
+
+/**
+ * The ground grid on the Z = 0 plane: a square around the model as wide as its longest side in
+ * plan, fully drawn over it and fading out to GRID_FADE_END times its size. One spacing for the whole grid,
+ * from the zoom: the finest round spacing (..., 0.1, 1, 10, ...) at least GRID_MIN_PIXELS apart
+ * on screen, fading out as it nears that, with the next one (10x) over it; so zooming brings
+ * finer lines in and out, like Blender's grid. The X and Y axes are drawn in colour.
+ */
+function GroundGrid({ center, size }: { center: [number, number]; size: number }) {
+  const half = Math.max(size, 1e-6) / 2
+  const [cx, cy] = center
+  // The zoom level, and where the view orbits (the window drawn when zoomed far in).
+  const [view0, setView0] = useState<{ level: number; wx: number; wy: number } | null>(null)
+  const fineMat = useRef<THREE.LineBasicMaterial>(null)
+  const { camera, controls, size: screen } = useThree()
+
+  // The zoom: model units per pixel at the point the view orbits around.
+  useFrame(() => {
+    const target = (controls as unknown as { target?: THREE.Vector3 } | null)?.target ?? new THREE.Vector3(cx, cy, 0)
+    let perPixel: number
+    if ((camera as THREE.OrthographicCamera).isOrthographicCamera) {
+      const o = camera as THREE.OrthographicCamera
+      perPixel = (o.top - o.bottom) / o.zoom / Math.max(screen.height, 1)
+    } else {
+      const p = camera as THREE.PerspectiveCamera
+      perPixel = (2 * camera.position.distanceTo(target) * Math.tan(THREE.MathUtils.degToRad(p.fov / 2))) / Math.max(screen.height, 1)
+    }
+    const lod = Math.log10(Math.max(perPixel, 1e-12) * GRID_MIN_PIXELS)
+    const next = Math.floor(lod)
+    // Follow the view when it has moved a good part of the way across the drawn window.
+    const far = view0 && Math.max(Math.abs(target.x - view0.wx), Math.abs(target.y - view0.wy)) > (GRID_MAX_LINES / 8) * 10 ** (next + 1)
+    if (!view0 || next !== view0.level || far) setView0({ level: next, wx: target.x, wy: target.y })
+    // The finer level fades out as its lines close in on GRID_MIN_PIXELS apart.
+    if (fineMat.current) fineMat.current.opacity = 1 - (lod - next)
+  })
+
+  const geo = useMemo(() => {
+    if (!view0) return null
+    const { level, wx, wy } = view0
+    const fine = gridLevel(cx, cy, half, 10 ** (level + 1), wx, wy, new THREE.Color(GRID_COLOR))
+    const coarse = gridLevel(cx, cy, half, 10 ** (level + 2), wx, wy, new THREE.Color(GRID_MAJOR_COLOR))
+    const axes: GridLines = { pos: [], col: [] }
+    const ext = GRID_FADE_END * half
+    if (Math.abs(cy) <= ext) fadedLine(axes, cx, cy, half, cx - ext, 0, cx + ext, 0, new THREE.Color(GRID_X_AXIS))
+    if (Math.abs(cx) <= ext) fadedLine(axes, cx, cy, half, 0, cy - ext, 0, cy + ext, new THREE.Color(GRID_Y_AXIS))
+    return { fine: toGeometry([fine]), coarse: toGeometry([coarse, axes]) }
+  }, [view0, cx, cy, half])
+  useEffect(() => () => {
+    geo?.fine.dispose()
+    geo?.coarse.dispose()
+  }, [geo])
+
+  if (!geo) return null
+  return (
+    <group renderOrder={-1}>
+      <lineSegments geometry={geo.fine} raycast={() => {}}>
+        <lineBasicMaterial ref={fineMat} vertexColors transparent depthWrite={false} />
+      </lineSegments>
+      <lineSegments geometry={geo.coarse} raycast={() => {}}>
+        <lineBasicMaterial vertexColors transparent depthWrite={false} />
+      </lineSegments>
+    </group>
+  )
+}
+
 function Scene() {
   const geoms = useStore((s) => s.tree?.geoms ?? NO_GEOMS)
   const shown = geoms.filter((g) => g.shown)
@@ -216,19 +345,37 @@ function Scene() {
   const ortho = useStore((s) => s.ortho)
   const request = useStore((s) => s.viewRequest)
   const setBounds = useStore((s) => s.setBounds)
-  const grid = useMemo(() => {
-    // Square 16x16 grid, 1.25x the model's larger plan dimension (X length or Y span),
-    // centered under the model on the Z=0 plane.
-    const span = bounds ? 1.25 * Math.max(bounds.size[0], bounds.size[1]) : 20
-    const g = new THREE.GridHelper(span || 20, 16, '#3a3a3a', '#262626')
-    g.rotation.x = Math.PI / 2
-    if (bounds) g.position.set(bounds.center[0], bounds.center[1], 0)
-    return g
-  }, [bounds])
-  useEffect(() => () => {
-    grid.geometry.dispose()
-    ;(grid.material as THREE.Material).dispose()
-  }, [grid])
+  const showGrid = useStore((s) => s.grid)
+  // The grid follows the model: its bounds are read again whenever the model changes (not
+  // only when the view is fitted), and the grid rebuilt when they moved.
+  const valuesRev = useStore((s) => s.valuesRev)
+  const [gridKey, setGridKey] = useState('')
+  useEffect(() => {
+    let stale = false
+    const t = window.setTimeout(() => {
+      api.bbox().then(
+        (b) => !stale && setGridKey(b ? JSON.stringify(b) : ''),
+        () => undefined,
+      )
+    }, 150)
+    return () => {
+      stale = true
+      window.clearTimeout(t)
+    }
+  }, [valuesRev])
+  // Where the grid goes: under the model's footprint, square on its longest side in plan.
+  const gridPlace = useMemo(() => {
+    const b = gridKey
+      ? (JSON.parse(gridKey) as { min: [number, number, number]; max: [number, number, number] })
+      : bounds
+        ? {
+            min: bounds.center.map((c, k) => c - bounds.size[k] / 2) as [number, number, number],
+            max: bounds.center.map((c, k) => c + bounds.size[k] / 2) as [number, number, number],
+          }
+        : { min: [-10, -10, 0] as [number, number, number], max: [10, 10, 0] as [number, number, number] }
+    const center: [number, number] = [(b.min[0] + b.max[0]) / 2, (b.min[1] + b.max[1]) / 2]
+    return { center, size: Math.max(b.max[0] - b.min[0], b.max[1] - b.min[1]) }
+  }, [gridKey, bounds])
 
   return (
     <>
@@ -242,7 +389,7 @@ function Scene() {
         // Fade dense wireframe as the model gets small on screen.
         onFrame={(radii) => (view.wireFade = THREE.MathUtils.clamp((14 - radii) / 8, 0, 1))}
       />
-      <primitive object={grid} />
+      {showGrid && <GroundGrid center={gridPlace.center} size={gridPlace.size} />}
       {shown.map((g) => (
         <GeomMesh key={g.id} id={g.id} />
       ))}
@@ -256,6 +403,8 @@ export function Viewport() {
   const ortho = useStore((s) => s.ortho)
   const requestView = useStore((s) => s.requestView)
   const toggleOrtho = useStore((s) => s.toggleOrtho)
+  const grid = useStore((s) => s.grid)
+  const toggleGrid = useStore((s) => s.toggleGrid)
   // The keys are the results viewer's while it's open (it covers this view).
   const active = useCallback(
     () => !document.querySelector('.modal-backdrop') && !useViewer.getState().open,
@@ -265,7 +414,7 @@ export function Viewport() {
   const down = useRef<[number, number] | null>(null)
   return (
     <div className="viewport">
-      <ViewTools onView={requestView} ortho={ortho} onToggleOrtho={toggleOrtho} />
+      <ViewTools onView={requestView} ortho={ortho} onToggleOrtho={toggleOrtho} grid={grid} onToggleGrid={toggleGrid} />
       {/* Resize on every frame while the side panels slide: the default (debounced) resize
           stretches the old frame for the whole animation and then snaps. */}
       <Canvas

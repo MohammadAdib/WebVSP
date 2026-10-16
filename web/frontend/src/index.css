@@ -369,6 +369,7 @@ input:focus, select:focus, textarea:focus, button:focus-visible {
 .view-tools button:hover:not(:disabled) { background: var(--bg-4); color: var(--fg-0); }
 .view-tools .sep { width: 1px; background: var(--line-strong); margin: 3px 3px; }
 .view-tools .proj { width: 30px; padding: 0; display: grid; place-items: center; color: var(--fg-0); }
+.view-tools .proj.off { color: var(--fg-3); }
 
 .m-sym { display: inline-block; line-height: 1; font-size: 0.85em; letter-spacing: -0.2em; padding-right: 0.2em; }
 /* ------------------------------------------------------------ VSPAERO results viewer */

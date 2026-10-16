@@ -182,7 +182,7 @@ function CameraRig({ request, getBounds, onBounds, onFrame, clipScale = 3 }: Rig
     // precision when zoomed far out, so shading and wire lines z-fight (jagged edges).
     const cam = camera as THREE.PerspectiveCamera | THREE.OrthographicCamera
     const d = camera.position.distanceTo(sphere.current.center)
-    const far = d + r * clipScale // the ground grid's corners are within ~1.8r of the center
+    const far = d + r * clipScale // the ground grid reaches ~2.8r from the center (faded out there)
     const near = isOrtho ? Math.max(d - r * clipScale, 1e-3) : Math.max(d - r * (clipScale / 2), far / 5000, r * 1e-4)
     if (Math.abs(cam.near - near) > near * 0.01 || Math.abs(cam.far - far) > far * 0.01) {
       cam.near = near
@@ -292,8 +292,30 @@ function OrthoIcon() {
   )
 }
 
-/** The view preset buttons and the projection switch. */
-export function ViewTools({ onView, ortho, onToggleOrtho }: { onView: (v: ViewName) => void; ortho: boolean; onToggleOrtho: () => void }) {
+/** A grid of lines: the ground grid switch. */
+function GridIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.2">
+      <path d="M1.5 6 H16.5 M1.5 12 H16.5 M6 1.5 V16.5 M12 1.5 V16.5" />
+      <rect x="1.5" y="1.5" width="15" height="15" strokeOpacity="0.6" />
+    </svg>
+  )
+}
+
+/** The view preset buttons, the projection switch and (if given) the ground grid switch. */
+export function ViewTools({
+  onView,
+  ortho,
+  onToggleOrtho,
+  grid,
+  onToggleGrid,
+}: {
+  onView: (v: ViewName) => void
+  ortho: boolean
+  onToggleOrtho: () => void
+  grid?: boolean
+  onToggleGrid?: () => void
+}) {
   return (
     <div className="view-tools">
       {VIEW_BUTTONS.map((b) => (
@@ -313,6 +335,17 @@ export function ViewTools({ onView, ortho, onToggleOrtho }: { onView: (v: ViewNa
       >
         {ortho ? <OrthoIcon /> : <PerspIcon />}
       </button>
+      {onToggleGrid && (
+        <button
+          className={'proj' + (grid ? '' : ' off')}
+          onClick={onToggleGrid}
+          title={grid ? 'Grid shown — click to hide' : 'Grid hidden — click to show'}
+          aria-label={grid ? 'Hide grid' : 'Show grid'}
+          aria-pressed={!!grid}
+        >
+          <GridIcon />
+        </button>
+      )}
     </div>
   )
 }
