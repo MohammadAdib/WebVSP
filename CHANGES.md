@@ -19,7 +19,6 @@ history is in [CHANGELOG.md](CHANGELOG.md).
   downloads it in other browsers.
 - Plot widgets captured as SVG.
 - VSPAERO's solver consoles and result plots mirrored.
-- File > New Window opens another tab, each with its own model.
 - Hosted on GitHub Pages; a push to `main` builds the engine and the page in CI and deploys them,
   with nothing built or uploaded by hand.
 - The Geom Browser docked on the left and the geom editor on the right; other screens and popups
@@ -34,6 +33,14 @@ history is in [CHANGELOG.md](CHANGELOG.md).
   draw type (wire, hidden, shade, none) and the GUI's selection.
 - 3D view toolbar (front, side, top, bottom, iso, fit), orthographic/perspective switch keeping
   the view, Blender numpad keys, orbit, pan and zoom to the cursor.
+- Split views like desktop OpenVSP's Window menu: one, two side by side, two stacked or four
+  panes (toolbar icons), each with its own camera; the toolbar, keys and View menu act on the
+  active pane, and a newly loaded model is framed in every pane.
+- A Blender-style ground grid: lines at round spacings that follow the zoom, red X and green Y
+  axes, a square under the model that follows it and fades out at 150% of its footprint, and a
+  toolbar switch to hide it.
+- File > Preferences (only a choice of file chooser) left out of the menu: files always go
+  through the browser's.
 - Outlines: each geom draws OpenVSP's feature lines (the desktop's black outline).
 - Mesh and NGon Mesh geoms (CompGeom results, imported STL/TRI, NGon conversions, VSPAERO's
   geometry) are drawn, per tag in the desktop's colour-wheel colours, NGon meshes with their

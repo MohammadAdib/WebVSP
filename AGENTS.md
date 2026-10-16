@@ -81,7 +81,6 @@ the work lives in a handful of files.
 | `src/viewport/Viewport.tsx` | Main 3D view: `GeomMesh` (surfaces, wireframe, outline), `Overlay` (mirrored draw objects), `BlankMarkers`, `MoveGizmo`, click selection. Tunables at the top (`BBOX_ALPHA`, `SECTION_BOX_ALPHA`, `OUTLINE_COLOR/WIDTH`, `MOVE_SNAP`, `GIZMO_AXIS_RADIUS`). |
 | `src/viewport/camera.tsx` | Camera shared with the results viewer: perspective/ortho with pose carry-over, orbit/pan/zoom-to-cursor, fit, view keys (Blender numpad), view toolbar. |
 | `src/viewer/` | VSPAERO results viewer: `adb.ts` (binary `.adb` reader, `.adb.cases`, `.polar`), `store.ts`, `ResultsViewer.tsx` (floating window, colour legend, case/coefficients panel). |
-| `src/newWindow.ts` | File > New Window: opens another tab (each tab has its own OpenVSP). |
 | `src/WasmToolbar.tsx` | "Loading OpenVSP in your browser…" until the engine is ready. |
 
 ### OpenVSP (C++) pieces WebVSP added or changed
@@ -224,6 +223,16 @@ edges for NGon meshes. **Change the writer and the reader together.**
 - **Camera**: `camera.tsx`, shared with the results viewer. View requests wait until the orbit
   controls are bound to the current camera; a new camera only inherits the pose of one that was
   framed.
+- **Panes**: `Viewport` splits into one, two or four panes (`layout` in the store, remembered),
+  each its own `<Canvas>` with its own camera and `Scene`. View choices (toolbar, keys, the View
+  menu through `viewRequest`) go to the active pane; `refitAll` (a model loaded or replaced)
+  frames the model in every pane from its own view. Meshes are fetched once for panes asking
+  together (`fetchMesh`); per-pane frame state goes through `PaneViewContext`.
+- **Grid**: `GroundGrid`, plain line segments rebuilt when the zoom level changes: the finest
+  round spacing at least `GRID_MIN_PIXELS` apart plus the next (10x) brighter, the finer fading
+  out; red X / green Y axes; fades out from the model's footprint to `GRID_FADE_END` times it.
+- **Menus**: `buildMenu` (`mirror/Window.tsx`) leaves out `HIDDEN_ITEMS` (File > Preferences:
+  the page always uses the browser's file pickers).
 
 ---
 
