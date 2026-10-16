@@ -11,6 +11,11 @@ off screen, and every window, tab, button, menu and prompt is mirrored into the 
 screen behaves exactly as it does on the desktop. The page draws them in a dark theme next to
 its own three.js 3D view.
 
+<img width="2880" height="1728" alt="Screenshot 2026-10-15 235821" src="https://github.com/user-attachments/assets/f74faf3c-2825-41e4-8649-8769eedb5f1e" />
+<img width="2880" height="1728" alt="Screenshot 2026-10-15 235857" src="https://github.com/user-attachments/assets/3accdc2e-48e7-4e4a-9bf4-4ac7a8e979aa" />
+<img width="2880" height="1728" alt="Screenshot 2026-10-15 234700" src="https://github.com/user-attachments/assets/3758dd3d-7011-41f6-9a17-62bcf8d1a093" />
+<img width="2880" height="1728" alt="Screenshot 2026-10-15 235703" src="https://github.com/user-attachments/assets/8db805a8-62f6-42b8-b0c4-8d93a876a07b" />
+
 ## What you get
 
 - OpenVSP's screens, menus and analyses, including VSPAERO (single-threaded) with a results
