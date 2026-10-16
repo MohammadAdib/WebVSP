@@ -84,8 +84,9 @@ export default function App() {
   }, [loadTree, handleEvent, setConnected, run])
 
   useEffect(() => {
-    const file = tree?.fileName?.split(/[\\/]/).pop() || 'Unnamed.vsp3'
-    document.title = `${file} — WebVSP`
+    const file = tree?.fileName?.split(/[\\/]/).pop()
+    // No file yet (a model never saved): just the app's name.
+    document.title = file ? `${file} — WebVSP` : 'WebVSP'
   }, [tree?.fileName])
 
   const all = Object.values(windows).sort((a, b) => a.id - b.id)

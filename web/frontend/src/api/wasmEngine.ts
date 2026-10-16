@@ -135,7 +135,9 @@ export async function wasmRequest(method: string, path: string, body?: unknown):
 
   if (route === 'GET /model') {
     const tree = (await call('model')) as { fileName: string }
-    return { ...tree, fileName: displayName(tree.fileName) }
+    // A model never saved has OpenVSP's bare default name: no file name at all. A file the user
+    // opened or saved is in HOME, so one actually called Unnamed.vsp3 still shows.
+    return { ...tree, fileName: tree.fileName === 'Unnamed.vsp3' ? '' : displayName(tree.fileName) }
   }
   if (route === 'GET /geom-types') return call('geomTypes')
   if (route === 'GET /bbox') return call('bbox')
