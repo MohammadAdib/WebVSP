@@ -138,6 +138,10 @@ export interface MWidget {
   /** A plot (Vsp_Canvas): pannable and zoomable; pcb: it handles clicks itself */
   plot?: number
   pcb?: number
+  /** A plot's axes: [pixel of min, pixel of max, min, max, 1 if log], pixels in window units */
+  px?: number[]
+  py?: number[]
+  py2?: number[]
   iw?: number
   ih?: number
   draw?: GlDraw

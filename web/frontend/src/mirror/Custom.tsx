@@ -1,4 +1,4 @@
-import { useContext, useEffect, useMemo, useRef } from 'react'
+import { useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { modsOf } from './fltk'
 import { sendMirror } from './store'
 import type { GlDraw, MWidget } from './types'
@@ -102,6 +102,21 @@ export function GlBody({ w }: { w: MWidget }) {
   )
 }
 
+/** An axis's value at a window pixel along it, from the engine's map (WebMirror's AxisMap). */
+function axisValue(map: number[], pixel: number) {
+  const [p0, p1, v0, v1, log] = map
+  const t = (pixel - p0) / (p1 - p0 || 1)
+  if (log && v0 > 0 && v1 > 0) return 10 ** (Math.log10(v0) + t * (Math.log10(v1) - Math.log10(v0)))
+  return v0 + t * (v1 - v0)
+}
+
+/** A coordinate for the readout: about five significant figures, exponents when very large or small. */
+function formatCoord(v: number) {
+  const a = Math.abs(v)
+  if (a !== 0 && (a >= 1e6 || a < 1e-3)) return v.toExponential(3)
+  return String(Number(v.toPrecision(5)))
+}
+
 /** How much one wheel notch zooms a plot. */
 const PLOT_ZOOM_STEP = 1.2
 /** Pan steps are sent at most this often (ms); the plot is redrawn by the engine each time. */
@@ -116,6 +131,16 @@ const PLOT_PAN_MS = 40
 function PlotImage({ w, src, input }: { w: MWidget; src: string; input: ReturnType<typeof useRawInput> }) {
   const ref = useRef<HTMLImageElement>(null)
   const pan = useRef<{ x: number; y: number; dx: number; dy: number; timer: number } | null>(null)
+  const { toWin } = useContext(WindowContext)
+  // The coordinates under the mouse, shown in the plot's top right corner.
+  const [hover, setHover] = useState<{ text: string } | null>(null)
+  const readout = (e: { clientX: number; clientY: number }) => {
+    if (!w.px || !w.py) return setHover(null)
+    const [wx, wy] = toWin(e.clientX, e.clientY)
+    const parts = [`x ${formatCoord(axisValue(w.px, wx))}`, `y ${formatCoord(axisValue(w.py, wy))}`]
+    if (w.py2) parts.push(`y2 ${formatCoord(axisValue(w.py2, wy))}`)
+    setHover({ text: parts.join('   ') })
+  }
   const fraction = (e: { clientX: number; clientY: number }) => {
     const r = ref.current!.getBoundingClientRect()
     return { fx: (e.clientX - r.left) / r.width, fy: 1 - (e.clientY - r.top) / r.height, r }
@@ -141,6 +166,7 @@ function PlotImage({ w, src, input }: { w: MWidget; src: string; input: ReturnTy
   }
   const pans = (e: React.PointerEvent) => (w.pcb ? e.button === 1 || e.button === 2 : e.button === 0)
   return (
+    <>
     <img
       ref={ref}
       className="m-image m-plot"
@@ -155,6 +181,7 @@ function PlotImage({ w, src, input }: { w: MWidget; src: string; input: ReturnTy
         pan.current = { x: e.clientX, y: e.clientY, dx: 0, dy: 0, timer: 0 }
       }}
       onPointerMove={(e) => {
+        readout(e)
         const p = pan.current
         if (!p) return input.onPointerMove(e)
         const { r } = fraction(e)
@@ -170,9 +197,12 @@ function PlotImage({ w, src, input }: { w: MWidget; src: string; input: ReturnTy
         flush()
         pan.current = null
       }}
+      onPointerLeave={() => setHover(null)}
       onDoubleClick={() => sendMirror({ op: 'plot', id: w.id, reset: 1 })}
       onContextMenu={(e) => e.preventDefault()}
     />
+    {hover && <div className="m-plot-readout">{hover.text}</div>}
+    </>
   )
 }
 

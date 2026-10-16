@@ -28,7 +28,8 @@ Nothing to install. OpenVSP and all of its functionality, compiled to WebAssembl
 
 - OpenVSP's screens, menus and analyses, including VSPAERO (single-threaded, timed in its
   window's title bar) with a results viewer in the page.
-- OpenVSP's plots with their axis numbers; scroll to zoom, drag to pan, double-click to reset.
+- OpenVSP's plots with their axis numbers and the x / y under the mouse; scroll to zoom, drag to
+  pan, double-click to reset.
 - A 3D view with orbit, pan and zoom to the cursor, a view toolbar, Blender numpad keys and
   orthographic or perspective views.
 - Click to select, Shift- or Ctrl-click to select several, click on nothing to deselect.

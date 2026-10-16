@@ -124,7 +124,8 @@ messages, which the page collects with `take()`:
   bound parm, kind-specific fields like menu items, tree items, browser lines, table cells,
   GL draw objects, SVG for plots). Only changes are sent unless `full`.
 - Plots (`Vsp_Canvas`) and their axes (`Ca_Axis_`, kind `canvas` too) are captured as SVG. A
-  plot carries `plot: 1` (and `pcb: 1` if it handles clicks itself); the page's `plot` event
+  plot carries `plot: 1` (and `pcb: 1` if it handles clicks itself) and its axes' value-to-pixel
+  maps (`px`, `py`, `py2` from `AxisMap`: the hover readout's coordinates); the page's `plot` event
   (`PlotImage` in `mirror/Custom.tsx`) pans, zooms or resets it. `PlotEvent` / `ApplyPlotView` in
   WebMirror.cpp keep a window per plot as fractions of the ranges its screen sets, reapplied
   before each capture (screens set their axis ranges again whenever they update). Axes have no

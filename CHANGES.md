@@ -30,7 +30,7 @@ history is in [CHANGELOG.md](CHANGELOG.md).
   result plots mirrored.
 - Plots pan and zoom: the wheel zooms about the cursor, dragging pans (the right or middle
   button on plots that use clicks, like the curve editor), a double-click resets. The axes
-  re-scale, so their numbers follow.
+  re-scale, so their numbers follow. The x and y under the mouse are shown in its top right corner.
 - FLTK symbol labels drawn with the right direction, size and flips (e.g. the Geom Browser's move
   up/down buttons).
 

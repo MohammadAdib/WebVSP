@@ -385,6 +385,12 @@ input:focus, select:focus, textarea:focus, button:focus-visible {
 .m-image { position: absolute; inset: 0; filter: invert(0.88) hue-rotate(180deg); border: 1px solid var(--line); touch-action: none; }
 .m-image.m-plot { cursor: grab; }
 .m-image.m-plot:active { cursor: grabbing; }
+/* The coordinates under the mouse on a plot, in its top right corner */
+.m-plot-readout {
+  position: absolute; top: 6px; right: 6px; z-index: 2; pointer-events: none; white-space: pre;
+  padding: 2px 6px; font: 11px/16px var(--mono); color: var(--fg-0);
+  background: rgba(30, 30, 30, 0.88); border: 1px solid var(--line-strong); border-radius: 3px;
+}
 /* A plot's axis (with its numbers): part of the plot, no frame of its own */
 .m-image.m-axis { border: none; }
 .m-placeholder {

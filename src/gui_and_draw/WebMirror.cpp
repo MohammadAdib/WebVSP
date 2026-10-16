@@ -441,6 +441,18 @@ void ApplyPlotView( Vsp_Canvas *c )
     }
 }
 
+// How an axis maps values to window pixels, for the page to read the mouse position off a plot:
+// [pixel of minimum, pixel of maximum, minimum, maximum, 1 if logarithmic]. Pixels run along the
+// axis (x for an x axis, y down for a y axis).
+string AxisMap( Ca_Axis_ *a )
+{
+    double v0 = a->minimum(), v1 = a->maximum();
+    char buf[160];
+    snprintf( buf, sizeof( buf ), "[%.6g,%.6g,%.10g,%.10g,%d]", a->position( v0 ), a->position( v1 ), v0, v1,
+              ( a->scale() & CA_LOG ) ? 1 : 0 );
+    return buf;
+}
+
 // The page's pan / zoom / reset of a plot: zoom by a factor about (fx, fy), or pan by (dx, dy),
 // all as fractions of the plot (from its left and bottom); reset goes back to the screen's view.
 void PlotEvent( Vsp_Canvas *c, const std::map< string, string > &ev )
@@ -1095,6 +1107,20 @@ string SerializeWidget( Fl_Widget *w, int win_id, int parent_id, int order, int 
             // Pannable and zoomable; "pcb": the plot handles clicks itself (e.g. the curve editor).
             ApplyPlotView( plot );
             o.Int( "plot", 1 ).Int( "pcb", plot->callback() != Fl_Widget::default_callback ? 1 : 0 );
+            // Its axes' value <-> pixel maps, for the coordinates under the mouse.
+            if ( Ca_Axis_ *ax = plot->current_x() )
+            {
+                o.Raw( "px", AxisMap( ax ) );
+            }
+            Ca_Axis_ *ay = plot->m_Ymain ? plot->m_Ymain : plot->current_y();
+            if ( ay )
+            {
+                o.Raw( "py", AxisMap( ay ) );
+            }
+            if ( plot->m_Ysecondary && plot->m_Ysecondary != ay && plot->m_Ysecondary->visible() )
+            {
+                o.Raw( "py2", AxisMap( plot->m_Ysecondary ) );
+            }
         }
         // The main 3D view is replaced by the client's own renderer.
         VspScreen *main = S().mgr ? S().mgr->GetScreen( vsp::VSP_MAIN_SCREEN ) : nullptr;
