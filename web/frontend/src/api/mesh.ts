@@ -12,6 +12,12 @@
  *     uint32   indices[nidx]
  *   uint32   number of outline points (OpenVSP's feature lines, MirrorFeatureLines)
  *   float32  outline[n*3]   pairs of points, one pair per line segment
+ *   uint32   number of surface parts (Mesh / NGon Mesh tags; 0, or the number of surfaces)
+ *   per part, for the surface of the same index:
+ *     float32  rgb[3]       the tag's colour; r < 0 means none (drawn like any surface)
+ *     uint32   number of edge points
+ *     float32  edges[n*3]   the tag's polygon edges as segment pairs (NGon faces), drawn
+ *                           instead of the triangles' edges; none: the triangles' edges
  */
 
 export interface SurfaceMesh {
@@ -21,6 +27,10 @@ export interface SurfaceMesh {
   positions: Float32Array
   normals: Float32Array
   indices: Uint32Array
+  /** The colour the desktop draws this surface in (a Mesh / NGon Mesh tag), as 0..1 RGB */
+  color?: [number, number, number]
+  /** Polygon edges to draw instead of the triangles' (NGon faces), as segment end points */
+  edges?: Float32Array
 }
 
 /** A geom's surfaces, and its outline (feature lines) as segment end points. */
@@ -49,6 +59,18 @@ export function decodeMesh(buf: ArrayBuffer): SurfaceMesh[] & { features?: Float
   if (off + 4 <= buf.byteLength) {
     const nf = view.getUint32(off, true)
     res.features = new Float32Array(buf, off + 4, nf * 3)
+    off += 4 + nf * 12
+  }
+  if (off + 4 <= buf.byteLength) {
+    const np = view.getUint32(off, true)
+    off += 4
+    for (let s = 0; s < np && s < out.length; s++) {
+      const rgb = new Float32Array(buf, off, 3)
+      if (rgb[0] >= 0) out[s].color = [rgb[0], rgb[1], rgb[2]]
+      const ne = view.getUint32(off + 12, true)
+      if (ne > 0) out[s].edges = new Float32Array(buf, off + 16, ne * 3)
+      off += 16 + ne * 12
+    }
   }
   return res
 }

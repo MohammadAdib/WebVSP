@@ -25,7 +25,12 @@
 
 #include "VSP_Geom_API.h"
 #include "APIErrorMgr.h"
+#include "DrawObj.h"
+#include "MeshGeom.h"
+#include "NGonMeshGeom.h"
 #include "Vec3d.h"
+#include "Vehicle.h"
+#include "VehicleMgr.h"
 #include "WebProcess.h"
 
 #include <sys/stat.h>
@@ -35,6 +40,7 @@
 #include <emscripten/val.h>
 
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -327,6 +333,119 @@ bool TriangleSurface( const string &id, Surface &out )
     return true;
 }
 
+// How the desktop draws a surface beyond its triangles: a colour of its own (Mesh / NGon Mesh
+// tags), and the polygon edges to draw instead of the triangles' (NGon Mesh faces).
+struct Part
+{
+    bool colored = false;
+    float rgb[3] = { 0, 0, 0 };
+    vector< float > edges;
+};
+
+// The geom's own wire/shade draw objects are named "<geom id>_<index>".
+bool IsWireShadeObj( const string &geom_id, const string &obj_id )
+{
+    if ( obj_id.size() <= geom_id.size() + 1 || obj_id.compare( 0, geom_id.size(), geom_id ) != 0 ||
+         obj_id[geom_id.size()] != '_' )
+    {
+        return false;
+    }
+    for ( size_t i = geom_id.size() + 1; i < obj_id.size(); i++ )
+    {
+        if ( !isdigit( ( unsigned char ) obj_id[i] ) )
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+// A Mesh or NGon Mesh geom as the desktop draws it, from its own draw objects: one triangle
+// list per tag (component), coloured round the colour wheel when the desktop colours them
+// (always for NGon meshes; for Mesh geoms when they're drawn by tag), with each tag's polygon
+// edges (NGon meshes draw their faces' edges, not the triangles').
+bool TagSurfaces( const string &id, vector< Surface > &surfs, vector< Part > &parts )
+{
+    Vehicle *veh = VehicleMgr.GetVehicle();
+    Geom *g = veh ? veh->FindGeom( id ) : nullptr;
+    if ( !g )
+    {
+        return false;
+    }
+    bool colored = dynamic_cast< NGonMeshGeom* >( g ) != nullptr;
+    if ( MeshGeom *mg = dynamic_cast< MeshGeom* >( g ) )
+    {
+        colored = mg->m_DrawType() == MeshGeom::DRAW_TAGS && g->m_GuiDraw.GetDispSubSurfFlag();
+    }
+    vector< DrawObj* > objs;
+    g->LoadDrawObjs( objs );
+    // An NGon mesh lists every tag's edges, then every tag's faces, in the same tag order.
+    vector< DrawObj* > faces, lines;
+    for ( DrawObj *d : objs )
+    {
+        if ( !d || !IsWireShadeObj( id, d->m_GeomID ) )
+        {
+            continue;
+        }
+        if ( d->m_Type == DrawObj::VSP_LINES )
+        {
+            lines.push_back( d );
+        }
+        else if ( d->m_Type == DrawObj::VSP_WIRE_TRIS || d->m_Type == DrawObj::VSP_HIDDEN_TRIS ||
+                  d->m_Type == DrawObj::VSP_SHADED_TRIS )
+        {
+            faces.push_back( d );
+        }
+    }
+    for ( size_t k = 0; k < faces.size(); k++ )
+    {
+        const DrawObj *d = faces[k];
+        size_t nv = d->m_PntVec.size() / 3 * 3;
+        if ( nv < 3 )
+        {
+            continue;
+        }
+        bool normals = d->m_NormVec.size() == d->m_PntVec.size();
+        Surface sf;
+        sf.nu = ( uint32_t ) nv;
+        sf.nw = 0;
+        for ( size_t v = 0; v < nv; v++ )
+        {
+            const vec3d &p = d->m_PntVec[v];
+            vec3d n;
+            if ( normals )
+            {
+                n = d->m_NormVec[v];
+            }
+            else
+            {
+                size_t t = v / 3 * 3;
+                n = cross( d->m_PntVec[t + 1] - d->m_PntVec[t], d->m_PntVec[t + 2] - d->m_PntVec[t] );
+                n.normalize();
+            }
+            sf.pos.insert( sf.pos.end(), { ( float ) p.x(), ( float ) p.y(), ( float ) p.z() } );
+            sf.nrm.insert( sf.nrm.end(), { ( float ) n.x(), ( float ) n.y(), ( float ) n.z() } );
+            sf.idx.push_back( ( uint32_t ) v );
+        }
+        Part part;
+        part.colored = colored;
+        for ( int c = 0; c < 3; c++ )
+        {
+            part.rgb[c] = ( float ) d->m_LineColor.v[c];
+        }
+        if ( k < lines.size() )
+        {
+            for ( const vec3d &p : lines[k]->m_PntVec )
+            {
+                part.edges.insert( part.edges.end(), { ( float ) p.x(), ( float ) p.y(), ( float ) p.z() } );
+            }
+        }
+        surfs.push_back( std::move( sf ) );
+        parts.push_back( std::move( part ) );
+    }
+    return !surfs.empty();
+}
+
 void Put32( vector< uint8_t > &b, uint32_t v )
 {
     uint8_t bytes[4];
@@ -344,6 +463,7 @@ void PutVec( vector< uint8_t > &b, const vector< T > &v )
 vector< uint8_t > MeshBytes( const string &id )
 {
     vector< Surface > surfs;
+    vector< Part > parts;
     // The viewer can ask for a Geom that has just been deleted: an empty mesh, quietly.
     vector< string > geoms = vsp::FindGeoms();
     int nsurf = std::find( geoms.begin(), geoms.end(), id ) == geoms.end() ? 0 : vsp::GetTotalNumSurfs( id );
@@ -356,7 +476,7 @@ vector< uint8_t > MeshBytes( const string &id )
         }
     }
     if ( surfs.empty() && nsurf == 0 && std::find( geoms.begin(), geoms.end(), id ) != geoms.end() &&
-         IsTriMesh( vsp::GetGeomTypeName( id ) ) )
+         IsTriMesh( vsp::GetGeomTypeName( id ) ) && !TagSurfaces( id, surfs, parts ) )
     {
         Surface sf;
         if ( TriangleSurface( id, sf ) )
@@ -389,6 +509,15 @@ vector< uint8_t > MeshBytes( const string &id )
     }
     Put32( b, ( uint32_t ) ( feat.size() / 3 ) );
     PutVec( b, feat );
+    // Then, for Mesh / NGon Mesh tags, each surface's colour and polygon edges.
+    Put32( b, ( uint32_t ) parts.size() );
+    for ( const Part &p : parts )
+    {
+        vector< float > rgb = { p.colored ? p.rgb[0] : -1.0f, p.rgb[1], p.rgb[2] };
+        PutVec( b, rgb );
+        Put32( b, ( uint32_t ) ( p.edges.size() / 3 ) );
+        PutVec( b, p.edges );
+    }
     return b;
 }
 

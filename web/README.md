@@ -52,7 +52,8 @@ If the page already deployed before the upload, re-run the workflow.
 - **Threading.** OpenVSP runs on its own thread in the module; the page talks to it through a
   thread-safe request queue (`web/wasm/engine/engine.cpp`, `frontend/src/api/wasmEngine.ts`).
 - **3D view.** Meshes come from the same u/w tessellation the FLTK GUI draws, sent as a compact
-  binary payload with each geom's outline (format in `frontend/src/api/mesh.ts`). A watcher
+  binary payload with each geom's outline (format in `frontend/src/api/mesh.ts`); Mesh and
+  NGon Mesh geoms come per tag in the desktop's colours. A watcher
   refetches only geoms whose Parms changed and follows each geom's draw type and the GUI's
   selection. Selection boxes, cross sections, the CG and other screens' drawings are mirrored
   from OpenVSP's own draw objects.

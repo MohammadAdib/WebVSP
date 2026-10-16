@@ -1,9 +1,15 @@
-# WebAssembly builds of the OpenVSP core (experimental in-browser engine).
+# WebAssembly builds of the OpenVSP core (WebVSP's engine).
 # Added from src/CMakeLists.txt only when building with Emscripten.
 
+# The engine reads some geoms' draw objects directly (engine.cpp), so it needs what
+# geom_core's headers include.
 SET( VSP_WASM_INCLUDES
     ${CodeEli_INCLUDE_DIRS} ${GEOM_API_INCLUDE_DIR} ${GEOM_CORE_INCLUDE_DIR} ${LIBIGES_INCLUDE_DIR}
-    ${UTIL_INCLUDE_DIR} ${UTIL_API_INCLUDE_DIR} ${XMLVSP_INCLUDE_DIR} ${VSP_SOURCE_DIR} )
+    ${UTIL_INCLUDE_DIR} ${UTIL_API_INCLUDE_DIR} ${XMLVSP_INCLUDE_DIR} ${VSP_SOURCE_DIR}
+    ${ANGELSCRIPT_INCLUDE_DIR} ${CLIPPER2_INCLUDE_DIR} ${CMINPACK_INCLUDE_DIR} ${DELABELLA_INCLUDE_DIR}
+    ${LIBIGL_INCLUDE_DIR} ${LIBXML2_INCLUDE_DIR} ${NANOFLANN_INCLUDE_DIR} ${PINOCCHIO_INCLUDE_DIR}
+    ${ROBUST_INCLUDE_DIR} ${STB_INCLUDE_DIR} ${TRIANGLE_INCLUDE_DIR} ${TRITRI_INCLUDE_DIR}
+    ${WAVEDRAGEL_INCLUDE_DIR} ${GTE_INCLUDE_DIR} )
 
 # Node smoke test: build, tessellate and round-trip a model.
 ADD_EXECUTABLE( vsp_wasm_smoke smoke.cpp )

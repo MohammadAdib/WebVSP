@@ -52,7 +52,12 @@ const view = {
 interface Built {
   /** The meshRev it was built for */
   rev?: number
-  surfaces: { mesh: THREE.BufferGeometry; lines: THREE.BufferGeometry }[]
+  surfaces: {
+    mesh: THREE.BufferGeometry
+    lines: THREE.BufferGeometry
+    /** The desktop's colour for this surface (a Mesh / NGon Mesh tag) */
+    color?: THREE.Color
+  }[]
   /** The outline (feature lines) as segment end points, x,y,z flat */
   outline: number[]
 }
@@ -69,9 +74,14 @@ function buildGeometry(buf: ArrayBuffer): Built {
       mesh.setIndex(new THREE.BufferAttribute(s.indices, 1))
       mesh.computeBoundingSphere()
       const lines = new THREE.BufferGeometry()
-      lines.setAttribute('position', pos)
-      lines.setIndex(new THREE.BufferAttribute(gridLineIndices(s.nu, s.nw), 1))
-      return { mesh, lines }
+      if (s.edges) {
+        // NGon faces: their polygon edges, not the triangles'.
+        lines.setAttribute('position', new THREE.BufferAttribute(s.edges, 3))
+      } else {
+        lines.setAttribute('position', pos)
+        lines.setIndex(new THREE.BufferAttribute(gridLineIndices(s.nu, s.nw), 1))
+      }
+      return { mesh, lines, color: s.color ? new THREE.Color(...s.color) : undefined }
     }),
   }
 }
@@ -128,6 +138,18 @@ function GeomMesh({ id }: { id: string }) {
     shadeMat.dispose()
     lineMat.dispose()
   }, [shadeMat, lineMat])
+  // Surfaces the desktop colours (Mesh / NGon Mesh tags) get materials of their own.
+  const tagMats = useMemo(
+    () =>
+      built?.surfaces.map((s) =>
+        s.color ? { color: s.color, shade: shadeMat.clone(), line: lineMat.clone() } : null,
+      ) ?? [],
+    [built, shadeMat, lineMat],
+  )
+  useEffect(() => () => tagMats.forEach((m) => {
+    m?.shade.dispose()
+    m?.line.dispose()
+  }), [tagMats])
 
   if (mode === 'hidden') {
     // Hidden-line: surfaces in the background color occlude the lines behind them.
@@ -138,6 +160,15 @@ function GeomMesh({ id }: { id: string }) {
     shadeMat.emissive.set(selected ? '#262626' : '#000000')
   }
   lineMat.color.copy(selected ? LINE_SEL : mode === 'shaded' ? LINE_ON_SHADE : LINE_WIRE)
+  for (const m of tagMats) {
+    if (!m) continue
+    // Like the desktop's tag colours: shaded in a tint of the colour, edges in the colour.
+    m.shade.color.copy(shadeMat.color)
+    m.shade.emissive.copy(shadeMat.emissive)
+    if (mode !== 'hidden') m.shade.color.lerp(m.color, selected ? 0.5 : 0.6)
+    m.line.color.copy(mode === 'shaded' ? lineMat.color : m.color)
+    if (selected && mode !== 'shaded') m.line.color.lerp(LINE_SEL, 0.35)
+  }
   useFrame(() => {
     // Pure wire mode keeps its lines; over shading they fade out as the model gets small.
     // Shaded geoms show their wireframe only when selected, as in the FLTK view.
@@ -145,6 +176,11 @@ function GeomMesh({ id }: { id: string }) {
     const fade = mode === 'shaded' ? view.wireFade : 1
     lineMat.opacity = base * fade
     lineMat.visible = lineMat.opacity > 0.02
+    for (const m of tagMats) {
+      if (!m) continue
+      m.line.opacity = lineMat.opacity
+      m.line.visible = lineMat.visible
+    }
   })
 
   const onClick = (e: ThreeEvent<MouseEvent>) => {
@@ -158,8 +194,8 @@ function GeomMesh({ id }: { id: string }) {
     <group onClick={onClick} position={offset ?? ZERO}>
       {built.surfaces.map((s, i) => (
         <group key={i}>
-          {(mode === 'shaded' || mode === 'hidden') && <mesh geometry={s.mesh} material={shadeMat} />}
-          <lineSegments geometry={s.lines} material={lineMat} />
+          {(mode === 'shaded' || mode === 'hidden') && <mesh geometry={s.mesh} material={tagMats[i]?.shade ?? shadeMat} />}
+          <lineSegments geometry={s.lines} material={tagMats[i]?.line ?? lineMat} />
           {mode === 'wire' && (
             // invisible surface so wireframe geoms remain clickable
             <mesh geometry={s.mesh} visible={false} />

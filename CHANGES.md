@@ -31,7 +31,9 @@ What WebVSP adds on top of OpenVSP, newest first. WebVSP is based on **OpenVSP 3
 - **Blank geoms** show as circles at their origins: gray, red when selected, clickable.
 - **Overlay of the screens' 3D drawings**: Mass Properties' CG (red point), and anything else a
   screen adds to the main view, mirrored from OpenVSP.
-- **Mesh and NGon Mesh geoms** (CompGeom results, imported STL/TRI, NGon conversions) are drawn.
+- **Mesh and NGon Mesh geoms** (CompGeom results, imported STL/TRI, NGon conversions, VSPAERO's
+  geometry) are drawn per tag in the desktop's colour-wheel colours, NGon meshes with their
+  polygon edges.
 
 ### VSPAERO
 - **VSPAERO runs in the browser.** `vspaero` and `vsploads` are compiled to WebAssembly and run
