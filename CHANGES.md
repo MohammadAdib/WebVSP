@@ -79,6 +79,8 @@ history is in [CHANGELOG.md](CHANGELOG.md).
   the copy of its parent when that's duplicated too) and starts G on the copies; Esc leaves
   them where they are.
 - C (View > Center) centers the model without changing the zoom; F still fits it.
+- F (and every view button) frames the model a little closer.
+- Numpad 8 / 2 stop at the top and bottom views instead of jamming as they near them.
 - X or Delete deletes the selection after asking (Enter or Delete to confirm, Esc to keep it);
   OpenVSP still asks what to do with clones.
 - Z switches the selection between wireframe and shaded; Shift+Z does it for every geom

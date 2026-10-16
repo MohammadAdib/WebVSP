@@ -31,6 +31,11 @@ const VIEW_DIRS: Record<AbsoluteView, THREE.Vector3> = {
 export const FOV = 35
 export const TAN_HALF_FOV = Math.tan(THREE.MathUtils.degToRad(FOV / 2))
 const ORBIT_STEP = THREE.MathUtils.degToRad(15)
+/** Numpad 8 / 2 stop here: straight down / up, as the top and bottom views look. */
+const MAX_ELEVATION = Math.asin(VIEW_DIRS.top.z)
+/** How much of the view's shorter side the model's bounding sphere fills when fitted: under 1,
+ *  since a model rarely fills its sphere (1 fits the sphere exactly). */
+const FIT_SCALE = 0.85
 /**
  * A viewing direction part of the way (e) from one to another, as elevation and compass
  * direction (azimuth, the shorter way round). Z is up.
@@ -207,8 +212,14 @@ function CameraRig({ request, getBounds, onBounds, onFrame, clipScale = 3, ortho
       if (name === 'orbit-left' || name === 'orbit-right') {
         offset.applyAxisAngle(new THREE.Vector3(0, 0, 1), name === 'orbit-left' ? -ORBIT_STEP : ORBIT_STEP)
       } else if (name === 'orbit-up' || name === 'orbit-down') {
-        const right = new THREE.Vector3().crossVectors(offset, camera.up).normalize()
-        if (right.lengthSq() > 0) offset.applyAxisAngle(right, name === 'orbit-up' ? -ORBIT_STEP : ORBIT_STEP)
+        // In elevation, keeping the compass direction, and no further than straight down or up
+        // (the top and bottom views): Z stays up, so the view can't go over the pole, and the
+        // sideways axis to turn about vanishes there.
+        const len = offset.length()
+        const el = Math.asin(THREE.MathUtils.clamp(offset.z / Math.max(len, 1e-12), -1, 1))
+        const az = Math.atan2(offset.y, offset.x)
+        const next = THREE.MathUtils.clamp(el + (name === 'orbit-up' ? -ORBIT_STEP : ORBIT_STEP), -MAX_ELEVATION, MAX_ELEVATION)
+        offset.set(Math.cos(next) * Math.cos(az), Math.cos(next) * Math.sin(az), Math.sin(next)).multiplyScalar(len)
       } else {
         offset.negate() // Blender numpad 9: the opposite view
       }
@@ -231,9 +242,9 @@ function CameraRig({ request, getBounds, onBounds, onFrame, clipScale = 3, ortho
         if (dir.lengthSq() === 0) dir.copy(VIEW_DIRS.leftiso)
         // Center: only pan, keeping the zoom.
         if (name === 'center') return go(dir, center, visibleHeight(camera, target))
-        // Fit the bounding sphere in the shorter side of the view.
+        // Fit the bounding sphere in the shorter side of the view, a little tighter (FIT_SCALE).
         const aspect = size.width / Math.max(size.height, 1)
-        const height = 2 * radius * 1.05 * Math.max(1, 1 / aspect)
+        const height = 2 * radius * FIT_SCALE * Math.max(1, 1 / aspect)
         go(dir, center, height)
       })
       .catch(() => {})

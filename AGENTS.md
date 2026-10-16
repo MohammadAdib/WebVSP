@@ -250,7 +250,9 @@ edges for NGon meshes. Last, a flag per surface (bit 0: a disk, `DISK_SURF`, dra
   controls are bound to the current camera, the camera is of the requested projection and the
   view has a size; a new camera only inherits the pose of one that was framed. Moves to a view
   are animated (`go`, `blendDirection`: elevation and azimuth separately, `VIEW_MOVE_MS`); the
-  first framing snaps, and a mouse drag stops a move. `StableOrbitControls` keeps one set of
+  first framing snaps, and a mouse drag stops a move. Fitting puts the model's bounding sphere
+  across `FIT_SCALE` of the view's shorter side. Numpad 8 / 2 step the
+  elevation, held within `MAX_ELEVATION` (Z stays up, so the view can't go over a pole). `StableOrbitControls` keeps one set of
   orbit controls for the life of a pane and hands it the new camera on a projection switch, so
   a drag carries on across it. An orthographic camera keeps its framing when the view resizes.
 - **Auto perspective**: each pane's `autoOrtho` (`withView` in `Viewport.tsx`): axis views
