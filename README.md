@@ -2,7 +2,7 @@
 <tr>
 <td valign="middle" width="220">
 
-<img width="200" height="200" alt="WebVSP" src="https://github.com/user-attachments/assets/3aa57595-c653-4c14-b44d-802d2e1f70d5" />
+<img width="200" height="200" alt="WebVSP" src="docs/images/webvsp-icon.png" />
 
 </td>
 <td valign="middle">
@@ -17,11 +17,11 @@ Nothing to install. OpenVSP and all of its functionality, compiled to WebAssembl
 </tr>
 </table>
 
-<img width="2880" height="1728" alt="Screenshot 2026-10-15 235821" src="https://github.com/user-attachments/assets/f74faf3c-2825-41e4-8649-8769eedb5f1e" />
-<img width="2880" height="1728" alt="Screenshot 2026-10-15 235857" src="https://github.com/user-attachments/assets/3accdc2e-48e7-4e4a-9bf4-4ac7a8e979aa" />
-<img width="2880" height="1728" alt="Screenshot 2026-10-15 234700" src="https://github.com/user-attachments/assets/3758dd3d-7011-41f6-9a17-62bcf8d1a093" />
-<img width="2880" height="1728" alt="Screenshot 2026-10-15 235703" src="https://github.com/user-attachments/assets/8db805a8-62f6-42b8-b0c4-8d93a876a07b" />
-<img width="2880" height="1728" alt="image" src="https://github.com/user-attachments/assets/f67095bf-092b-400b-8d92-4d28aac9df14" />
+<img width="2880" height="1728" alt="WebVSP screenshot" src="docs/images/screenshot-1.png" />
+<img width="2880" height="1728" alt="WebVSP screenshot" src="docs/images/screenshot-2.png" />
+<img width="2880" height="1728" alt="WebVSP screenshot" src="docs/images/screenshot-3.png" />
+<img width="2880" height="1728" alt="WebVSP screenshot" src="docs/images/screenshot-4.png" />
+<img width="2880" height="1728" alt="WebVSP split into four views" src="docs/images/screenshot-split-views.png" />
 
 
 ## What you get

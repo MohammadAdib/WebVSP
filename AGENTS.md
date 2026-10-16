@@ -337,7 +337,8 @@ then deploys to GitHub Pages. Nothing is built or uploaded by hand, so any clone
 
 - **Repos and branches.** One branch, `main`, tracking `origin` (`MohammadAdib/WebVSP`); pushing
   it deploys. `upstream` is OpenVSP itself, for pulling its releases: **never push to it** (its
-  push URL is disabled). Don't touch the separate `MohammadAdib/OpenVSP` fork.
+  push URL is disabled). `MohammadAdib/WebVSP` is a GitHub fork of `OpenVSP/OpenVSP`, so GitHub
+  compares it with upstream and can sync OpenVSP's new commits.
 - **Commits**: only when asked; no AI co-author or "Generated with" lines.
 - **Threading.** All OpenVSP calls happen on OpenVSP's pthread in the module. The page reaches
   it only through the exported, thread-safe functions; WebMirror's `PostEvent` and
