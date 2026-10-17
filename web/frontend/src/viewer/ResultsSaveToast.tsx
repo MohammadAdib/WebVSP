@@ -10,15 +10,17 @@ export function ResultsSaveToast() {
         <div className="results-toast-text">
           Save the VSPAERO results next to <b>{ask.modelName}</b>?
           <span className="results-toast-hint">
-            {folderAccess
-              ? 'Choose its folder once; later runs save there by themselves. File > Open the model with them for Load Previous Results.'
-              : `${ask.files.length} files will be downloaded.`}
+            {ask.folder
+              ? `To ${ask.folder.name}, as before: the browser asks to allow it once per visit.`
+              : folderAccess
+                ? 'Choose its folder once; later runs save there by themselves. File > Open the model with them for Load Previous Results.'
+                : `${ask.files.length} files will be downloaded.`}
           </span>
         </div>
         <div className="results-toast-buttons">
           <button onClick={declineOffered}>Not now</button>
           <button className="primary" onClick={() => void saveOffered()}>
-            {folderAccess ? 'Save…' : 'Download'}
+            {ask.folder ? 'Save' : folderAccess ? 'Save…' : 'Download'}
           </button>
         </div>
       </div>

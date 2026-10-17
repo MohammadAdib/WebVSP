@@ -43,8 +43,10 @@ history is in [CHANGELOG.md](CHANGELOG.md).
   downloads it in other browsers.
 - A finished VSPAERO run's result files (`.history`, `.polar`, `.lod`, `.adb`...) are saved next
   to the model on disk: the first time, a toast asks for the model's folder (Chrome and Edge);
-  later runs of that model save there by themselves. Other browsers download them. Opening the
-  model together with them brings them back for Load Previous Results.
+  later runs of that model save there by themselves, and the folder is remembered across
+  visits (after a reload the browser may want one click to allow it again). Other browsers
+  download them. Opening the model together with them brings them back for Load Previous
+  Results.
 
 ## The 3D view
 

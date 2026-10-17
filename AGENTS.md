@@ -309,7 +309,10 @@ its original, so a move or rotation preview is drawn mirrored on the copies (S·
   argument) beside it in the module's file system, if the model is a linked file, and hands them
   to `api/solverResults.ts`. A file handle gives no access to its folder, so the first save asks
   for it (`ResultsSaveToast` → `showDirectoryPicker`, starting in the model's folder; it needs a
-  click); the folder is kept per model for the session and later runs write there directly.
+  click); the folder is kept per model and later runs write there directly. It's also stored in
+  IndexedDB (`webvsp` / `resultFolders`: the model's file handle with the folder's, matched by
+  `isSameEntry`), so it's found again after a reload; the browser then usually wants a click
+  (`requestPermission`) before writing, so the toast asks again, without the picker.
   Without folder access (Firefox, Safari) the files are downloaded.
 - **Results viewer**: `vspviewer` launches are intercepted by `openViewer` in `wasmEngine.ts`,
   which reads `<base>.adb`, `.adb.cases` and `.polar` and opens `viewer/ResultsViewer.tsx`. Its

@@ -6,8 +6,10 @@ import { create } from 'zustand'
  *
  * The page only has the model's own file (a file handle), not its folder, so the first save asks
  * for the folder (a button press is needed for the browser's folder picker; it opens where the
- * model is); later runs of that model save there by themselves. Browsers without folder access
- * download the files instead.
+ * model is); later runs of that model save there by themselves. The folder is remembered across
+ * visits (IndexedDB, paired with the model's file); after a reload the browser usually wants a
+ * click to allow writing to it again, so the first run asks once more, without the picker.
+ * Browsers without folder access download the files instead.
  */
 
 export interface ResultFile {
@@ -23,16 +25,18 @@ export interface ResultsOffer {
   files: ResultFile[]
 }
 
-/** What the toast shows: a question about a finished run's results, or a note about a save. */
-export const useResultsSave = create<{ ask: ResultsOffer | null; note: string | null; failed: boolean }>(() => ({
-  ask: null,
-  note: null,
-  failed: false,
-}))
-
 type DirHandle = FileSystemDirectoryHandle & {
   queryPermission?: (o: { mode: 'readwrite' }) => Promise<PermissionState>
+  requestPermission?: (o: { mode: 'readwrite' }) => Promise<PermissionState>
 }
+
+/** What the toast shows: a question about a finished run's results (with the folder chosen for
+ *  them before, if any, waiting for permission), or a note about a save. */
+export const useResultsSave = create<{
+  ask: (ResultsOffer & { folder?: DirHandle }) | null
+  note: string | null
+  failed: boolean
+}>(() => ({ ask: null, note: null, failed: false }))
 type DirPicker = (o: { id?: string; mode?: 'readwrite'; startIn?: FileSystemHandle | string }) => Promise<DirHandle>
 
 /** The folder chosen for each model's results (this session), and models whose results the
@@ -50,17 +54,26 @@ function note(text: string, failed = false) {
 /** A finished run's results: saved at once where this model's went before, otherwise asked about. */
 export async function offerResults(offer: ResultsOffer) {
   if (!offer.files.length) return
-  const dir = folders.get(offer.modelPath)
-  if (dir && (await dir.queryPermission?.({ mode: 'readwrite' })) === 'granted') return writeAll(dir, offer)
+  const dir = folders.get(offer.modelPath) ?? (await rememberedFolder(offer.modelHandle))
+  if (dir) folders.set(offer.modelPath, dir)
+  if (dir && (await permission(dir)) === 'granted') return writeAll(dir, offer)
   if (declined.has(offer.modelPath)) return
-  useResultsSave.setState({ ask: offer })
+  useResultsSave.setState({ ask: { ...offer, folder: dir } })
 }
 
-/** "Save": choose the folder (starting in the model's) and write the files; must run from a click. */
+/** "Save": allow the folder chosen before, or choose one (starting in the model's), then write the
+ *  files; must run from a click. */
 export async function saveOffered() {
   const offer = useResultsSave.getState().ask
   if (!offer) return
   useResultsSave.setState({ ask: null })
+  if (offer.folder) {
+    try {
+      if ((await offer.folder.requestPermission?.({ mode: 'readwrite' })) === 'granted') return writeAll(offer.folder, offer)
+    } catch {
+      /* gone or refused: choose again */
+    }
+  }
   const pick = (window as unknown as { showDirectoryPicker?: DirPicker }).showDirectoryPicker
   if (!pick) {
     for (const f of offer.files) download(f)
@@ -73,7 +86,89 @@ export async function saveOffered() {
     return // cancelled
   }
   folders.set(offer.modelPath, dir)
+  if (offer.modelHandle) void remember(offer.modelHandle, dir)
   await writeAll(dir, offer)
+}
+
+async function permission(dir: DirHandle) {
+  try {
+    return await dir.queryPermission?.({ mode: 'readwrite' })
+  } catch {
+    return undefined
+  }
+}
+
+// ------------------------------------------------------------------ remembered folders
+
+/** Each model's results folder, kept across visits: { model: its file, folder } records in
+ *  IndexedDB (file and folder handles can be stored there). Matched by isSameEntry, so two models
+ *  with the same name in different folders keep their own. Any failure: just this session. */
+const DB = 'webvsp'
+const STORE = 'resultFolders'
+interface FolderRecord {
+  model: FileSystemFileHandle
+  folder: DirHandle
+}
+
+function openDb(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB, 1)
+    req.onupgradeneeded = () => req.result.createObjectStore(STORE, { autoIncrement: true })
+    req.onsuccess = () => resolve(req.result)
+    req.onerror = () => reject(req.error)
+  })
+}
+
+/** All records, with their keys. */
+async function records(db: IDBDatabase): Promise<{ key: IDBValidKey; rec: FolderRecord }[]> {
+  return new Promise((resolve, reject) => {
+    const out: { key: IDBValidKey; rec: FolderRecord }[] = []
+    const req = db.transaction(STORE).objectStore(STORE).openCursor()
+    req.onsuccess = () => {
+      const c = req.result
+      if (!c) return resolve(out)
+      out.push({ key: c.key, rec: c.value as FolderRecord })
+      c.continue()
+    }
+    req.onerror = () => reject(req.error)
+  })
+}
+
+async function findRecord(db: IDBDatabase, model: FileSystemFileHandle) {
+  for (const r of await records(db)) {
+    if (await r.rec.model.isSameEntry(model).catch(() => false)) return r
+  }
+  return undefined
+}
+
+async function rememberedFolder(model: FileSystemFileHandle | null): Promise<DirHandle | undefined> {
+  if (!model) return undefined
+  try {
+    const db = await openDb()
+    const found = await findRecord(db, model)
+    db.close()
+    return found?.rec.folder
+  } catch {
+    return undefined
+  }
+}
+
+async function remember(model: FileSystemFileHandle, folder: DirHandle) {
+  try {
+    const db = await openDb()
+    const found = await findRecord(db, model)
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORE, 'readwrite')
+      const store = tx.objectStore(STORE)
+      if (found) store.put({ model, folder }, found.key)
+      else store.add({ model, folder })
+      tx.oncomplete = () => resolve()
+      tx.onerror = () => reject(tx.error)
+    })
+    db.close()
+  } catch (err) {
+    console.warn('WebVSP: the results folder is only remembered for this visit', err)
+  }
 }
 
 /** "Not now": not asked again for this model this session. */
