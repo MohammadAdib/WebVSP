@@ -82,7 +82,7 @@ the work lives in a handful of files.
 | `src/viewport/camera.tsx` | Camera shared with the results viewer: perspective/ortho with pose carry-over, orbit/pan/zoom-to-cursor, fit, view keys (Blender numpad), view toolbar. |
 | `src/viewport/transform.tsx` | Blender's G / R: the run's state, mouse driver, axis line, status bar, and the preview (`usePreview`) shared with the move gizmo. |
 | `src/viewport/KeysHelp.tsx` | The keyboard button beside the view toolbar and its list of the 3D view's keys. |
-| `src/viewer/` | VSPAERO results viewer: `adb.ts` (binary `.adb` reader, `.adb.cases`, `.polar`), `store.ts`, `ResultsViewer.tsx` (floating window, colour legend, case/coefficients panel). |
+| `src/viewer/` | VSPAERO results viewer: `adb.ts` (binary `.adb` reader, `.adb.cases`, `.polar`), `store.ts`, `ResultsViewer.tsx` (floating window, colour legend, case/coefficients panel), `ResultsSaveToast.tsx` (saving a run's results next to the model). |
 | `src/WasmToolbar.tsx` | "Loading OpenVSP in your browser…" until the engine is ready. |
 
 ### OpenVSP (C++) pieces WebVSP added or changed
@@ -304,6 +304,13 @@ its original, so a move or rotation preview is drawn mirrored on the copies (S·
   is active (watched in `mirror/Window.tsx`, `setSolverRunning`) and counts only if `vspaero` was
   launched during it (the button flickers on as the window appears); `vspaero`'s exit code says
   how it ended. `SolverTimer` shows it in that window's title bar.
+- **Saving results**: when a run ends well (`onSolverEnded` in `solverRun.ts`), `wasmEngine.ts`
+  gathers the files named after the model (`<base>.*`, `<base>_*`; the base is `vspaero`'s last
+  argument) beside it in the module's file system, if the model is a linked file, and hands them
+  to `api/solverResults.ts`. A file handle gives no access to its folder, so the first save asks
+  for it (`ResultsSaveToast` → `showDirectoryPicker`, starting in the model's folder; it needs a
+  click); the folder is kept per model for the session and later runs write there directly.
+  Without folder access (Firefox, Safari) the files are downloaded.
 - **Results viewer**: `vspviewer` launches are intercepted by `openViewer` in `wasmEngine.ts`,
   which reads `<base>.adb`, `.adb.cases` and `.polar` and opens `viewer/ResultsViewer.tsx`. Its
   wakes are drawn past their end and faded out (`WAKE_FADE_LENGTH`, `WAKE_FADE_STEPS` in

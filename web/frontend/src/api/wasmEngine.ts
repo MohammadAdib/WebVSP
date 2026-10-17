@@ -15,7 +15,8 @@
 import type { SocketMessage } from './client'
 import type { MDialog } from '../mirror/types'
 import { useViewer } from '../viewer/store'
-import { solverExited, solverSpawned } from './solverRun'
+import { offerResults } from './solverResults'
+import { onSolverEnded, solverExited, solverSpawned } from './solverRun'
 
 interface VspModule {
   call(id: number, op: string, a: string, b: string, value: number): void
@@ -388,6 +389,25 @@ interface ProcRequest {
 }
 
 const programs = new Map<number, Worker>()
+/** The model VSPAERO last ran on: its path in the module's file system, without extension. */
+let solverBase = ''
+
+// A run that finished: its result files go next to the model on disk (solverResults.ts), for a
+// model opened or saved from disk; a model never saved has nowhere to put them.
+onSolverEnded((code) => {
+  if (code !== 0 || !solverBase || !modulePromise) return
+  void modulePromise.then((vsp) => {
+    const model = linked.get(`${solverBase}.vsp3`)
+    if (!model) return
+    const dir = dirname(solverBase)
+    const base = solverBase.slice(dir.length + 1)
+    const files = vsp.FS.readdir(dir)
+      .filter((n) => (n.startsWith(base + '.') || n.startsWith(base + '_')) && n !== model.name)
+      .filter((n) => vsp.FS.isFile(vsp.FS.stat(`${dir}/${n}`).mode))
+      .map((name) => ({ name, data: new Uint8Array(vsp.FS.readFile(`${dir}/${name}`)) }))
+    void offerResults({ modelPath: model.path, modelName: model.name, modelHandle: model.handle, files })
+  })
+})
 
 function dirname(path: string) {
   const i = path.lastIndexOf('/')
@@ -414,7 +434,12 @@ function runProgram(vsp: VspModule, r: ProcRequest) {
 
   const worker = new Worker(new URL(`${import.meta.env.BASE_URL}program.worker.js`, window.location.href), { type: 'module' })
   programs.set(r.id, worker)
-  if (cmd === 'vspaero') solverSpawned()
+  if (cmd === 'vspaero') {
+    solverSpawned()
+    // Its last argument is the model's path without extension (relative to its folder).
+    const last = args[args.length - 1] ?? ''
+    solverBase = last.startsWith('/') ? last : `${cwd === '/' ? '' : cwd}/${last}`
+  }
   const finish = (code: number) => {
     if (!programs.has(r.id)) return
     programs.delete(r.id)

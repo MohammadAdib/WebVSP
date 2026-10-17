@@ -39,7 +39,8 @@ Nothing to install. OpenVSP and all of its functionality, compiled to WebAssembl
   and show, Z / Shift+Z for wireframe or shaded, X / Delete to delete (it asks first). The
   keyboard button by the 3D view's toolbar lists them all.
 - The desktop's selection boxes, cross sections, outlines, CG and other drawings.
-- Files are opened and saved through the browser; in Chrome and Edge, Save overwrites the file.
+- Files are opened and saved through the browser; in Chrome and Edge, Save overwrites the file,
+  and VSPAERO's results can be saved next to the model.
   Each tab is its own window with its own model.
 
 Not available yet: STEP export, multithreaded VSPAERO.

@@ -10,6 +10,7 @@ import { SidePanel, usePanelHeight, ViewerOverlay } from './mirror/Dock'
 import { FloatingWindow, MirrorMenuBar } from './mirror/Window'
 import { useStore } from './store'
 import { Viewport } from './viewport/Viewport'
+import { ResultsSaveToast } from './viewer/ResultsSaveToast'
 import { ResultsViewer } from './viewer/ResultsViewer'
 import { WasmToolbar } from './WasmToolbar'
 
@@ -131,6 +132,7 @@ export default function App() {
       </div>
       <DialogHost />
       <DeleteConfirm />
+      <ResultsSaveToast />
     </div>
   )
 }

@@ -21,6 +21,10 @@ let spawned = false
 let exitCode: number | null = null
 let previous: Run = { start: null, end: null, code: null }
 
+/** Called when a run ends, with vspaero's exit code. */
+const endListeners = new Set<(code: number) => void>()
+export const onSolverEnded = (listener: (code: number) => void) => endListeners.add(listener)
+
 export const solverSpawned = () => {
   spawned = true
 }
@@ -38,9 +42,12 @@ export function setSolverRunning(running: boolean) {
     // Kill Solver lit without vspaero being launched (the window appearing): not a run.
     // (OpenVSP launches vspaero just before it lights the button, so these are cleared after a
     // run, not at its start.)
-    if (!spawned) useSolverRun.setState(previous)
-    else useSolverRun.setState({ end: Date.now(), code: exitCode ?? 0 })
+    const code = exitCode ?? 0
+    const real = spawned
+    if (!real) useSolverRun.setState(previous)
+    else useSolverRun.setState({ end: Date.now(), code })
     spawned = false
     exitCode = null
+    if (real) endListeners.forEach((l) => l(code))
   }
 }
