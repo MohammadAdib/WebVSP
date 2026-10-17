@@ -699,6 +699,12 @@ public:
         return m_TransMatVec;
     }
 
+    // Each surface's feature lines (the outline), as the 3D view draws them.
+    const vector < SimpleFeatureTess > &GetFeatureTessVec() const
+    {
+        return m_FeatureTessVec;
+    }
+
     //==== XSec Surfs ====//
     virtual int GetNumXSecSurfs() const
     {

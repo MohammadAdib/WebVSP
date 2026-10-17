@@ -96,7 +96,8 @@ history is in [CHANGELOG.md](CHANGELOG.md).
   mouse drives it; X, Y or Z holds it to that axis (drawn through the selection in the axis's
   colour); typing a number gives the exact distance or angle (G X 10 moves 10 along X, R Z 90
   turns 90° about Z); Ctrl snaps. Enter or a click applies it as one Edit > Undo step; Esc or a
-  right click cancels.
+  right click cancels. Symmetric copies follow mirrored (or turned, for rotational symmetry)
+  while it runs, as OpenVSP places them.
 - Shift+D duplicates the selection in place (each copy under its original's parent, or under
   the copy of its parent when that's duplicated too) and starts G on the copies; Esc leaves
   them where they are.

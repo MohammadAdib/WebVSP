@@ -20,6 +20,13 @@
  *                           instead of the triangles' edges; none: the triangles' edges
  *   uint32   number of surface flags (0, or the number of surfaces)
  *   uint32   flags[n]       per surface; bit 0: a disk (a propeller in disk mode)
+ *   uint32   number of OpenVSP surfaces described next (0, or all of the geom's)
+ *   per OpenVSP surface (symmetric copies included):
+ *     int32    the surface it was written as above (-1: not written)
+ *     uint32   the OpenVSP surface it is a copy of (itself for an original)
+ *     uint32   how many outline points it gave, in order (all 0: the outline isn't split)
+ *     float32  transform[16]   main surface to world, column-major; a copy's transform times
+ *                              the inverse of its original's maps the original onto the copy
  */
 
 export interface SurfaceMesh {
@@ -37,8 +44,20 @@ export interface SurfaceMesh {
   disk?: boolean
 }
 
+/** One of OpenVSP's surfaces (symmetric copies included), from the payload's last section. */
+export interface SurfaceCopy {
+  /** Its index among the decoded surfaces (-1: not drawn) */
+  drawn: number
+  /** The OpenVSP surface it is a copy of (itself for an original) */
+  original: number
+  /** How many outline points it gave, in order */
+  outline: number
+  /** Main surface to world, column-major */
+  transform: Float32Array
+}
+
 /** A geom's surfaces, and its outline (feature lines) as segment end points. */
-export function decodeMesh(buf: ArrayBuffer): SurfaceMesh[] & { features?: Float32Array } {
+export function decodeMesh(buf: ArrayBuffer): SurfaceMesh[] & { features?: Float32Array; copies?: SurfaceCopy[] } {
   const view = new DataView(buf)
   const magic = String.fromCharCode(view.getUint8(0), view.getUint8(1), view.getUint8(2), view.getUint8(3))
   if (magic !== 'VSPM') throw new Error('bad mesh payload')
@@ -59,7 +78,7 @@ export function decodeMesh(buf: ArrayBuffer): SurfaceMesh[] & { features?: Float
     off += nidx * 4
     out.push({ nu, nw, positions, normals, indices })
   }
-  const res: SurfaceMesh[] & { features?: Float32Array } = out
+  const res: SurfaceMesh[] & { features?: Float32Array; copies?: SurfaceCopy[] } = out
   if (off + 4 <= buf.byteLength) {
     const nf = view.getUint32(off, true)
     res.features = new Float32Array(buf, off + 4, nf * 3)
@@ -83,6 +102,21 @@ export function decodeMesh(buf: ArrayBuffer): SurfaceMesh[] & { features?: Float
       if (view.getUint32(off + 4 * s, true) & 1) out[s].disk = true
     }
     off += 4 * nflags
+  }
+  if (off + 4 <= buf.byteLength) {
+    const nc = view.getUint32(off, true)
+    off += 4
+    const copies: SurfaceCopy[] = []
+    for (let s = 0; s < nc && off + 76 <= buf.byteLength; s++) {
+      copies.push({
+        drawn: view.getInt32(off, true),
+        original: view.getUint32(off + 4, true),
+        outline: view.getUint32(off + 8, true),
+        transform: new Float32Array(buf, off + 12, 16),
+      })
+      off += 76
+    }
+    if (copies.length) res.copies = copies
   }
   return res
 }

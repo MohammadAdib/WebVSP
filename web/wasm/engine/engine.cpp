@@ -474,6 +474,8 @@ vector< uint8_t > MeshBytes( const string &id )
     int nsurf = std::find( geoms.begin(), geoms.end(), id ) == geoms.end() ? 0 : vsp::GetTotalNumSurfs( id );
     // Per surface: 1 for a disk (a propeller in disk mode), drawn see-through when shaded.
     vector< uint32_t > flags;
+    // Per OpenVSP surface: its index among the surfaces written (-1: none).
+    vector< int32_t > drawn( nsurf, -1 );
     Vehicle *veh = VehicleMgr.GetVehicle();
     Geom *geom = veh && nsurf > 0 ? veh->FindGeom( id ) : nullptr;
     for ( int s = 0; s < nsurf; s++ )
@@ -481,6 +483,7 @@ vector< uint8_t > MeshBytes( const string &id )
         Surface sf;
         if ( GridSurface( id, s, sf ) )
         {
+            drawn[s] = ( int32_t ) surfs.size();
             surfs.push_back( std::move( sf ) );
             const VspSurf *vs = geom ? geom->GetSurfPtr( s ) : nullptr;
             flags.push_back( vs && vs->GetSurfType() == vsp::DISK_SURF ? 1u : 0u );
@@ -533,6 +536,51 @@ vector< uint8_t > MeshBytes( const string &id )
     flags.resize( flags.empty() ? 0 : surfs.size(), 0 );
     Put32( b, ( uint32_t ) flags.size() );
     PutVec( b, flags );
+    // Then the symmetric copies, per OpenVSP surface (0 entries, or one per surface): the
+    // surface it was written as (-1: none), the surface it is a copy of (itself for an
+    // original), how many outline points it gave (in order; all 0 if the outline can't be split
+    // by surface), and its transform (main surface to world, column-major). A move previewed on
+    // the original is mirrored onto each copy with copy * original^-1.
+    vector< Matrix4d > trans = geom ? geom->GetTransMatVec() : vector< Matrix4d >();
+    if ( geom && ( int ) trans.size() == nsurf )
+    {
+        vector< uint32_t > outline( nsurf, 0 );
+        const vector< SimpleFeatureTess > &ft = geom->GetFeatureTessVec();
+        if ( ( int ) ft.size() == nsurf )
+        {
+            size_t total = 0;
+            for ( int s = 0; s < nsurf; s++ )
+            {
+                for ( const vector< vec3d > &line : ft[s].m_ptline )
+                {
+                    outline[s] += line.size() > 1 ? 2 * ( uint32_t ) ( line.size() - 1 ) : 0;
+                }
+                total += outline[s];
+            }
+            if ( total != feat.size() / 3 )
+            {
+                std::fill( outline.begin(), outline.end(), 0 );
+            }
+        }
+        Put32( b, ( uint32_t ) nsurf );
+        for ( int s = 0; s < nsurf; s++ )
+        {
+            vector< int > copies;
+            geom->GetSymmIndexs( geom->GetMainSurfID( s ), copies );
+            int original = copies.empty() ? s : copies[0];
+            Put32( b, ( uint32_t ) drawn[s] );
+            Put32( b, ( uint32_t ) original );
+            Put32( b, outline[s] );
+            double m[16];
+            trans[s].getMat( m );
+            vector< float > mf( m, m + 16 );
+            PutVec( b, mf );
+        }
+    }
+    else
+    {
+        Put32( b, 0 );
+    }
     return b;
 }
 

@@ -96,6 +96,7 @@ the work lives in a handful of files.
 | `src/gui_and_draw/MainGLWindow`, `SubGLWindow`, `VSPWindow`, `ScreenMgr`, `ManageGeomScreen`, `TreeIconWidget` | Hooks the mirror needs (camera/view state for GL views, hidden windows, `ManageGeomScreen::Toggle` for multi-select). |
 | `src/geom_api/VSP_Geom_API.{h,cpp}`, `GuiInterface.{h,cpp}` | API used by the engine: `Mirror*` (enable, pump, post event, take output, request full, pick), `MirrorGeomOrigin`, `MirrorMoveGeoms`, `MirrorRotateGeoms`, `MirrorDuplicateGeoms`, `MirrorFeatureLines`, `GetMeshGeomTriPnts`, `GetActiveGeoms`, `GetParmActiveFlag`. |
 | `src/geom_core/Vehicle.{h,cpp}` | `DuplicateGeomVec` for Shift+D: copies in place under the originals' parents, clipboard untouched. |
+| `src/geom_core/Geom.h` | `GetFeatureTessVec`: each surface's outline, so the mesh payload can split it by symmetric copy. |
 | `src/geom_core/ParmMgr.{h,cpp}`, `ParmUndo.h` | Undo groups (`BeginUndoGroup`/`EndUndoGroup`): changes in a group are one `UnDo()` step. |
 | `src/geom_core/MeshGeom`, `NGonMeshGeom` | Triangles for drawing Mesh / NGon Mesh geoms (`GetDrawTriPnts`). |
 | `src/geom_core/ScriptCall.h`, `ScriptMgr.cpp` | AngelScript registrations through calling-convention macros (generic wrappers in WebAssembly). |
@@ -201,8 +202,12 @@ line segments from `MirrorFeatureLines`), then per-surface parts for Mesh / NGon
 Those come from the geom's own wire/shade draw objects (`TagSurfaces` in `engine.cpp`, which
 includes geom_core headers directly): one surface per tag, its colour-wheel colour when the
 desktop colours it (always for NGon meshes; Mesh geoms drawn by tag), and the tag's polygon
-edges for NGon meshes. Last, a flag per surface (bit 0: a disk, `DISK_SURF`, drawn at
-`DISK_ALPHA` when shaded). **Change the writer and the reader together.**
+edges for NGon meshes. Then a flag per surface (bit 0: a disk, `DISK_SURF`, drawn at
+`DISK_ALPHA` when shaded). Last, per OpenVSP surface (symmetric copies included): which written
+surface it is, the surface it is a copy of, its share of the outline points, and its transform
+(`Geom::GetTransMatVec`); `copyMaps` in `Viewport.tsx` turns these into each copy's map from
+its original, so a move or rotation preview is drawn mirrored on the copies (S·P·S⁻¹).
+**Change the writer and the reader together.**
 
 ---
 

@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import * as THREE from 'three'
 import type { TransformControls as TransformControlsImpl } from 'three-stdlib'
 import { api } from '../api/client'
-import { decodeMesh, gridLineIndices } from '../api/mesh'
+import { decodeMesh, gridLineIndices, type SurfaceCopy } from '../api/mesh'
 import { NO_GEOMS, useStore, type Layout, type ViewName } from '../store'
 import { useViewer } from '../viewer/store'
 import { useMirror } from '../mirror/store'
@@ -75,16 +75,40 @@ interface Built {
     color?: THREE.Color
     /** A disk (a propeller in disk mode): see-through when shaded */
     disk?: boolean
+    /** A symmetric copy: the map from its original onto it (world to world) */
+    symm?: THREE.Matrix4
   }[]
-  /** The outline (feature lines) as segment end points, x,y,z flat */
-  outline: number[]
+  /** The outline (feature lines) as segment end points, x,y,z flat: per surface when known,
+   *  each with its symmetric copy's map */
+  outline: { points: number[]; symm?: THREE.Matrix4 }[]
+}
+
+/** The map from each OpenVSP surface's original onto it (undefined for an original): its
+ *  transform times the inverse of the original's. */
+function copyMaps(copies: SurfaceCopy[] | undefined): (THREE.Matrix4 | undefined)[] {
+  return (copies ?? []).map((c, k) => {
+    const o = copies![c.original]
+    if (c.original === k || !o) return undefined
+    return new THREE.Matrix4().fromArray(c.transform).multiply(new THREE.Matrix4().fromArray(o.transform).invert())
+  })
 }
 
 function buildGeometry(buf: ArrayBuffer): Built {
   const decoded = decodeMesh(buf)
+  const maps = copyMaps(decoded.copies)
+  const symmOfDrawn = new Map<number, THREE.Matrix4 | undefined>()
+  decoded.copies?.forEach((c, k) => c.drawn >= 0 && symmOfDrawn.set(c.drawn, maps[k]))
+  // The outline split by surface, when the engine could; otherwise whole.
+  const features = decoded.features ? Array.from(decoded.features) : []
+  const counts = decoded.copies?.map((c) => c.outline) ?? []
+  const split = counts.length > 0 && counts.reduce((a, b) => a + b, 0) * 3 === features.length && features.length > 0
+  let at = 0
+  const outline = split
+    ? counts.map((n, k) => ({ points: features.slice(at * 3, (at += n) * 3), symm: maps[k] })).filter((g) => g.points.length >= 6)
+    : [{ points: features }]
   return {
-    outline: decoded.features ? Array.from(decoded.features) : [],
-    surfaces: decoded.map((s) => {
+    outline,
+    surfaces: decoded.map((s, i) => {
       const pos = new THREE.BufferAttribute(s.positions, 3)
       const mesh = new THREE.BufferGeometry()
       mesh.setAttribute('position', pos)
@@ -99,7 +123,7 @@ function buildGeometry(buf: ArrayBuffer): Built {
         lines.setAttribute('position', pos)
         lines.setIndex(new THREE.BufferAttribute(gridLineIndices(s.nu, s.nw), 1))
       }
-      return { mesh, lines, color: s.color ? new THREE.Color(...s.color) : undefined, disk: s.disk }
+      return { mesh, lines, color: s.color ? new THREE.Color(...s.color) : undefined, disk: s.disk, symm: symmOfDrawn.get(i) }
     }),
   }
 }
@@ -116,6 +140,17 @@ function GeomMesh({ id }: { id: string }) {
   // Moved by the move gizmo or G / R: drawn moved until the moved geom's mesh arrives.
   const preview = usePreview((s) => (s.ids.includes(id) && (built?.rev ?? 0) <= (s.revs[id] ?? -1) ? s : null))
   const matrix = useMemo(() => previewMatrix(preview, id, new THREE.Matrix4()), [preview, id])
+  // A symmetric copy follows the move mirrored (or turned) like OpenVSP will place it: the
+  // preview conjugated by the map from its original onto it.
+  const forCopy = useMemo(() => {
+    const cache = new Map<THREE.Matrix4 | undefined, THREE.Matrix4>()
+    return (symm?: THREE.Matrix4) => {
+      if (!symm || !preview) return matrix
+      let m = cache.get(symm)
+      if (!m) cache.set(symm, (m = symm.clone().multiply(matrix).multiply(symm.clone().invert())))
+      return m
+    }
+  }, [matrix, preview])
 
   useEffect(() => {
     let cancelled = false
@@ -221,9 +256,9 @@ function GeomMesh({ id }: { id: string }) {
 
   if (!built || mode === 'none') return null
   return (
-    <group onClick={onClick} matrix={matrix} matrixAutoUpdate={false}>
+    <group onClick={onClick}>
       {built.surfaces.map((s, i) => (
-        <group key={i}>
+        <group key={i} matrix={forCopy(s.symm)} matrixAutoUpdate={false}>
           {(mode === 'shaded' || mode === 'hidden') && <mesh geometry={s.mesh} material={s.disk && mode === 'shaded' ? diskMat : (tagMats[i]?.shade ?? shadeMat)} />}
           <lineSegments geometry={s.lines} material={tagMats[i]?.line ?? lineMat} />
           {mode === 'wire' && (
@@ -232,8 +267,13 @@ function GeomMesh({ id }: { id: string }) {
           )}
         </group>
       ))}
-      {built.outline.length >= 6 && (
-        <Line points={built.outline} segments color={OUTLINE_COLOR} lineWidth={OUTLINE_WIDTH} />
+      {built.outline.map(
+        (g, k) =>
+          g.points.length >= 6 && (
+            <group key={k} matrix={forCopy(g.symm)} matrixAutoUpdate={false}>
+              <Line points={g.points} segments color={OUTLINE_COLOR} lineWidth={OUTLINE_WIDTH} />
+            </group>
+          ),
       )}
     </group>
   )
