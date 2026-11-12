@@ -69,6 +69,8 @@ history is in [CHANGELOG.md](CHANGELOG.md).
   30° per press (8 and 2 stopping at the top and bottom views); F (or Home, numpad .) fits the
   model; C (View > Center) centers it, keeping the zoom. The side view (3) has the nose on the
   left, as in Blender.
+- A model that grows to more than 10 times the size it was last fitted at is fitted again, as F
+  does; below that, the view stays put and only its clip planes follow the model.
 - Moving to a view is animated (keys, F5-F12, toolbar, orbit steps, the orientation gizmo's
   balls), turning in elevation and compass direction so top and bottom views arrive the right
   way round.
@@ -101,7 +103,8 @@ history is in [CHANGELOG.md](CHANGELOG.md).
 - Blender's G and R: G moves the selection and R rotates it, each geom about its own origin. The
   mouse drives it; X, Y or Z holds it to that axis (drawn through the selection in the axis's
   colour); typing a number gives the exact distance or angle (G X 10 moves 10 along X, R Z 90
-  turns 90° about Z); Ctrl snaps. Enter or a click applies it as one Edit > Undo step; Esc or a
+  turns 90° about Z). A move with the mouse goes in whole units (Ctrl: freely); a rotation is
+  free (Ctrl: 5° steps). Enter or a click applies it as one Edit > Undo step; Esc or a
   right click cancels. Symmetric copies follow mirrored (or turned, for rotational symmetry)
   while it runs, as OpenVSP places them.
 - Shift+D duplicates the selection in place (each copy under its original's parent, or under

@@ -5,6 +5,7 @@ import * as THREE from 'three'
 import type { TransformControls as TransformControlsImpl } from 'three-stdlib'
 import { api } from '../api/client'
 import { decodeMesh, gridLineIndices, type SurfaceCopy } from '../api/mesh'
+import type { BBox } from '../api/types'
 import { NO_GEOMS, useStore, type Layout, type ViewName } from '../store'
 import { useViewer } from '../viewer/store'
 import { useMirror } from '../mirror/store'
@@ -413,18 +414,16 @@ interface GridPlace {
   size: number
 }
 
-/** Where the ground grid goes: under the whole model's footprint (hidden geoms too, so hiding
- *  some doesn't shrink or move it), square on its longest side in plan. Read again whenever the
- *  model changes (not only when the view is fitted). */
-function useGridPlace(): GridPlace {
-  const bounds = useStore((s) => s.bounds)
+/** A bounding box of the model (`api.bbox`: the shown geoms; `api.bboxAll`: every geom), read
+ *  again a moment after each change to the model. The same box keeps the same object. */
+function useModelBox(read: () => Promise<BBox | null>): BBox | null {
   const valuesRev = useStore((s) => s.valuesRev)
-  const [gridKey, setGridKey] = useState('')
+  const [key, setKey] = useState('')
   useEffect(() => {
     let stale = false
     const t = window.setTimeout(() => {
-      api.bboxAll().then(
-        (b) => !stale && setGridKey(b ? JSON.stringify(b) : ''),
+      read().then(
+        (b) => !stale && setKey(b ? JSON.stringify(b) : ''),
         () => undefined,
       )
     }, 150)
@@ -432,19 +431,28 @@ function useGridPlace(): GridPlace {
       stale = true
       window.clearTimeout(t)
     }
-  }, [valuesRev])
+  }, [valuesRev, read])
+  return useMemo(() => (key ? (JSON.parse(key) as BBox) : null), [key])
+}
+
+/** Where the ground grid goes: under the whole model's footprint (hidden geoms too, so hiding
+ *  some doesn't shrink or move it), square on its longest side in plan. Read again whenever the
+ *  model changes (not only when the view is fitted). */
+function useGridPlace(): GridPlace {
+  const bounds = useStore((s) => s.bounds)
+  const all = useModelBox(api.bboxAll)
   return useMemo(() => {
-    const b = gridKey
-      ? (JSON.parse(gridKey) as { min: [number, number, number]; max: [number, number, number] })
-      : bounds
+    const b =
+      all ??
+      (bounds
         ? {
             min: bounds.center.map((c, k) => c - bounds.size[k] / 2) as [number, number, number],
             max: bounds.center.map((c, k) => c + bounds.size[k] / 2) as [number, number, number],
           }
-        : { min: [-10, -10, 0] as [number, number, number], max: [10, 10, 0] as [number, number, number] }
+        : { min: [-10, -10, 0] as [number, number, number], max: [10, 10, 0] as [number, number, number] })
     const center: [number, number] = [(b.min[0] + b.max[0]) / 2, (b.min[1] + b.max[1]) / 2]
     return { center, size: Math.max(b.max[0] - b.min[0], b.max[1] - b.min[1]) }
-  }, [gridKey, bounds])
+  }, [all, bounds])
 }
 
 /** One pane's 3D scene: its own camera (view and projection), the shared model. */
@@ -452,6 +460,7 @@ function Scene({
   ortho,
   request,
   gridPlace,
+  modelBox,
   active,
   onRotate,
   onAxisView,
@@ -461,6 +470,8 @@ function Scene({
   active: boolean
   request: { name: ViewName; n: number }
   gridPlace: GridPlace
+  /** The shown geoms' bounding box, as the model changes */
+  modelBox: BBox | null
   onRotate: () => void
   onAxisView: (view: ViewName) => void
 }) {
@@ -479,6 +490,7 @@ function Scene({
         onRotate={onRotate}
         onAxisView={onAxisView}
         getBounds={api.bbox}
+        bounds={modelBox}
         onBounds={setBounds}
         // Fade dense wireframe as the model gets small on screen.
         onFrame={(radii) => (paneView.wireFade = THREE.MathUtils.clamp((14 - radii) / 8, 0, 1))}
@@ -553,6 +565,7 @@ export function Viewport() {
   const grid = useStore((s) => s.grid)
   const toggleGrid = useStore((s) => s.toggleGrid)
   const gridPlace = useGridPlace()
+  const modelBox = useModelBox(api.bbox)
   const count = LAYOUT_VIEWS[layout].length
 
   // Splitting gives every pane its layout's view; going back to one view keeps the camera of
@@ -679,6 +692,7 @@ export function Viewport() {
                 ortho={pane.ortho}
                 request={pane.request}
                 gridPlace={gridPlace}
+                modelBox={modelBox}
                 active={i === active}
                 // Turning a pane with the mouse leaves its axis view: back to perspective if
                 // the axis view made it orthographic.

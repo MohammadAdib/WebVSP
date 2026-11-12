@@ -26,7 +26,7 @@ const SECTIONS: { title: string; keys: [string, string][] }[] = [
       ['X / Y / Z', 'Hold to that axis'],
       ['G  X  10', 'Move 10 along X (type the value)'],
       ['R  Z  90', 'Rotate 90° about Z'],
-      ['Ctrl', 'Snap while moving the mouse'],
+      ['Ctrl', 'Move freely (G goes in whole units) / rotate in 5° steps'],
       ['Enter / click', 'Apply'],
       ['Esc / right-click', 'Cancel'],
     ],

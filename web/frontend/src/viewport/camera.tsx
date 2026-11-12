@@ -37,6 +37,9 @@ const MAX_ELEVATION = Math.asin(VIEW_DIRS.top.z)
 /** How much of the view's shorter side the model's bounding sphere fills when fitted: under 1,
  *  since a model rarely fills its sphere (1 fits the sphere exactly). */
 const FIT_SCALE = 0.85
+/** A model that grows to more than this many times the size it was last framed at (its
+ *  bounding sphere's radius) is framed again, as F does. */
+const AUTO_FIT_GROWTH = 10
 /**
  * A viewing direction part of the way (e) from one to another, as elevation and compass
  * direction (azimuth, the shorter way round). Z is up.
@@ -73,10 +76,21 @@ function visibleHeight(camera: THREE.Camera, target: THREE.Vector3) {
   return 2 * camera.position.distanceTo(target) * TAN_HALF_FOV
 }
 
+/** A box's bounding sphere and size (a 10-unit box around the origin when there's no model). */
+function boxSphere(bb: Box | null) {
+  const lo = new THREE.Vector3(...(bb?.min ?? [-5, -5, -5]))
+  const hi = new THREE.Vector3(...(bb?.max ?? [5, 5, 5]))
+  const size = hi.clone().sub(lo)
+  return { center: lo.add(hi).multiplyScalar(0.5), radius: Math.max(size.length() / 2, 0.1), size }
+}
+
 interface RigProps {
   request: ViewRequest
   /** The model's bounding box (fetched when a view is requested). */
   getBounds: () => Promise<Box | null>
+  /** The model's bounding box as the model changes, if known: the clip planes follow it, and a
+   *  model grown past AUTO_FIT_GROWTH times the size it was framed at is framed again. */
+  bounds?: Box | null
   onBounds?: (b: { center: [number, number, number]; size: [number, number, number]; radius: number }) => void
   /** Each frame: how far away the model looks, in model radii (e.g. to fade wireframe). */
   onFrame?: (distanceInRadii: number) => void
@@ -87,11 +101,13 @@ interface RigProps {
   ortho?: boolean
 }
 
-function CameraRig({ request, getBounds, onBounds, onFrame, clipScale = 3, ortho }: RigProps) {
+function CameraRig({ request, getBounds, bounds, onBounds, onFrame, clipScale = 3, ortho }: RigProps) {
   const { camera, controls, size } = useThree()
   const light = useRef<THREE.DirectionalLight>(null)
   // Bounding sphere of the model; drives clip planes and zoom limits.
   const sphere = useRef(new THREE.Sphere(new THREE.Vector3(), 10))
+  // The model's radius when the view was last fitted to it (null: not yet).
+  const fittedRadius = useRef<number | null>(null)
   // Last pose, carried over when switching between perspective and orthographic.
   const pose = useRef<{ dir: THREE.Vector3; target: THREE.Vector3; height: number } | null>(null)
   const lastCamera = useRef<THREE.Camera | null>(null)
@@ -154,6 +170,21 @@ function CameraRig({ request, getBounds, onBounds, onFrame, clipScale = 3, ortho
       to: { dir: dir.clone().normalize(), target: target.clone(), height },
       start: performance.now(),
     }
+  }
+  /** The model's box, read for a view: its sphere drives the clip planes and zoom limits. */
+  const takeBounds = (bb: Box | null) => {
+    const b = boxSphere(bb)
+    sphere.current.set(b.center, b.radius)
+    onBounds?.({ center: b.center.toArray(), size: b.size.toArray(), radius: b.radius })
+    return b
+  }
+  /** Looking along `dir`, fit the model's bounding sphere in the shorter side of the view, a
+   *  little tighter (FIT_SCALE). */
+  const fitTo = (dir: THREE.Vector3) => {
+    const { center, radius } = sphere.current
+    fittedRadius.current = radius
+    const aspect = size.width / Math.max(size.height, 1)
+    go(dir, center.clone(), 2 * radius * FIT_SCALE * Math.max(1, 1 / aspect))
   }
   useEffect(() => {
     const c = controls as unknown as THREE.EventDispatcher<{ start: object }> | null
@@ -231,22 +262,13 @@ function CameraRig({ request, getBounds, onBounds, onFrame, clipScale = 3, ortho
     getBounds()
       .then((bb) => {
         if (cancelled) return
-        const lo = new THREE.Vector3(...(bb?.min ?? [-5, -5, -5]))
-        const hi = new THREE.Vector3(...(bb?.max ?? [5, 5, 5]))
-        const center = lo.clone().add(hi).multiplyScalar(0.5)
-        const radius = Math.max(hi.clone().sub(lo).length() / 2, 0.1)
-        sphere.current.set(center, radius)
-        const s = hi.clone().sub(lo)
-        onBounds?.({ center: [center.x, center.y, center.z], size: [s.x, s.y, s.z], radius })
+        const { center } = takeBounds(bb)
         const dir =
           name === 'fit' || name === 'center' ? camera.position.clone().sub(target).normalize() : VIEW_DIRS[name as AbsoluteView].clone()
         if (dir.lengthSq() === 0) dir.copy(VIEW_DIRS.leftiso)
         // Center: only pan, keeping the zoom.
         if (name === 'center') return go(dir, center, visibleHeight(camera, target))
-        // Fit the bounding sphere in the shorter side of the view, a little tighter (FIT_SCALE).
-        const aspect = size.width / Math.max(size.height, 1)
-        const height = 2 * radius * FIT_SCALE * Math.max(1, 1 / aspect)
-        go(dir, center, height)
+        fitTo(dir)
       })
       .catch(() => {})
     return () => {
@@ -254,6 +276,22 @@ function CameraRig({ request, getBounds, onBounds, onFrame, clipScale = 3, ortho
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [request, controls, camera, ready])
+
+  // The model changed: the clip planes follow it, the camera staying where it is; but a model
+  // grown past AUTO_FIT_GROWTH times the size it was fitted at is fitted again, as F does (looking
+  // the way the view looks, or will at the end of a move to a view).
+  useEffect(() => {
+    if (!bounds) return
+    const { center, radius } = boxSphere(bounds)
+    const fitted = fittedRadius.current
+    if (ctl && ready && fitted !== null && radius > fitted * AUTO_FIT_GROWTH) {
+      takeBounds(bounds)
+      fitTo(anim.current?.to.dir.clone() ?? camera.position.clone().sub(ctl.target).normalize())
+    } else {
+      sphere.current.set(center, radius)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bounds])
 
   useFrame(() => {
     const a = anim.current

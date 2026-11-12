@@ -15,8 +15,9 @@ const AXES: Vec3[] = [
 ]
 export const AXIS_NAMES = ['X', 'Y', 'Z']
 
-/** Holding Ctrl while moving the mouse snaps a move to this (model units) and a rotation to
- *  ROTATE_SNAP degrees, as Blender's increment snapping does. */
+/** A move with the mouse goes in steps of MOVE_SNAP (model units) along each axis, like the move
+ *  gizmo's; holding Ctrl moves freely. A rotation is free; holding Ctrl turns it in steps of
+ *  ROTATE_SNAP degrees. (Blender's increment snapping, on for moves, off for rotations.) */
 const MOVE_SNAP = 1
 const ROTATE_SNAP = 5
 
@@ -215,9 +216,13 @@ export function TransformDriver({ active }: { active: boolean }) {
     if (start.current?.run !== run) {
       start.current = { run, x: pointer.x, y: pointer.y, plane0: planePoint(pointer.x, pointer.y), lastAngle: angleAt(pointer.x, pointer.y), turned: 0 }
     }
-    const onMove = (e: PointerEvent) => {
+    // Where the mouse is, and whether Ctrl is held: pressing or letting go of Ctrl redoes the
+    // result without the mouse having to move.
+    const last = { x: pointer.x, y: pointer.y, ctrl: false }
+    const update = () => {
       const s0 = start.current
       if (!s0) return
+      const { x, y, ctrl } = last
       const t = useTransform.getState()
       if (t.mode === 'move') {
         let d: THREE.Vector3
@@ -225,17 +230,31 @@ export function TransformDriver({ active }: { active: boolean }) {
           // Along the axis: the mouse's travel along the axis as drawn on screen.
           const a = new THREE.Vector3(...AXES[t.axis])
           const sa = screenOf(pivot.clone().add(a)).sub(screenOf(pivot))
-          const travel = new THREE.Vector2(e.clientX - s0.x, e.clientY - s0.y)
+          const travel = new THREE.Vector2(x - s0.x, y - s0.y)
           const len2 = sa.lengthSq()
           d = a.multiplyScalar(len2 > 1e-6 ? travel.dot(sa) / len2 : 0)
         } else {
-          const p = planePoint(e.clientX, e.clientY)
+          const p = planePoint(x, y)
           d = p && s0.plane0 ? p.sub(s0.plane0) : new THREE.Vector3()
         }
         const v = d.toArray() as Vec3
-        if (e.ctrlKey) for (let k = 0; k < 3; k++) v[k] = Math.round(v[k] / MOVE_SNAP) * MOVE_SNAP
+        // `+ 0` turns a rounded -0 into 0.
+        if (!ctrl) for (let k = 0; k < 3; k++) v[k] = Math.round(v[k] / MOVE_SNAP) * MOVE_SNAP + 0
         useTransform.setState({ mouseMove: v })
       } else if (t.mode === 'rotate') {
+        // Counterclockwise on screen is about the axis toward the viewer; an axis pointing away
+        // turns the other way.
+        const facing = t.axis === null ? 1 : Math.sign(new THREE.Vector3(...AXES[t.axis]).dot(toViewer())) || 1
+        let deg = THREE.MathUtils.radToDeg(s0.turned) * facing
+        if (ctrl) deg = Math.round(deg / ROTATE_SNAP) * ROTATE_SNAP
+        useTransform.setState({ mouseAngle: deg })
+      }
+    }
+    const onMove = (e: PointerEvent) => {
+      const s0 = start.current
+      if (!s0) return
+      Object.assign(last, { x: e.clientX, y: e.clientY, ctrl: e.ctrlKey })
+      if (useTransform.getState().mode === 'rotate') {
         // Turned so far on screen around the pivot (it can go round more than once).
         const a = angleAt(e.clientX, e.clientY)
         let step = a - s0.lastAngle
@@ -243,16 +262,22 @@ export function TransformDriver({ active }: { active: boolean }) {
         if (step < -Math.PI) step += 2 * Math.PI
         s0.lastAngle = a
         s0.turned += step
-        // Counterclockwise on screen is about the axis toward the viewer; an axis pointing away
-        // turns the other way.
-        const facing = t.axis === null ? 1 : Math.sign(new THREE.Vector3(...AXES[t.axis]).dot(toViewer())) || 1
-        let deg = THREE.MathUtils.radToDeg(s0.turned) * facing
-        if (e.ctrlKey) deg = Math.round(deg / ROTATE_SNAP) * ROTATE_SNAP
-        useTransform.setState({ mouseAngle: deg })
       }
+      update()
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Control' || e.ctrlKey === last.ctrl) return
+      last.ctrl = e.ctrlKey
+      update()
     }
     window.addEventListener('pointermove', onMove)
-    return () => window.removeEventListener('pointermove', onMove)
+    window.addEventListener('keydown', onKey)
+    window.addEventListener('keyup', onKey)
+    return () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('keyup', onKey)
+    }
   }, [active, mode, run, camera, gl])
 
   return null
@@ -296,7 +321,9 @@ export function TransformHud() {
   return (
     <div className="transform-hud" role="status">
       <b>{s.mode === 'move' ? 'Move' : 'Rotate'}</b> <span>{value}</span>
-      <span className="hint">X Y Z axis · type a value · Enter or click to apply · Esc or right-click to cancel · Ctrl snaps</span>
+      <span className="hint">
+        X Y Z axis · type a value · Enter or click to apply · Esc or right-click to cancel · {s.mode === 'move' ? 'Ctrl moves freely' : `Ctrl snaps to ${ROTATE_SNAP}°`}
+      </span>
     </div>
   )
 }
