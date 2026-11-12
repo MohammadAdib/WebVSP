@@ -155,6 +155,7 @@ export async function wasmRequest(method: string, path: string, body?: unknown):
   if (route === 'POST /geoms/duplicate') return call('duplicate', (b.ids as string[]).join(','))
   if (route === 'POST /geoms/draw-type') return call('drawType', (b.ids as string[]).join(','), '', Number(b.type))
   if (route === 'POST /geoms/rotate') return call('rotate', (b.ids as string[]).join(','), (b.axis as number[]).join(','), Number(b.angle))
+  if (route === 'POST /geoms/scale') return call('scale', (b.ids as string[]).join(','), '', Number(b.factor))
   throw new WasmEngineError(501, `Not available in the in-browser engine: ${method} ${path}`)
 }
 

@@ -1303,6 +1303,25 @@ string MainOverlayJson()
                     Obj b;
                     b.Str( "t", "blank" ).Str( "id", g->GetID() ).Bool( "sel", veh->IsGeomActive( g->GetID() ) )
                      .Raw( "p", "[" + pts + "]" );
+                    // Each point's transform (the original's, then each symmetric copy's;
+                    // column-major), so the page can mirror a move or rotation preview onto the
+                    // copies' markers as it does onto their surfaces.
+                    vector< Matrix4d > trans = g->GetTransMatVec();
+                    if ( trans.size() == d->m_PntVec.size() )
+                    {
+                        string ms;
+                        for ( size_t i = 0; i < trans.size(); i++ )
+                        {
+                            double m[16];
+                            trans[i].getMat( m );
+                            for ( int k = 0; k < 16; k++ )
+                            {
+                                snprintf( buf, sizeof( buf ), "%s%.9g", i || k ? "," : "", m[k] );
+                                ms += buf;
+                            }
+                        }
+                        b.Raw( "m", "[" + ms + "]" );
+                    }
                     markers.push_back( b.Done() );
                 }
                 else if ( d->m_GeomID == g->GetID() + "PtMassCG" )
@@ -1439,6 +1458,31 @@ void SetEventCoords( int x, int y, int mods, int clicks )
     Fl::e_y_root = y;
     Fl::e_state = mods;
     Fl::e_clicks = clicks;
+}
+
+// A browser's items are reached only through its protected item_first / item_next; a pointer to
+// member formed through a derived class reaches them on any browser.
+struct BrowserItems : Fl_Browser_
+{
+    static void *First( const Fl_Browser_ *b )
+    {
+        return ( b->*( &BrowserItems::item_first ) )();
+    }
+    static void *Next( const Fl_Browser_ *b, void *item )
+    {
+        return ( b->*( &BrowserItems::item_next ) )( item );
+    }
+};
+
+// A check browser's item on this line (1-based), or null.
+void *CheckBrowserItem( Fl_Check_Browser *cb, int line )
+{
+    void *item = line >= 1 ? BrowserItems::First( cb ) : nullptr;
+    for ( int i = 1; item && i < line; i++ )
+    {
+        item = BrowserItems::Next( cb, item );
+    }
+    return item;
 }
 
 void ApplyEvent( const std::map< string, string > &ev )
@@ -1656,7 +1700,22 @@ void ApplyEvent( const std::map< string, string > &ev )
         Fl_Check_Browser *cb = dynamic_cast< Fl_Check_Browser* >( w );
         if ( cb )
         {
-            cb->checked( GetInt( ev, "line" ), GetInt( ev, "v" ) );
+            // As a click on the line does: the line becomes the current one (callbacks read
+            // value() to know which line it was, e.g. the Gen tab's sets) and its box toggles,
+            // here to v.
+            int line = GetInt( ev, "line" );
+            int v = GetInt( ev, "v" ) ? 1 : 0;
+            void *item = CheckBrowserItem( cb, line );
+            if ( item )
+            {
+                cb->checked( line, !v );
+                cb->deselect();
+                cb->select( item, 1 );
+            }
+            else
+            {
+                cb->checked( line, v );
+            }
             cb->do_callback();
         }
     }

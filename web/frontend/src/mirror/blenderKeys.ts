@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { api } from '../api/client'
 import { useStore } from '../store'
 import { useViewer } from '../viewer/store'
-import { applyTransform, cancelTransform, setTransformAxis, startTransform, typeTransform, useTransform } from '../viewport/transform'
+import { applyTransform, cancelTransform, setTransformAxis, startTransform, typeTransform, useTransform, type TransformMode } from '../viewport/transform'
 import { askDelete } from './DeleteConfirm'
 import { labelText } from './fltk'
 import { sendMirror, useMirror } from './store'
@@ -20,9 +20,9 @@ import { sendMirror, useMirror } from './store'
  *   X, Del   delete the selection, after asking (then the Geom Browser's Delete, which also
  *            asks about clones)
  *   Shift+D  duplicate the selection in place, then move the copies (G); Esc leaves them there
- *   G, R     move or rotate the selection (viewport/transform.tsx), with the keys and clicks
- *            below while it runs
- * They listen ahead of everything else (capture), so while G / R runs its keys (X, digits...)
+ *   G, R, S  move, rotate or scale the selection (viewport/transform.tsx), with the keys and
+ *            clicks below while it runs
+ * They listen ahead of everything else (capture), so while G / R / S runs its keys (X, digits...)
  * don't also reach the view keys or OpenVSP's menu shortcuts. Plain R is taken from OpenVSP's
  * View > Set Rotation Center, which has nothing to act on in the page.
  */
@@ -39,7 +39,7 @@ export function useBlenderKeys() {
         return askDelete(() => clickBrowser('Delete'))
       }
       // e.code: with Alt (Option on a Mac) e.key is another character.
-      const key = { KeyA: 'a', KeyH: 'h', KeyZ: 'z', KeyG: 'g', KeyR: 'r', KeyD: 'd', KeyX: 'x' }[e.code]
+      const key = { KeyA: 'a', KeyH: 'h', KeyZ: 'z', KeyG: 'g', KeyR: 'r', KeyS: 's', KeyD: 'd', KeyX: 'x' }[e.code]
       if (!key) return
       let action: (() => unknown) | null = null
       if (key === 'a') action = e.shiftKey ? null : e.altKey ? () => api.pick('') : () => clickBrowser('Sel All')
@@ -47,7 +47,7 @@ export function useBlenderKeys() {
       else if (key === 'z') action = e.altKey ? null : () => toggleWire(!e.shiftKey)
       else if (key === 'd') action = e.shiftKey && !e.altKey ? duplicate : null
       else if (key === 'x') action = e.shiftKey || e.altKey ? null : () => askDelete(() => clickBrowser('Delete'))
-      else if (!e.altKey && !e.shiftKey) action = () => startTransform(key === 'g' ? 'move' : 'rotate')
+      else if (!e.altKey && !e.shiftKey) action = () => startTransform(TRANSFORM_KEYS[key])
       if (!action) return
       e.preventDefault()
       e.stopPropagation()
@@ -87,8 +87,12 @@ let swallowUntil = 0
 /** The 3D view's keys are free: no prompt open and the results viewer (which covers it) shut. */
 const viewKeysFree = () => !useMirror.getState().dialogs.length && !document.querySelector('.modal-backdrop') && !useViewer.getState().open
 
-/** A key while G / R runs: X / Y / Z hold an axis, digits type the value, Enter applies, Esc
- *  cancels, G / R switch to the other. Every other key is kept from the page meanwhile. */
+/** The keys that start G, R and S. */
+const TRANSFORM_KEYS: Record<string, TransformMode> = { g: 'move', r: 'rotate', s: 'scale' }
+
+/** A key while G / R / S runs: X / Y / Z hold an axis (G and R), digits type the value, Enter
+ *  applies, Esc cancels, G / R / S switch to another. Every other key is kept from the page
+ *  meanwhile. */
 function transformKey(e: KeyboardEvent) {
   if (['Shift', 'Control', 'Alt', 'Meta'].includes(e.key)) return
   e.preventDefault()
@@ -98,8 +102,8 @@ function transformKey(e: KeyboardEvent) {
   else if (k === 'Enter') applyTransform()
   else if (/^[xyz]$/i.test(k) && !e.ctrlKey) setTransformAxis('xyz'.indexOf(k.toLowerCase()))
   else if (/^[0-9.-]$/.test(k) || k === 'Backspace') typeTransform(k)
-  else if (/^[gr]$/i.test(k) && !e.repeat) {
-    const mode = k.toLowerCase() === 'g' ? 'move' : 'rotate'
+  else if (/^[grs]$/i.test(k) && !e.repeat && !e.ctrlKey) {
+    const mode = TRANSFORM_KEYS[k.toLowerCase()]
     if (useTransform.getState().mode !== mode) {
       cancelTransform()
       void startTransform(mode)

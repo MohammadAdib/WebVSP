@@ -39,6 +39,8 @@ export const api = {
   setDrawType: (ids: string[], type: number) => request('POST', '/geoms/draw-type', { ids, type }),
   /** Rotates each geom about its own origin, about a world axis (degrees). */
   rotateGeoms: (ids: string[], axis: [number, number, number], angle: number) => request('POST', '/geoms/rotate', { ids, axis, angle }),
+  /** Scales each geom about its own origin (its XForm Scale factor times `factor`). */
+  scaleGeoms: (ids: string[], factor: number) => request('POST', '/geoms/scale', { ids, factor }),
 }
 
 /** Engine messages that aren't model events: GUI mirror output and prompt bookkeeping. */

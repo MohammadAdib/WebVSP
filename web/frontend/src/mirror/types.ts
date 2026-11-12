@@ -78,6 +78,9 @@ export interface GlDrawObj {
   /** blank: the geom's id, and whether it's selected */
   id?: string
   sel?: boolean
+  /** blank: each point's transform (the original's, then each symmetric copy's), 16 numbers
+   *  column-major apiece */
+  m?: number[]
   /** x,y,z triples */
   p: number[]
 }

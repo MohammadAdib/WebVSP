@@ -4073,6 +4073,38 @@ extern void MirrorRotateGeoms( const std::vector< std::string > & geom_ids, cons
     ErrorMgr.NoError();
 }
 
+extern void MirrorScaleGeoms( const std::vector< std::string > & geom_ids, double factor )
+{
+    Vehicle* veh = GetVehicle();
+    if ( !( factor > 0 ) || !std::isfinite( factor ) )
+    {
+        ErrorMgr.AddError( VSP_INVALID_INPUT_VAL, "MirrorScaleGeoms::Scale factor must be positive" );
+        return;
+    }
+    std::vector< Geom* > geoms;
+    for ( const std::string & id : geom_ids )
+    {
+        Geom* geom = veh->FindGeom( id );
+        if ( !geom )
+        {
+            ErrorMgr.AddError( VSP_INVALID_GEOM_ID, "MirrorScaleGeoms::Can't Find Geom " + id );
+            return;
+        }
+        geoms.push_back( geom );
+    }
+
+    // The Scale factor, as the XForm tab's slider sets it: Geom::Update scales the dimensions by
+    // its change since the last update, and Edit > Undo sets it back, scaling them back.
+    ParmMgr.BeginUndoGroup();
+    for ( Geom* geom : geoms )
+    {
+        geom->m_Scale.SetFromDevice( geom->m_Scale() * factor );
+    }
+    ParmMgr.EndUndoGroup();
+    veh->Update();
+    ErrorMgr.NoError();
+}
+
 extern bool IsEventLoopRunning( )
 {
 #ifdef VSP_USE_FLTK

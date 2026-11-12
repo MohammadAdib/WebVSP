@@ -489,6 +489,14 @@ public:
     Geom( Vehicle* vehicle_ptr );
     virtual ~Geom();
 
+    // Each Update that rebuilds the Geom's surface, placement or tessellation counts once:
+    // s_ShapeRevs over every Geom, m_ShapeRev the count when this one last changed.  Lets a
+    // viewer (WebVSP) see which Geoms look different, including changes made outside Parms
+    // (a type of cross section changed, an airfoil file read) and updates that bypass
+    // Vehicle::Update.
+    static unsigned long s_ShapeRevs;
+    unsigned long m_ShapeRev = 0;
+
     // Scaling is a template method.  Scale() computes the incremental scale factor, dispatches to
     // the per-Geom ApplyScale( double ) hook (that Geom's own dimensional Parms and geom-specific nested
     // containers), and then always recurses into the Geom-common containers -- SubSurfaces, CFD

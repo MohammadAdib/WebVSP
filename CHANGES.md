@@ -53,7 +53,8 @@ history is in [CHANGELOG.md](CHANGELOG.md).
 - A three.js 3D view drawing each geom from the GUI's own u/w tessellation, following each geom's
   draw type (wire, hidden, shade, none) and the GUI's selection. Each geom draws OpenVSP's feature
   lines (the desktop's black outline); disks (propellers in disk mode) are see-through (25%) when
-  shaded.
+  shaded. A geom is drawn again whenever OpenVSP rebuilds it, including changes no parameter
+  shows (a cross section's or airfoil's type, an airfoil file) and updates of one geom alone.
 - Mesh and NGon Mesh geoms (CompGeom results, imported STL/TRI, NGon conversions, VSPAERO's
   geometry) are drawn, per tag in the desktop's colour-wheel colours, NGon meshes with their
   polygon edges.
@@ -62,7 +63,8 @@ history is in [CHANGELOG.md](CHANGELOG.md).
   blending tangent vectors (dashed where the desktop stipples them, with arrowheads).
 - The screens' drawings in the main view mirrored: Mass Properties' CG (red point), and anything
   else a screen adds. Blank geoms shown as circles at their origins: gray, red when selected,
-  clickable.
+  clickable, and following the mouse (mirrored on their symmetric copies) while they're moved or
+  turned.
 - A toolbar (front, side, top, bottom, iso, fit), orthographic or perspective, and orbit, pan and
   zoom to the cursor with the mouse.
 - Blender's view keys: numpad 1 / 3 / 7 (Ctrl for the other side), 5, 9, and 2 / 4 / 6 / 8 orbiting
@@ -100,11 +102,13 @@ history is in [CHANGELOG.md](CHANGELOG.md).
   geom's XForm location (absolute or relative, converted into the frame it's attached to); a geom
   attached to a selected parent moves with the parent. The move is applied when the arrow is let
   go.
-- Blender's G and R: G moves the selection and R rotates it, each geom about its own origin. The
-  mouse drives it; X, Y or Z holds it to that axis (drawn through the selection in the axis's
-  colour); typing a number gives the exact distance or angle (G X 10 moves 10 along X, R Z 90
-  turns 90° about Z). A move with the mouse goes in whole units (Ctrl: freely); a rotation is
-  free (Ctrl: 5° steps). Enter or a click applies it as one Edit > Undo step; Esc or a
+- Blender's G, R and S: G moves the selection, R rotates it and S scales it, each geom about its
+  own origin (S the same every way: OpenVSP's XForm Scale, which has no per-axis scale). The
+  mouse drives it; X, Y or Z holds a move or rotation to that axis (drawn through the selection
+  in the axis's colour); typing a number gives the exact distance, angle or factor (G X 10 moves
+  10 along X, R Z 90 turns 90° about Z, S 2 doubles the size). A move with the mouse goes in
+  whole units and a scale in steps of 0.1 (Ctrl: freely); a rotation is free (Ctrl: 5° steps).
+  Enter or a click applies it as one Edit > Undo step; Esc or a
   right click cancels. Symmetric copies follow mirrored (or turned, for rotational symmetry)
   while it runs, as OpenVSP places them.
 - Shift+D duplicates the selection in place (each copy under its original's parent, or under

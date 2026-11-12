@@ -12,7 +12,7 @@ import { useMirror } from '../mirror/store'
 import type { GlDrawObj } from '../mirror/types'
 import { Navigation, useViewKeys, ViewTools } from './camera'
 import { KeysHelp } from './KeysHelp'
-import { previewMatrix, revsOf, TransformAxisLine, TransformDriver, TransformHud, usePreview, useTransform } from './transform'
+import { previewMatrix, revsOf, TransformAxisLine, TransformDriver, TransformHud, usePreview, useTransform, type Preview } from './transform'
 
 /** Opacity of the selected geom's bounding box (red) and of the active wing section's box (green). */
 export const BBOX_ALPHA = 0.5
@@ -815,7 +815,7 @@ function MoveGizmo() {
   // since every move re-tessellates them.
   const onChange = () => {
     if (!dragging.current) return
-    usePreview.setState({ ids, d: delta(), rot: null, revs: revsOf(ids) })
+    usePreview.setState({ ids, d: delta(), rot: null, scale: null, revs: revsOf(ids) })
   }
 
   useEffect(() => {
@@ -854,14 +854,66 @@ function MoveGizmo() {
   )
 }
 
+type Vec3 = [number, number, number]
+
+/** After a blank's move or rotation is applied, how long at most its markers stay where the
+ *  preview put them, waiting for the overlay to show them there (ms). */
+const BLANK_HOLD_MS = 1500
+
+/** A blank's marker points under the preview: the original's moved or turned, each symmetric
+ *  copy's mirrored (or turned) to match, with the map from the original onto it (its transform
+ *  times the inverse of the original's), as the surfaces' copies are. */
+function previewPoints(p: Preview, id: string, pts: Vec3[], m?: number[]): Vec3[] {
+  const P = previewMatrix(p, id, new THREE.Matrix4())
+  const inv0 = m && m.length >= 16 * pts.length ? new THREE.Matrix4().fromArray(m, 0).invert() : null
+  return pts.map((q, j) => {
+    let M = P
+    if (j > 0 && inv0) {
+      const S = new THREE.Matrix4().fromArray(m!, 16 * j).multiply(inv0)
+      M = S.clone().multiply(P).multiply(S.invert())
+    }
+    return new THREE.Vector3(...q).applyMatrix4(M).toArray() as Vec3
+  })
+}
+
+const samePoints = (a: Vec3[], b: Vec3[]) =>
+  a.length === b.length && a.every((p, i) => p.every((v, k) => Math.abs(v - b[i][k]) <= 1e-5 * Math.max(1, Math.abs(v))))
+
 /**
  * A blank geom: a circle at its origin (and each symmetric copy), gray, or red when it's
- * selected. Clicking one selects it, like clicking a surface.
+ * selected. Clicking one selects it, like clicking a surface. Moved or turned with the selection
+ * by the move gizmo and G / R, like the surfaces; once that's applied, the markers stay put until
+ * the overlay shows them there (it comes a moment after the model changes).
  */
 function BlankMarkers({ o }: { o: GlDrawObj }) {
-  const name = useStore((s) => (o.id ? s.geomsById[o.id]?.name : undefined))
-  const at: [number, number, number][] = []
-  for (let i = 0; i + 2 < o.p.length; i += 3) at.push([o.p[i], o.p[i + 1], o.p[i + 2]])
+  const id = o.id ?? ''
+  const name = useStore((s) => (id ? s.geomsById[id]?.name : undefined))
+  const rev = useStore((s) => s.meshRev[id] ?? 0)
+  const preview = usePreview((s) => (id && s.ids.includes(id) ? s : null))
+  const [, recheck] = useState(0)
+  const held = useRef<{ pts: Vec3[]; until: number } | null>(null)
+  const from: Vec3[] = []
+  for (let i = 0; i + 2 < o.p.length; i += 3) from.push([o.p[i], o.p[i + 1], o.p[i + 2]])
+  let at = from
+  if (!preview) {
+    held.current = null // cancelled, or another preview
+  } else if (rev <= (preview.revs[id] ?? -1)) {
+    // Previewed (the model hasn't changed since it began).
+    at = previewPoints(preview, id, from, o.m)
+    held.current = { pts: at, until: 0 }
+  } else if (held.current) {
+    // Applied: held until the overlay has them there too, or for BLANK_HOLD_MS at most.
+    const h = held.current
+    if (!h.until) h.until = performance.now() + BLANK_HOLD_MS
+    if (performance.now() < h.until && !samePoints(h.pts, from)) at = h.pts
+    else held.current = null
+  }
+  const holding = !!held.current?.until
+  useEffect(() => {
+    if (!holding) return
+    const t = window.setTimeout(() => recheck((n) => n + 1), Math.max(0, (held.current?.until ?? 0) - performance.now()) + 10)
+    return () => window.clearTimeout(t)
+  }, [holding])
   return (
     <>
       {at.map((p, i) => (
@@ -929,7 +981,7 @@ function Overlay() {
     <>
       {items.map((it, k) => {
         const o = it.o
-        if (o.t === 'blank') return <BlankMarkers key={k} o={o} />
+        if (o.t === 'blank') return <BlankMarkers key={'blank:' + o.id} o={o} />
         if (o.t === 'points')
           return (
             <points key={k} geometry={it.geo!} renderOrder={12}>

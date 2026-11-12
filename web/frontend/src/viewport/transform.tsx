@@ -16,15 +16,19 @@ const AXES: Vec3[] = [
 export const AXIS_NAMES = ['X', 'Y', 'Z']
 
 /** A move with the mouse goes in steps of MOVE_SNAP (model units) along each axis, like the move
- *  gizmo's; holding Ctrl moves freely. A rotation is free; holding Ctrl turns it in steps of
- *  ROTATE_SNAP degrees. (Blender's increment snapping, on for moves, off for rotations.) */
+ *  gizmo's, and a scale in steps of SCALE_SNAP; holding Ctrl makes either free. A rotation is
+ *  free; holding Ctrl turns it in steps of ROTATE_SNAP degrees. (Blender's increment snapping,
+ *  on for moves and scales, off for rotations.) */
 const MOVE_SNAP = 1
 const ROTATE_SNAP = 5
+const SCALE_SNAP = 0.1
+
+export type TransformMode = 'move' | 'rotate' | 'scale'
 
 /**
- * What the 3D view draws moved or turned before the geoms themselves change: the selected geoms
- * while the move gizmo is dragged or G / R runs. Each geom is drawn this way until its new mesh
- * arrives (its meshRev passes the one recorded here).
+ * What the 3D view draws moved, turned or scaled before the geoms themselves change: the selected
+ * geoms while the move gizmo is dragged or G / R / S runs. Each geom is drawn this way until its
+ * new mesh arrives (its meshRev passes the one recorded here).
  */
 export interface Preview {
   ids: readonly string[]
@@ -32,18 +36,27 @@ export interface Preview {
   d: Vec3
   /** Turned about a world axis (degrees), each geom about its own origin */
   rot: { axis: Vec3; angle: number; origins: Record<string, Vec3> } | null
+  /** Scaled by, each geom about its own origin */
+  scale: { factor: number; origins: Record<string, Vec3> } | null
   revs: Record<string, number>
 }
-export const usePreview = create<Preview>(() => ({ ids: [], d: ZERO, rot: null, revs: {} }))
+export const usePreview = create<Preview>(() => ({ ids: [], d: ZERO, rot: null, scale: null, revs: {} }))
+/** No preview. */
+export const clearPreview = () => usePreview.setState({ ids: [], d: ZERO, rot: null, scale: null })
 
 /** The preview as a matrix for one geom (identity when it isn't moved). */
 export function previewMatrix(p: Preview | null, id: string, out: THREE.Matrix4) {
   out.identity()
   if (!p) return out
+  // About the geom's own origin o: T(o) X T(-o).
+  const aboutOrigin = (o: Vec3, m: THREE.Matrix4) =>
+    out.makeTranslation(o[0], o[1], o[2]).multiply(m).multiply(new THREE.Matrix4().makeTranslation(-o[0], -o[1], -o[2]))
   if (p.rot) {
-    const o = p.rot.origins[id] ?? ZERO
     const r = new THREE.Matrix4().makeRotationAxis(new THREE.Vector3(...p.rot.axis).normalize(), THREE.MathUtils.degToRad(p.rot.angle))
-    out.makeTranslation(o[0], o[1], o[2]).multiply(r).multiply(new THREE.Matrix4().makeTranslation(-o[0], -o[1], -o[2]))
+    aboutOrigin(p.rot.origins[id] ?? ZERO, r)
+  } else if (p.scale) {
+    const f = p.scale.factor
+    aboutOrigin(p.scale.origins[id] ?? ZERO, new THREE.Matrix4().makeScale(f, f, f))
   }
   if (p.d.some((v) => v !== 0)) out.premultiply(new THREE.Matrix4().makeTranslation(p.d[0], p.d[1], p.d[2]))
   return out
@@ -56,14 +69,16 @@ export const revsOf = (ids: readonly string[]) => {
 }
 
 /**
- * Blender's G (move) and R (rotate) on the selected geoms. The mouse drives it (moving in the
- * view's plane, or turning about the view's axis around the selection); X, Y or Z holds it to
- * that world axis (again: free); typing a number gives the exact distance or angle (along X when
- * no axis is held, about the view's axis for R). Enter or a click applies it, Esc or a right
- * click cancels. Rotation turns each geom about its own origin.
+ * Blender's G (move), R (rotate) and S (scale) on the selected geoms. The mouse drives it (moving
+ * in the view's plane, turning about the view's axis around the selection, or scaling with the
+ * mouse's distance from the selection on screen); X, Y or Z holds a move or rotation to that
+ * world axis (again: free); typing a number gives the exact distance, angle or factor (along X
+ * when no axis is held, about the view's axis for R). Enter or a click applies it, Esc or a right
+ * click cancels. Rotation and scaling act on each geom about its own origin; OpenVSP scales a
+ * geom the same in every direction, so S takes no axis.
  */
 interface Transform {
-  mode: 'move' | 'rotate' | null
+  mode: TransformMode | null
   /** Bumped per run: the mouse's start is taken again */
   run: number
   ids: string[]
@@ -76,6 +91,7 @@ interface Transform {
   /** From the mouse */
   mouseMove: Vec3
   mouseAngle: number
+  mouseScale: number
   /** Toward the viewer in the pane the mouse drives (rotation axis when none is held) */
   viewAxis: Vec3
 }
@@ -89,6 +105,7 @@ export const useTransform = create<Transform>(() => ({
   typed: '',
   mouseMove: ZERO,
   mouseAngle: 0,
+  mouseScale: 1,
   viewAxis: [0, 0, 1],
 }))
 
@@ -97,8 +114,8 @@ const typedValue = (t: string) => {
   return Number.isFinite(v) ? v : t.startsWith('-') ? -0 : 0
 }
 
-/** The move or rotation as it stands. */
-export function transformResult(s: Transform): { d: Vec3 } | { axis: Vec3; angle: number } {
+/** The move, rotation or scale as it stands. */
+export function transformResult(s: Transform): { d: Vec3 } | { axis: Vec3; angle: number } | { factor: number } {
   if (s.mode === 'move') {
     if (s.typed) {
       const a = AXES[s.axis ?? 0]
@@ -107,6 +124,7 @@ export function transformResult(s: Transform): { d: Vec3 } | { axis: Vec3; angle
     }
     return { d: s.mouseMove }
   }
+  if (s.mode === 'scale') return { factor: s.typed ? typedValue(s.typed) : s.mouseScale }
   const axis = s.axis === null ? s.viewAxis : AXES[s.axis]
   return { axis, angle: s.typed ? typedValue(s.typed) : s.mouseAngle }
 }
@@ -117,25 +135,28 @@ useTransform.subscribe((s, prev) => {
   if (s === prev) return
   const r = transformResult(s)
   const revs = s.run !== prev.run ? revsOf(s.ids) : usePreview.getState().revs
-  if ('d' in r) usePreview.setState({ ids: s.ids, d: r.d, rot: null, revs })
-  else usePreview.setState({ ids: s.ids, d: ZERO, rot: { axis: r.axis, angle: r.angle, origins: s.origins }, revs })
+  const none = { d: ZERO, rot: null, scale: null }
+  if ('d' in r) usePreview.setState({ ...none, ids: s.ids, d: r.d, revs })
+  // A factor typed as far as "0." draws the geoms as they are.
+  else if ('factor' in r) usePreview.setState({ ...none, ids: s.ids, scale: { factor: r.factor > 0 ? r.factor : 1, origins: s.origins }, revs })
+  else usePreview.setState({ ...none, ids: s.ids, rot: { axis: r.axis, angle: r.angle, origins: s.origins }, revs })
 })
 
-/** Starts G or R on the selection, or on these geoms (none: nothing happens). */
-export async function startTransform(mode: 'move' | 'rotate', geoms?: string[]) {
+/** Starts G, R or S on the selection, or on these geoms (none: nothing happens). */
+export async function startTransform(mode: TransformMode, geoms?: string[]) {
   const ids = geoms ?? useStore.getState().tree?.active ?? []
   if (!ids.length) return
   const ps = await Promise.all(ids.map((id) => api.geomOrigin(id)))
   const origins = Object.fromEntries(ids.map((id, i) => [id, ps[i]]))
   const pivot: Vec3 = [0, 0, 0]
   for (const p of ps) for (let k = 0; k < 3; k++) pivot[k] += p[k] / ps.length
-  useTransform.setState((s) => ({ mode, run: s.run + 1, ids: [...ids], origins, pivot, axis: null, typed: '', mouseMove: ZERO, mouseAngle: 0 }))
+  useTransform.setState((s) => ({ mode, run: s.run + 1, ids: [...ids], origins, pivot, axis: null, typed: '', mouseMove: ZERO, mouseAngle: 0, mouseScale: 1 }))
 }
 
 export function cancelTransform() {
   if (!useTransform.getState().mode) return
   useTransform.setState({ mode: null })
-  usePreview.setState({ ids: [], d: ZERO, rot: null })
+  clearPreview()
 }
 
 export function applyTransform() {
@@ -143,26 +164,31 @@ export function applyTransform() {
   if (!s.mode) return
   const r = transformResult(s)
   useTransform.setState({ mode: null })
-  const clear = () => usePreview.setState({ ids: [], d: ZERO, rot: null })
   if ('d' in r) {
-    if (r.d.every((v) => v === 0)) return clear()
-    api.moveGeoms(s.ids, r.d).catch(clear)
+    if (r.d.every((v) => v === 0)) return clearPreview()
+    api.moveGeoms(s.ids, r.d).catch(clearPreview)
+  } else if ('factor' in r) {
+    if (!(r.factor > 0) || r.factor === 1) return clearPreview()
+    api.scaleGeoms(s.ids, r.factor).catch(clearPreview)
   } else {
-    if (r.angle === 0) return clear()
-    api.rotateGeoms(s.ids, r.axis, r.angle).catch(clear)
+    if (r.angle === 0) return clearPreview()
+    api.rotateGeoms(s.ids, r.axis, r.angle).catch(clearPreview)
   }
 }
 
-/** X / Y / Z: hold to that axis; the same again lets it go. */
+/** X / Y / Z: hold to that axis; the same again lets it go. Not for S (OpenVSP scales a geom
+ *  the same every way). */
 export function setTransformAxis(axis: number) {
-  useTransform.setState((s) => ({ axis: s.axis === axis ? null : axis }))
+  useTransform.setState((s) => (s.mode === 'scale' ? {} : { axis: s.axis === axis ? null : axis }))
 }
 
-/** A key typed into the value: digits, '.', '-' (flips the sign), Backspace. */
+/** A key typed into the value: digits, '.', '-' (flips the sign; not for a scale factor),
+ *  Backspace. */
 export function typeTransform(key: string) {
   useTransform.setState((s) => {
     let t = s.typed
     if (key === 'Backspace') t = t.slice(0, -1)
+    else if (key === '-' && s.mode === 'scale') return {}
     else if (key === '-') t = t.startsWith('-') ? t.slice(1) : '-' + t
     else if (key === '.' && t.includes('.')) return {}
     else t += key
@@ -184,7 +210,7 @@ export function TransformDriver({ active }: { active: boolean }) {
   const { camera, gl } = useThree()
   const mode = useTransform((s) => s.mode)
   const run = useTransform((s) => s.run)
-  const start = useRef<{ run: number; x: number; y: number; plane0: THREE.Vector3 | null; lastAngle: number; turned: number } | null>(null)
+  const start = useRef<{ run: number; x: number; y: number; plane0: THREE.Vector3 | null; lastAngle: number; turned: number; dist0: number } | null>(null)
 
   useEffect(() => {
     if (!active || !mode) return
@@ -213,8 +239,12 @@ export function TransformDriver({ active }: { active: boolean }) {
       const c = screenOf(pivot)
       return Math.atan2(-(y - c.y), x - c.x)
     }
+    // How far the mouse is from the selection on screen (pixels): a scale is this over where it
+    // started.
+    const distAt = (x: number, y: number) => screenOf(pivot).distanceTo(new THREE.Vector2(x, y))
     if (start.current?.run !== run) {
-      start.current = { run, x: pointer.x, y: pointer.y, plane0: planePoint(pointer.x, pointer.y), lastAngle: angleAt(pointer.x, pointer.y), turned: 0 }
+      const { x, y } = pointer
+      start.current = { run, x, y, plane0: planePoint(x, y), lastAngle: angleAt(x, y), turned: 0, dist0: Math.max(distAt(x, y), 1) }
     }
     // Where the mouse is, and whether Ctrl is held: pressing or letting go of Ctrl redoes the
     // result without the mouse having to move.
@@ -248,6 +278,11 @@ export function TransformDriver({ active }: { active: boolean }) {
         let deg = THREE.MathUtils.radToDeg(s0.turned) * facing
         if (ctrl) deg = Math.round(deg / ROTATE_SNAP) * ROTATE_SNAP
         useTransform.setState({ mouseAngle: deg })
+      } else if (t.mode === 'scale') {
+        let f = distAt(x, y) / s0.dist0
+        // Snapped, never down to 0. Rounded to the step's decimals, so 0.1 * 3 is 0.3.
+        if (!ctrl) f = Number((Math.max(Math.round(f / SCALE_SNAP), 1) * SCALE_SNAP).toFixed(6))
+        useTransform.setState({ mouseScale: Math.max(f, 1e-6) })
       }
     }
     const onMove = (e: PointerEvent) => {
@@ -313,17 +348,22 @@ export function TransformHud() {
       ) : (
         `D ${fmt(r.d[0])}, ${fmt(r.d[1])}, ${fmt(r.d[2])}`
       )
+    ) : 'factor' in r ? (
+      `${s.typed || fmt(r.factor)}×`
     ) : (
       <>
         {s.typed || fmt(r.angle)}°{axis && <> about {axis}</>}
       </>
     )
+  const hint = {
+    move: 'X Y Z axis · type a value · Enter or click to apply · Esc or right-click to cancel · Ctrl moves freely',
+    rotate: `X Y Z axis · type a value · Enter or click to apply · Esc or right-click to cancel · Ctrl snaps to ${ROTATE_SNAP}°`,
+    scale: 'the same every way (OpenVSP has no per-axis scale) · type a factor · Enter or click to apply · Esc or right-click to cancel · Ctrl scales freely',
+  }[s.mode]
   return (
     <div className="transform-hud" role="status">
-      <b>{s.mode === 'move' ? 'Move' : 'Rotate'}</b> <span>{value}</span>
-      <span className="hint">
-        X Y Z axis · type a value · Enter or click to apply · Esc or right-click to cancel · {s.mode === 'move' ? 'Ctrl moves freely' : `Ctrl snaps to ${ROTATE_SNAP}°`}
-      </span>
+      <b>{{ move: 'Move', rotate: 'Rotate', scale: 'Scale' }[s.mode]}</b> <span>{value}</span>
+      <span className="hint">{hint}</span>
     </div>
   )
 }

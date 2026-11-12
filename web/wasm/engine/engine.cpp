@@ -26,6 +26,8 @@
 //   drawType(a=ids, value=type)         geoms' draw type (GEOM_DRAW_WIRE=0 ... NONE=4)
 //   rotate(a=ids, b="ax,ay,az", value=degrees)  rotate geoms about a world axis, each about its
 //                                       own origin (one undo step)
+//   scale(a=ids, value=factor)          scale geoms, each about its own origin, by their XForm
+//                                       Scale factor (one undo step)
 
 #include "VSP_Geom_API.h"
 #include "APIErrorMgr.h"
@@ -607,7 +609,9 @@ string TreeSignature()
     return sig + vsp::GetVSPFileName();
 }
 
-// Everything that shapes a Geom's surfaces: its Parms, its XSecs' Parms, and its parent's.
+// Everything that shapes a Geom's surfaces: its Parms, its XSecs' Parms, its parent's, and how
+// many times it has been rebuilt (Geom::m_ShapeRev: what no Parm shows, such as a cross section's
+// type changed or an airfoil file read).
 size_t Fingerprint( const string &gid, std::unordered_map< string, size_t > &cache )
 {
     auto hit = cache.find( gid );
@@ -619,6 +623,11 @@ size_t Fingerprint( const string &gid, std::unordered_map< string, size_t > &cac
     std::hash< double > hd;
     size_t h = hs( gid );
     auto mix = [&h]( size_t v ) { h ^= v + 0x9e3779b97f4a7c15ULL + ( h << 6 ) + ( h >> 2 ); };
+    Vehicle *veh = VehicleMgr.GetVehicle();
+    if ( Geom *g = veh ? veh->FindGeom( gid ) : nullptr )
+    {
+        mix( std::hash< unsigned long >()( g->m_ShapeRev ) );
+    }
     for ( const string &pid : vsp::GetGeomParmIDs( gid ) )
     {
         mix( hs( pid ) );
@@ -688,10 +697,18 @@ void EmitModelChanged( bool tree, const vector< string > &changed, const vector<
           ",\"undo\":" + NO_UNDO + "}" );
 }
 
-// Every ~150 ms, and right after each edit: report what the GUI or a request changed.
+// Every ~150 ms, and right after each edit: report what the GUI or a request changed. Looked
+// into when the vehicle updated, or any Geom was rebuilt (some screens update only their Geom,
+// which Vehicle::Update's count never sees: a wing's airfoil type, say).
+unsigned long g_ShapeRevs = 0;
 void Watch( const string &label = "", bool force = false )
 {
     bool updated = vsp::GetAndResetUpdateCount() > 0;
+    if ( Geom::s_ShapeRevs != g_ShapeRevs )
+    {
+        g_ShapeRevs = Geom::s_ShapeRevs;
+        updated = true;
+    }
     string sig = TreeSignature();
     bool tree_changed = sig != g_TreeSig;
     if ( !updated && !tree_changed && !force )
@@ -833,6 +850,13 @@ void Run( const Job &j )
         vsp::MirrorRotateGeoms( SplitCsv( j.a ), axis, j.value );
         string err = TakeErrors();
         Watch( "Rotate", true );
+        return Result( j.id, err, "{\"ok\":true}" );
+    }
+    if ( j.op == "scale" )
+    {
+        vsp::MirrorScaleGeoms( SplitCsv( j.a ), j.value );
+        string err = TakeErrors();
+        Watch( "Scale", true );
         return Result( j.id, err, "{\"ok\":true}" );
     }
     if ( j.op == "origin" )

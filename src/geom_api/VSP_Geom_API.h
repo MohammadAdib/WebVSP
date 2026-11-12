@@ -11613,6 +11613,19 @@ extern void MirrorRotateGeoms( const std::vector< std::string > & geom_ids, cons
     \ingroup Visualization
 */
 /*!
+    Scale Geoms in the 3D view, each about its own origin, as Blender's S does: multiplies each
+    one's XForm Scale factor (which resizes all of its dimensions, as the XForm tab's Scale
+    slider does), as one step of Edit > Undo. OpenVSP scales a Geom the same in every direction.
+    \param [in] geom_ids vector<string> Geom IDs
+    \param [in] factor double How much bigger (above 1) or smaller (below 1) to make them
+*/
+
+extern void MirrorScaleGeoms( const std::vector< std::string > & geom_ids, double factor );
+
+/*!
+    \ingroup Visualization
+*/
+/*!
     Duplicate Geoms in place, as Blender's Shift+D does: each copy goes under its original's
     parent (or under the copy of its parent, when that is duplicated too), at the same spot. The
     clipboard is left alone.
