@@ -722,7 +722,8 @@ interface Gizmo extends THREE.Object3D {
 
 /**
  * Keep the move arrows (lines and cones) pointing the positive way along their axes wherever
- * the camera is. three.js mirrors them to the camera's side; undo that after each update.
+ * the camera is. three.js mirrors an axis to the camera's side whenever it points even slightly
+ * away (so from straight above, X and Y would flip back and forth); undo that after each update.
  */
 function keepArrowsOutward(controls: TransformControlsImpl) {
   const gz = (controls as unknown as { gizmo: Gizmo }).gizmo
@@ -818,9 +819,11 @@ function MoveGizmo() {
     usePreview.setState({ ids, d: delta(), rot: null, scale: null, revs: revsOf(ids) })
   }
 
-  useEffect(() => {
+  // drei builds new controls whenever the camera changes (a switch to or from orthographic, as
+  // the top view makes), so check every frame: patching is done once per controls.
+  useFrame(() => {
     if (controls.current) keepArrowsOutward(controls.current)
-  }, [key, center])
+  })
 
   if (!ids.length || !center || transforming) return null
   return (

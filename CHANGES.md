@@ -98,10 +98,10 @@ history is in [CHANGELOG.md](CHANGELOG.md).
 - Z switches the selection between wireframe and shaded; Shift+Z does it for every geom
   (shaded if every shown geom is wireframe, otherwise wireframe).
 - Move gizmo: Blender-style X/Y/Z arrows on the selection, at the middle of the selected geoms'
-  origins. Dragging moves the geoms along that axis, snapped to a 1-unit grid, by setting each
-  geom's XForm location (absolute or relative, converted into the frame it's attached to); a geom
-  attached to a selected parent moves with the parent. The move is applied when the arrow is let
-  go.
+  origins, always pointing the positive way along their axes (from any view). Dragging moves the
+  geoms along that axis, snapped to a 1-unit grid, by setting each geom's XForm location
+  (absolute or relative, converted into the frame it's attached to); a geom attached to a
+  selected parent moves with the parent. The move is applied when the arrow is let go.
 - Blender's G, R and S: G moves the selection, R rotates it and S scales it, each geom about its
   own origin (S the same every way: OpenVSP's XForm Scale, which has no per-axis scale). The
   mouse drives it; X, Y or Z holds a move or rotation to that axis (drawn through the selection

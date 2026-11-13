@@ -240,7 +240,8 @@ its original, so a move or rotation preview is drawn mirrored on the copies (S·
   (`usePreview`); on release `api.moveGeoms(ids, delta)` → `MirrorMoveGeoms`, which
   converts the world delta into each geom's abs/rel location frame, skips geoms that follow a
   selected ancestor, and sets the parms inside one undo group. `keepArrowsOutward` patches the
-  gizmo so arrows always point +X/+Y/+Z and thickens its axis lines.
+  gizmo so arrows always point +X/+Y/+Z and thickens its axis lines; it's checked every frame,
+  since drei makes new controls whenever the camera changes (orthographic for the axis views).
 - **Clicks**: a click on a mesh picks it; Shift/Ctrl/Cmd toggles; a click on nothing (not a
   drag, not on the gizmo) deselects.
 - **Blender keys** (`mirror/blenderKeys.ts`): A, Alt+A, H, Shift+H, Alt+H press the Geom
