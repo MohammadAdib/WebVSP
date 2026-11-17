@@ -88,8 +88,9 @@ interface RigProps {
   request: ViewRequest
   /** The model's bounding box (fetched when a view is requested). */
   getBounds: () => Promise<Box | null>
-  /** The model's bounding box as the model changes, if known: the clip planes follow it, and a
-   *  model grown past AUTO_FIT_GROWTH times the size it was framed at is framed again. */
+  /** The model's bounding box as the model changes, if known (null: nothing shown): the clip
+   *  planes follow it, and a model grown past AUTO_FIT_GROWTH times the size it was framed at,
+   *  or shown after nothing was, is framed again. */
   bounds?: Box | null
   onBounds?: (b: { center: [number, number, number]; size: [number, number, number]; radius: number }) => void
   /** Each frame: how far away the model looks, in model radii (e.g. to fade wireframe). */
@@ -108,6 +109,8 @@ function CameraRig({ request, getBounds, bounds, onBounds, onFrame, clipScale = 
   const sphere = useRef(new THREE.Sphere(new THREE.Vector3(), 10))
   // The model's radius when the view was last fitted to it (null: not yet).
   const fittedRadius = useRef<number | null>(null)
+  // Nothing shown, as last seen: the view has nothing to frame (only the empty model's default).
+  const empty = useRef(false)
   // Last pose, carried over when switching between perspective and orthographic.
   const pose = useRef<{ dir: THREE.Vector3; target: THREE.Vector3; height: number } | null>(null)
   const lastCamera = useRef<THREE.Camera | null>(null)
@@ -173,6 +176,7 @@ function CameraRig({ request, getBounds, bounds, onBounds, onFrame, clipScale = 
   }
   /** The model's box, read for a view: its sphere drives the clip planes and zoom limits. */
   const takeBounds = (bb: Box | null) => {
+    empty.current = !bb
     const b = boxSphere(bb)
     sphere.current.set(b.center, b.radius)
     onBounds?.({ center: b.center.toArray(), size: b.size.toArray(), radius: b.radius })
@@ -278,16 +282,21 @@ function CameraRig({ request, getBounds, bounds, onBounds, onFrame, clipScale = 
   }, [request, controls, camera, ready])
 
   // The model changed: the clip planes follow it, the camera staying where it is; but a model
-  // grown past AUTO_FIT_GROWTH times the size it was fitted at is fitted again, as F does (looking
-  // the way the view looks, or will at the end of a move to a view).
+  // grown past AUTO_FIT_GROWTH times the size it was fitted at, or shown after nothing was (all
+  // hidden, or an empty model), is fitted again, as F does (looking the way the view looks, or
+  // will at the end of a move to a view).
   useEffect(() => {
-    if (!bounds) return
+    if (!bounds) {
+      empty.current = true
+      return
+    }
     const { center, radius } = boxSphere(bounds)
     const fitted = fittedRadius.current
-    if (ctl && ready && fitted !== null && radius > fitted * AUTO_FIT_GROWTH) {
+    if (ctl && ready && fitted !== null && (empty.current || radius > fitted * AUTO_FIT_GROWTH)) {
       takeBounds(bounds)
       fitTo(anim.current?.to.dir.clone() ?? camera.position.clone().sub(ctl.target).normalize())
     } else {
+      empty.current = false
       sphere.current.set(center, radius)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

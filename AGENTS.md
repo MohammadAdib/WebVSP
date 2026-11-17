@@ -280,7 +280,8 @@ its original, so a move or rotation preview is drawn mirrored on the copies (S·
   bounding sphere across `FIT_SCALE` of the view's shorter side. The rig's `bounds` (the shown
   geoms' box, read by `useModelBox` in `Viewport.tsx` after each model change) keeps the clip
   planes on the model as it changes, and a model grown past `AUTO_FIT_GROWTH` (10) times the
-  radius it was last fitted at is fitted again, from the view's direction; `center` (C, View > Center and
+  radius it was last fitted at, or shown after nothing was (`bounds` null: everything hidden, or
+  an empty model), is fitted again, from the view's direction; `center` (C, View > Center and
   Center All through `VIEW_ITEMS` in `mirror/Window.tsx`) only pans to the model, keeping the
   zoom. Numpad 4 / 6 / 8 / 2 turn `ORBIT_STEP` (30°); 8 / 2 step the elevation, held within
   `MAX_ELEVATION` (Z stays up, so the view can't go over a pole). `StableOrbitControls` keeps

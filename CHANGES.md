@@ -72,7 +72,8 @@ history is in [CHANGELOG.md](CHANGELOG.md).
   model; C (View > Center) centers it, keeping the zoom. The side view (3) has the nose on the
   left, as in Blender.
 - A model that grows to more than 10 times the size it was last fitted at is fitted again, as F
-  does; below that, the view stays put and only its clip planes follow the model.
+  does, and so is whatever is shown after nothing was (everything hidden, or an empty model);
+  otherwise the view stays put and only its clip planes follow the model.
 - Moving to a view is animated (keys, F5-F12, toolbar, orbit steps, the orientation gizmo's
   balls), turning in elevation and compass direction so top and bottom views arrive the right
   way round.
