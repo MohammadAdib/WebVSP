@@ -48,7 +48,7 @@ the work lives in a handful of files.
 |---|---|
 | `web/frontend/` | The page: Vite + React 19 + TypeScript, three.js via @react-three/fiber and drei, zustand stores. |
 | `web/wasm/` | The engine: OpenVSP compiled to WebAssembly, headless FLTK, build scripts. |
-| `.github/workflows/pages.yml` | On every push to `main`: builds the engine, then the page with it, and deploys to GitHub Pages. |
+| `.github/workflows/pages.yml` | On every push to `main` (or a run asked for by the `legacy` branch): builds the engine, then the page with it, for both branches, and deploys them to GitHub Pages, `legacy` under `/legacy`. |
 
 ### The engine: `web/wasm/`
 
@@ -371,6 +371,11 @@ then deploys to GitHub Pages. Nothing is built or uploaded by hand, so any clone
   WebAssembly builds: delabella adds `-mfma` on x86-64 hosts (so it also gets `-msimd128`), and
   Eigen builds a Fortran LAPACK when a Fortran compiler is around (so only its headers are
   installed). Older CMake versions read FLTK's type-size checks wrongly, hence the pinned CMake.
+- Two sites, one deploy: the workflow builds `main` (OpenVSP 3.55, the site's root) and the
+  `legacy` branch (OpenVSP 3.43, at `/legacy`) side by side and deploys them together. The
+  legacy site is cached by its branch's commit, so it's rebuilt only when that branch moves; a
+  broken legacy build deploys the last good one instead and doesn't hold up `main`. Pushing to
+  `legacy` runs its `legacy.yml`, which only asks `main`'s `pages.yml` to run.
 - `workflow_dispatch` runs it on any branch (builds everything; only `main` deploys).
 - Changing the Emscripten version: update `EMSDK_VERSION` (and `CCACHE_COMPILERCHECK`) in the
   workflow, and the version in `build_wasm.ps1`'s comment.
@@ -379,10 +384,14 @@ then deploys to GitHub Pages. Nothing is built or uploaded by hand, so any clone
 
 ## 8. Conventions and traps
 
-- **Repos and branches.** One branch, `main`, tracking `origin` (`MohammadAdib/WebVSP`); pushing
-  it deploys. `upstream` is OpenVSP itself, for pulling its releases: **never push to it** (its
-  push URL is disabled). `MohammadAdib/WebVSP` is a GitHub fork of `OpenVSP/OpenVSP`, so GitHub
-  compares it with upstream and can sync OpenVSP's new commits.
+- **Repos and branches.** `main` tracks `origin` (`MohammadAdib/WebVSP`); pushing it deploys.
+  `legacy` is WebVSP on OpenVSP 3.43.3 (the tag `OpenVSP_3.43.3` plus WebVSP's changes, ported:
+  no NGon meshes, STEP guards and the tree widget's icon clicks done 3.43's way); it shares
+  `main`'s page. Bring `main`'s later changes to it by cherry-picking them (never merge `main`
+  into it: that would bring OpenVSP 3.55 with them). `upstream` is OpenVSP itself, for pulling
+  its releases: **never push to it** (its push URL is disabled). `MohammadAdib/WebVSP` is a
+  GitHub fork of `OpenVSP/OpenVSP`, so GitHub compares it with upstream and can sync OpenVSP's
+  new commits.
 - **Commits**: only when asked; no AI co-author or "Generated with" lines.
 - **Threading.** All OpenVSP calls happen on OpenVSP's pthread in the module. The page reaches
   it only through the exported, thread-safe functions; WebMirror's `PostEvent` and

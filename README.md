@@ -11,6 +11,8 @@
 
 **Open it: https://mohammadadib.github.io/WebVSP/**
 
+On OpenVSP 3.43 instead (the `legacy` branch): https://mohammadadib.github.io/WebVSP/legacy/
+
 Nothing to install. OpenVSP and all of its functionality, compiled to WebAssembly, runs in the browser tab on any device that can access the webpage!
 
 </td>
@@ -58,6 +60,7 @@ To build desktop OpenVSP itself, see the
 
 ## Source and license
 
-WebVSP is a fork of OpenVSP 3.55.0 ([CHANGELOG.md](CHANGELOG.md) is OpenVSP's history).
+WebVSP is a fork of OpenVSP 3.55.0 ([CHANGELOG.md](CHANGELOG.md) is OpenVSP's history); the
+`legacy` branch is the same on OpenVSP 3.43.3.
 Everything outside `web/` is OpenVSP, with small changes for the web app. OpenVSP is available
 under the NASA Open Source Agreement (NOSA) version 1.3; see [LICENSE](LICENSE).

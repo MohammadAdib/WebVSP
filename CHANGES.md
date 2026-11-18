@@ -10,6 +10,7 @@ history is in [CHANGELOG.md](CHANGELOG.md).
   cross-origin isolated for it.
 - Hosted on GitHub Pages; a push to `main` builds the engine and the page in CI and deploys them,
   with nothing built or uploaded by hand.
+- The same on OpenVSP 3.43.3 at `/legacy` (the `legacy` branch), built and deployed with it.
 - The WebVSP icon as the favicon, and installable as an app (a web app manifest).
 
 ## OpenVSP's GUI, mirrored

@@ -1,9 +1,13 @@
 # Builds WebVSP and deploys it to GitHub Pages: one push to main and it's live.
-#   engine  OpenVSP, its GUI and VSPAERO compiled to WebAssembly (web/wasm/build_wasm.ps1)
-#   page    the web app (web/frontend), with the engine in it
-#   deploy  to GitHub Pages
+#   build   per site: the engine (OpenVSP, its GUI and VSPAERO compiled to WebAssembly by
+#           web/wasm/build_wasm.ps1), then the web app (web/frontend) with the engine in it
+#             main    OpenVSP 3.55, at the site's root
+#             legacy  OpenVSP 3.43 (the legacy branch), at /legacy
+#   deploy  both sites to GitHub Pages, as one
 # The third-party libraries and FLTK change rarely: they're cached, keyed on their sources.
-# OpenVSP itself compiles through ccache, so a push rebuilds only what it changed.
+# OpenVSP itself compiles through ccache, so a push rebuilds only what it changed. The legacy
+# site is cached by its branch's commit, so it's rebuilt only when that branch moves; a push to
+# the legacy branch runs this workflow (see legacy.yml on that branch).
 name: Build and deploy WebVSP
 
 on:
@@ -30,7 +34,20 @@ env:
   CMAKE_VERSION: 4.4.4
 
 jobs:
-  engine:
+  build:
+    name: build (${{ matrix.site }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - site: main
+            ref: ''         # the commit this run is for
+            ccache: ccache
+          - site: legacy
+            ref: legacy
+            ccache: ccache-legacy
+    # A broken legacy build doesn't hold up main's: the last good legacy site is deployed instead.
+    continue-on-error: ${{ matrix.site == 'legacy' }}
     runs-on: ubuntu-latest
     timeout-minutes: 240
     env:
@@ -41,27 +58,45 @@ jobs:
       CCACHE_MAXSIZE: 2G
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.ref }}
+
+      - name: Revision
+        id: rev
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      # The legacy site as built from this commit before, if it was: nothing to build then.
+      - name: Built site (cached)
+        id: site
+        if: matrix.site == 'legacy'
+        uses: actions/cache@v4
+        with:
+          path: web/frontend/dist
+          key: site-legacy-${{ steps.rev.outputs.sha }}
 
       # CMake pinned to the version the engine is developed with: older ones read the type sizes
       # FLTK's configure checks for out of WebAssembly objects wrongly.
       - name: Tools
+        if: steps.site.outputs.cache-hit != 'true'
         run: |
           sudo apt-get update && sudo apt-get install -y ninja-build ccache
           pip install --user cmake==${{ env.CMAKE_VERSION }}
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Tool versions
+        if: steps.site.outputs.cache-hit != 'true'
         run: cmake --version && ninja --version && ccache --version | head -1
 
       - name: Emscripten (cached)
         id: emsdk-cache
+        if: steps.site.outputs.cache-hit != 'true'
         uses: actions/cache@v4
         with:
           path: emsdk
           key: emsdk-${{ env.EMSDK_VERSION }}
 
       - name: Emscripten (install)
-        if: steps.emsdk-cache.outputs.cache-hit != 'true'
+        if: steps.site.outputs.cache-hit != 'true' && steps.emsdk-cache.outputs.cache-hit != 'true'
         run: |
           git clone --depth 1 https://github.com/emscripten-core/emsdk.git emsdk
           emsdk/emsdk install ${{ env.EMSDK_VERSION }}
@@ -70,19 +105,22 @@ jobs:
       # Libraries and FLTK: rebuilt only when their sources or the build setup change.
       - name: Libraries and FLTK (cached)
         id: libs-cache
+        if: steps.site.outputs.cache-hit != 'true'
         uses: actions/cache@v4
         with:
           path: build/libs-wasm
           key: libs-wasm-${{ env.EMSDK_VERSION }}-cmake${{ env.CMAKE_VERSION }}-${{ hashFiles('Libraries/**', 'web/wasm/fltk/**', 'web/wasm/toolchain.cmake', 'web/wasm/build_wasm.ps1') }}
 
       - name: Compiler cache
+        if: steps.site.outputs.cache-hit != 'true'
         uses: actions/cache@v4
         with:
           path: .ccache
-          key: ccache-${{ env.EMSDK_VERSION }}-${{ github.sha }}
-          restore-keys: ccache-${{ env.EMSDK_VERSION }}-
+          key: ${{ matrix.ccache }}-${{ env.EMSDK_VERSION }}-${{ steps.rev.outputs.sha }}
+          restore-keys: ${{ matrix.ccache }}-${{ env.EMSDK_VERSION }}-
 
       - name: Build the engine
+        if: steps.site.outputs.cache-hit != 'true'
         shell: bash
         run: |
           source emsdk/emsdk_env.sh > /dev/null
@@ -98,50 +136,66 @@ jobs:
             test -s web/frontend/public/wasm/$f.wasm || { echo "::error::$f.wasm was not built"; exit 1; }
           done
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: engine
-          path: web/frontend/public/wasm
-          retention-days: 7
-
-  page:
-    needs: engine
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          sparse-checkout: web/frontend
-
       - uses: actions/setup-node@v4
+        if: steps.site.outputs.cache-hit != 'true'
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: web/frontend/package-lock.json
 
-      - uses: actions/download-artifact@v4
-        with:
-          name: engine
-          path: web/frontend/public/wasm
-
-      - name: Build
+      - name: Build the page
+        if: steps.site.outputs.cache-hit != 'true'
         working-directory: web/frontend
         run: |
           npm ci
           npm run build
 
-      - uses: actions/configure-pages@v5
-
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
+          name: site-${{ matrix.site }}
           path: web/frontend/dist
+          retention-days: 7
 
   deploy:
-    needs: page
+    needs: build
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: site-main
+          path: site
+
+      - id: legacy
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: site-legacy
+          path: site/legacy
+
+      # The legacy build failed: deploy the last legacy site that built.
+      - name: Last legacy site
+        if: steps.legacy.outcome != 'success'
+        uses: actions/cache/restore@v4
+        with:
+          path: web/frontend/dist
+          key: site-legacy-none
+          restore-keys: site-legacy-
+
+      - name: Put the last legacy site in place
+        if: steps.legacy.outcome != 'success'
+        run: |
+          if [ -d web/frontend/dist ]; then mkdir -p site/legacy && cp -r web/frontend/dist/. site/legacy/
+          else echo "::warning::No legacy site to deploy"; fi
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
       - id: deployment
         uses: actions/deploy-pages@v4

@@ -33,7 +33,8 @@ WebAssembly, on Linux), builds the page with it, and deploys both to GitHub Page
 that touches `src/`, `Libraries/`, `web/` or the workflow. Nothing needs building or uploading
 by hand, so it works from any clone. The libraries are cached and OpenVSP compiles through
 ccache, so ordinary pushes rebuild only what changed; the first run, or one that changes the
-libraries, takes much longer.
+libraries, takes much longer. The same run builds the `legacy` branch (OpenVSP 3.43) and
+deploys it at `/legacy`; pushing to `legacy` starts that run too.
 
 ## Design notes
 
