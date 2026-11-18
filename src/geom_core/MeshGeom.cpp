@@ -943,8 +943,19 @@ void MeshGeom::WriteX3D( xmlNodePtr node )
 
 void MeshGeom::UpdateBBox()
 {
+    // Around the mesh and its symmetric copies.
+    vector< Matrix4d > mats;
+    vector< bool > mirrored;
+    GetSymmMeshMats( mats, mirrored );
     BndBox new_box;
-    ::UpdateBBox( new_box, m_TMeshVec, GetTotalTransMat() );
+    ::UpdateBBox( new_box, m_TMeshVec, mats[0] );
+    for ( int c = 1; c < ( int )mats.size(); c++ )
+    {
+        for ( TMesh *tm : m_TMeshVec )
+        {
+            tm->UpdateBBox( new_box, mats[c] );
+        }
+    }
 
     if ( new_box != m_BBox )
     {
@@ -1186,6 +1197,119 @@ void TMeshRole::BuildTMeshDrawObjs( const vector< TMesh* > &tmesh_vec, bool byta
     }
 }
 
+// Geom::UpdateSymmAttach places copies of the main surfaces, and a MeshGeom has none: place the
+// mesh's copies here, as that does (each copy is the symmetry's reflection or turn about the
+// ancestor it is set about, after the mesh's own transform).  Runs whenever the transform or
+// the symmetry may have changed, before UpdateBBox and UpdateDrawObj.
+void MeshGeom::UpdateSymmAttach()
+{
+    Geom::UpdateSymmAttach();
+
+    // The symmetry operations, in the frame of the ancestor the symmetry is about; each set
+    // flag copies everything so far, as Geom::UpdateSymmAttach does.
+    vector< Matrix4d > ops( 1 );
+    vector< bool > mirrored( 1, false );
+    int sym_flag = GetSymFlag();
+    for ( int bit = 0; bit < vsp::SYM_NUM_TYPES; bit++ )
+    {
+        int type = 1 << bit;
+        if ( !( sym_flag & type ) )
+        {
+            continue;
+        }
+        int n = ( int )ops.size();
+        if ( type == vsp::SYM_XY || type == vsp::SYM_XZ || type == vsp::SYM_YZ )
+        {
+            Matrix4d ref;
+            if ( type == vsp::SYM_XY )
+            {
+                ref.loadXYRef();
+            }
+            else if ( type == vsp::SYM_XZ )
+            {
+                ref.loadXZRef();
+            }
+            else
+            {
+                ref.loadYZRef();
+            }
+            for ( int i = 0; i < n; i++ )
+            {
+                Matrix4d m = ops[i];
+                m.postMult( ref.data() );
+                ops.push_back( m );
+                mirrored.push_back( !mirrored[i] );
+            }
+        }
+        else if ( m_SymRotN() > 1 )
+        {
+            double angle = 360.0 / ( double )m_SymRotN();
+            for ( int k = 1; k < m_SymRotN(); k++ )
+            {
+                Matrix4d rot;
+                if ( type == vsp::SYM_ROT_X )
+                {
+                    rot.rotateX( k * angle );
+                }
+                else if ( type == vsp::SYM_ROT_Y )
+                {
+                    rot.rotateY( k * angle );
+                }
+                else
+                {
+                    rot.rotateZ( k * angle );
+                }
+                for ( int i = 0; i < n; i++ )
+                {
+                    Matrix4d m = ops[i];
+                    m.postMult( rot.data() );
+                    ops.push_back( m );
+                    mirrored.push_back( mirrored[i] );
+                }
+            }
+        }
+    }
+
+    Matrix4d origin;
+    if ( m_SymAncestOriginFlag() )
+    {
+        origin = GetAncestorAttachMatrix( m_SymAncestor() - 1 );
+    }
+    else
+    {
+        origin = GetAncestorModelMatrix( m_SymAncestor() - 1 );
+    }
+    Matrix4d to_origin = origin;
+    to_origin.affineInverse();
+
+    // Each copy: the mesh's own transform, then into the ancestor's frame, the operation, and back.
+    Matrix4d base = GetTotalTransMat();
+    m_SymmMeshMats.assign( ops.size(), base );
+    for ( int i = 0; i < ( int )ops.size(); i++ )
+    {
+        if ( i > 0 )
+        {
+            m_SymmMeshMats[i].postMult( to_origin.data() );
+            m_SymmMeshMats[i].postMult( ops[i].data() );
+            m_SymmMeshMats[i].postMult( origin.data() );
+        }
+    }
+    m_SymmMeshMirrored = mirrored;
+}
+
+void MeshGeom::GetSymmMeshMats( vector< Matrix4d > &mats, vector< bool > &mirrored ) const
+{
+    if ( m_SymmMeshMats.empty() )
+    {
+        // Not updated yet (a mesh just read in): only the mesh itself.
+        mats.assign( 1, GetTotalTransMat() );
+        mirrored.assign( 1, false );
+        return;
+    }
+    mats = m_SymmMeshMats;
+    mirrored = m_SymmMeshMirrored;
+}
+
 vector< double > MeshGeom::GetDrawTriPnts()
 {
     vector< double > pnts;
@@ -1193,18 +1317,26 @@ vector< double > MeshGeom::GetDrawTriPnts()
     {
         return pnts;
     }
-    Matrix4d trans = GetTotalTransMat();
-    for ( TMesh *tm : m_TMeshVec )
+    vector< Matrix4d > mats;
+    vector< bool > mirrored;
+    GetSymmMeshMats( mats, mirrored );
+    for ( int c = 0; c < ( int )mats.size(); c++ )
     {
-        pnts.reserve( pnts.size() + tm->m_TVec.size() * 9 );
-        for ( TTri *tri : tm->m_TVec )
+        const Matrix4d &trans = mats[c];
+        for ( TMesh *tm : m_TMeshVec )
         {
-            for ( TNode *n : { tri->m_N0, tri->m_N1, tri->m_N2 } )
+            pnts.reserve( pnts.size() + tm->m_TVec.size() * 9 );
+            for ( TTri *tri : tm->m_TVec )
             {
-                vec3d p = trans.xform( n->m_Pnt );
-                pnts.push_back( p.x() );
-                pnts.push_back( p.y() );
-                pnts.push_back( p.z() );
+                // A mirror image winds the other way.
+                TNode *corners[3] = { tri->m_N0, mirrored[c] ? tri->m_N2 : tri->m_N1, mirrored[c] ? tri->m_N1 : tri->m_N2 };
+                for ( TNode *n : corners )
+                {
+                    vec3d p = trans.xform( n->m_Pnt );
+                    pnts.push_back( p.x() );
+                    pnts.push_back( p.y() );
+                    pnts.push_back( p.z() );
+                }
             }
         }
     }
@@ -1269,6 +1401,12 @@ void MeshGeom::UpdateDrawObj()
     Matrix4d trans = GetTotalTransMat();
     vec3d zeroV = trans.xform( vec3d( 0.0, 0.0, 0.0 ) );
 
+    // The mesh and its symmetric copies (mirror images wind the other way).
+    vector< Matrix4d > symm_mats;
+    vector< bool > symm_mirrored;
+    GetSymmMeshMats( symm_mats, symm_mirrored );
+    int num_copies = ( int )symm_mats.size();
+
     if ( m_ViewMeshFlag.Get() )
     {
         if ( m_DrawType() & MeshGeom::DRAW_XYZ )
@@ -1278,19 +1416,25 @@ void MeshGeom::UpdateDrawObj()
                 unsigned int num_tris = m_TMeshVec[m]->m_TVec.size();
                 unsigned int pi = 0;
                 vector<TTri*>& tris = m_TMeshVec[m]->m_TVec;
-                m_WireShadeDrawObj_vec[m].m_PntVec.resize( num_tris * 3 );
-                m_WireShadeDrawObj_vec[m].m_NormVec.resize( num_tris * 3 );
-                for ( int t = 0 ; t < ( int ) num_tris ; t++ )
+                m_WireShadeDrawObj_vec[m].m_PntVec.resize( num_tris * 3 * num_copies );
+                m_WireShadeDrawObj_vec[m].m_NormVec.resize( num_tris * 3 * num_copies );
+                for ( int c = 0 ; c < num_copies ; c++ )
                 {
-                    m_WireShadeDrawObj_vec[m].m_PntVec[pi] = trans.xform( tris[t]->m_N0->m_Pnt );
-                    m_WireShadeDrawObj_vec[m].m_PntVec[pi + 1] = trans.xform( tris[t]->m_N1->m_Pnt );
-                    m_WireShadeDrawObj_vec[m].m_PntVec[pi + 2] = trans.xform( tris[t]->m_N2->m_Pnt );
-                    vec3d norm =  trans.xform( tris[t]->m_Norm ) - zeroV;
-                    norm.normalize();
-                    m_WireShadeDrawObj_vec[m].m_NormVec[pi] = norm;
-                    m_WireShadeDrawObj_vec[m].m_NormVec[pi + 1] = norm;
-                    m_WireShadeDrawObj_vec[m].m_NormVec[pi + 2] = norm;
-                    pi += 3;
+                    const Matrix4d &ctrans = symm_mats[c];
+                    vec3d czero = ctrans.xform( vec3d( 0.0, 0.0, 0.0 ) );
+                    bool mirror = symm_mirrored[c];
+                    for ( int t = 0 ; t < ( int ) num_tris ; t++ )
+                    {
+                        m_WireShadeDrawObj_vec[m].m_PntVec[pi] = ctrans.xform( tris[t]->m_N0->m_Pnt );
+                        m_WireShadeDrawObj_vec[m].m_PntVec[pi + 1] = ctrans.xform( ( mirror ? tris[t]->m_N2 : tris[t]->m_N1 )->m_Pnt );
+                        m_WireShadeDrawObj_vec[m].m_PntVec[pi + 2] = ctrans.xform( ( mirror ? tris[t]->m_N1 : tris[t]->m_N2 )->m_Pnt );
+                        vec3d norm =  ctrans.xform( tris[t]->m_Norm ) - czero;
+                        norm.normalize();
+                        m_WireShadeDrawObj_vec[m].m_NormVec[pi] = norm;
+                        m_WireShadeDrawObj_vec[m].m_NormVec[pi + 1] = norm;
+                        m_WireShadeDrawObj_vec[m].m_NormVec[pi + 2] = norm;
+                        pi += 3;
+                    }
                 }
             }
         }
@@ -1325,27 +1469,33 @@ void MeshGeom::UpdateDrawObj()
         {
             map< std::vector<int>, int >::const_iterator mit;
 
-            for ( int m = 0 ; m < ( int )m_TMeshVec.size() ; m++ )
+            for ( int c = 0 ; c < num_copies ; c++ )
             {
-                int num_tris = m_TMeshVec[m]->m_TVec.size();
-                vector<TTri*>& tris = m_TMeshVec[m]->m_TVec;
-                for ( int t = 0 ; t < ( int ) num_tris ; t++ )
+                const Matrix4d &ctrans = symm_mats[c];
+                vec3d czero = ctrans.xform( vec3d( 0.0, 0.0, 0.0 ) );
+                bool mirror = symm_mirrored[c];
+                for ( int m = 0 ; m < ( int )m_TMeshVec.size() ; m++ )
                 {
-                    mit = m_SingleTagMap.find( tris[t]->m_Tags );
-                    if ( mit == m_SingleTagMap.end() )
+                    int num_tris = m_TMeshVec[m]->m_TVec.size();
+                    vector<TTri*>& tris = m_TMeshVec[m]->m_TVec;
+                    for ( int t = 0 ; t < ( int ) num_tris ; t++ )
                     {
-                        continue;
-                    }
+                        mit = m_SingleTagMap.find( tris[t]->m_Tags );
+                        if ( mit == m_SingleTagMap.end() )
+                        {
+                            continue;
+                        }
 
-                    DrawObj* d_obj = &m_WireShadeDrawObj_vec[ mit->second ];
-                    d_obj->m_PntVec.push_back( trans.xform( tris[t]->m_N0->m_Pnt ) );
-                    d_obj->m_PntVec.push_back( trans.xform( tris[t]->m_N1->m_Pnt ) );
-                    d_obj->m_PntVec.push_back( trans.xform( tris[t]->m_N2->m_Pnt ) );
-                    vec3d norm =  trans.xform( tris[t]->m_Norm ) - zeroV;
-                    norm.normalize();
-                    d_obj->m_NormVec.push_back( norm );
-                    d_obj->m_NormVec.push_back( norm );
-                    d_obj->m_NormVec.push_back( norm );
+                        DrawObj* d_obj = &m_WireShadeDrawObj_vec[ mit->second ];
+                        d_obj->m_PntVec.push_back( ctrans.xform( tris[t]->m_N0->m_Pnt ) );
+                        d_obj->m_PntVec.push_back( ctrans.xform( ( mirror ? tris[t]->m_N2 : tris[t]->m_N1 )->m_Pnt ) );
+                        d_obj->m_PntVec.push_back( ctrans.xform( ( mirror ? tris[t]->m_N1 : tris[t]->m_N2 )->m_Pnt ) );
+                        vec3d norm =  ctrans.xform( tris[t]->m_Norm ) - czero;
+                        norm.normalize();
+                        d_obj->m_NormVec.push_back( norm );
+                        d_obj->m_NormVec.push_back( norm );
+                        d_obj->m_NormVec.push_back( norm );
+                    }
                 }
             }
         }
@@ -1400,9 +1550,12 @@ void MeshGeom::UpdateDrawObj()
     const int ncstep = 1;
     const double nctodeg = 360.0/(ncgrp*ncstep);
 
-    m_FeatureDrawObj_vec.resize( m_PolyVec.size() );
-    for ( int i = 0; i < m_PolyVec.size(); i++ )
+    // Each polygon on the mesh and on each of its symmetric copies, in the polygon's colour.
+    m_FeatureDrawObj_vec.resize( m_PolyVec.size() * num_copies );
+    for ( int f = 0; f < ( int )m_FeatureDrawObj_vec.size(); f++ )
     {
+        int i = f % ( int )m_PolyVec.size();
+        const Matrix4d &ctrans = symm_mats[ f / ( int )m_PolyVec.size() ];
 
         // Color sequence -- go around color wheel ncstep times with slight
         // offset from ncgrp basic colors.
@@ -1414,24 +1567,24 @@ void MeshGeom::UpdateDrawObj()
             deg = (int)deg % 360;
         }
 
-        vec3d rgb = m_FeatureDrawObj_vec[i].ColorWheel( deg );
+        vec3d rgb = m_FeatureDrawObj_vec[f].ColorWheel( deg );
         rgb.normalize();
 
-        m_FeatureDrawObj_vec[i].m_Type = DrawObj::VSP_LINE_STRIP;
-        m_FeatureDrawObj_vec[i].m_LineWidth = 5;
-        m_FeatureDrawObj_vec[i].m_LineColor = rgb;
-        m_FeatureDrawObj_vec[i].m_Screen = DrawObj::VSP_MAIN_SCREEN;
+        m_FeatureDrawObj_vec[f].m_Type = DrawObj::VSP_LINE_STRIP;
+        m_FeatureDrawObj_vec[f].m_LineWidth = 5;
+        m_FeatureDrawObj_vec[f].m_LineColor = rgb;
+        m_FeatureDrawObj_vec[f].m_Screen = DrawObj::VSP_MAIN_SCREEN;
 
         char str[255];
-        snprintf( str, sizeof( str ),  "_%d", i );
-        m_FeatureDrawObj_vec[i].m_GeomID = m_ID + "Feature_" + str;
+        snprintf( str, sizeof( str ),  "_%d", f );
+        m_FeatureDrawObj_vec[f].m_GeomID = m_ID + "Feature_" + str;
 
-        m_FeatureDrawObj_vec[i].m_GeomChanged = true;
+        m_FeatureDrawObj_vec[f].m_GeomChanged = true;
 
-        m_FeatureDrawObj_vec[i].m_PntVec.resize( m_PolyVec[i].size() );
+        m_FeatureDrawObj_vec[f].m_PntVec.resize( m_PolyVec[i].size() );
         for ( int j = 0; j < m_PolyVec[i].size(); j++ )
         {
-            m_FeatureDrawObj_vec[i].m_PntVec[j] = trans.xform( m_PolyVec[i][j] );
+            m_FeatureDrawObj_vec[f].m_PntVec[j] = ctrans.xform( m_PolyVec[i][j] );
         }
     }
 }
@@ -2461,7 +2614,30 @@ vector<TMesh*> MeshGeom::CreateTMeshVecInSelf( bool skipnegflipnormal, const int
 
 vector<TMesh*> MeshGeom::CreateTMeshVec( bool skipnegflipnormal, const int & n_ref ) const
 {
-    return BuildTMeshVec( this );
+    // The mesh and its symmetric copies, each placed as it is copied (a mirror image's
+    // triangles wind the other way, on top of any flip of the mesh itself).
+    vector< Matrix4d > mats;
+    vector< bool > mirrored;
+    GetSymmMeshMats( mats, mirrored );
+    if ( mats.size() == 1 )
+    {
+        return BuildTMeshVec( this );
+    }
+
+    bool flipnormal = GetRoleShapeFlipNormal();
+    vector< TMesh* > ret_tmesh_vec;
+    ret_tmesh_vec.reserve( m_TMeshVec.size() * mats.size() );
+    for ( int c = 0 ; c < ( int )mats.size() ; c++ )
+    {
+        for ( int i = 0 ; i < ( int )m_TMeshVec.size() ; i++ )
+        {
+            TMesh *tm = new TMesh();
+            tm->copyPlaced( m_TMeshVec[i], mats[c], flipnormal != mirrored[c] );
+            tm->LoadGeomAttributes( this );
+            ret_tmesh_vec.push_back( tm );
+        }
+    }
+    return ret_tmesh_vec;
 }
 
 //==== Get Total Transformation Matrix from Original Points ====//

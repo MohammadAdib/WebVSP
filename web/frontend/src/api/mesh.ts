@@ -20,7 +20,9 @@
  *                           instead of the triangles' edges; none: the triangles' edges
  *   uint32   number of surface flags (0, or the number of surfaces)
  *   uint32   flags[n]       per surface; bit 0: a disk (a propeller in disk mode)
- *   uint32   number of OpenVSP surfaces described next (0, or all of the geom's)
+ *   uint32   number of OpenVSP surfaces described next (0, or all of the geom's; for a Mesh
+ *            geom with symmetric copies, every surface written above: each tag's triangles once
+ *            for the mesh and once per copy)
  *   per OpenVSP surface (symmetric copies included):
  *     int32    the surface it was written as above (-1: not written)
  *     uint32   the OpenVSP surface it is a copy of (itself for an original)

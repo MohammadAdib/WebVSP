@@ -228,8 +228,14 @@ public:
     }
 
     // The triangles as drawn (empty when the mesh is hidden): x, y, z of each corner, three
-    // corners per triangle, placed by the Geom's transform.
+    // corners per triangle, placed by the Geom's transform, symmetric copies included.
     vector< double > GetDrawTriPnts();
+
+    // Where the mesh and each of its symmetric copies go (the mesh itself first), and whether
+    // each is a mirror image, whose triangles then wind the other way.  Geom's symmetry copies
+    // surfaces, which a MeshGeom has none of, so a MeshGeom places its copies itself, the same
+    // way: drawn, bounded and handed to analyses (CreateTMeshVec) with them.
+    void GetSymmMeshMats( vector< Matrix4d > &mats, vector< bool > &mirrored ) const;
 
 protected:
 
@@ -238,6 +244,10 @@ protected:
         m_ScaleMatrix.loadIdentity();
         m_ScaleMatrix.scale( m_ScaleFromOrig() );
     }
+    using Geom::UpdateSymmAttach;
+    virtual void UpdateSymmAttach();
+    vector< Matrix4d > m_SymmMeshMats;
+    vector< bool > m_SymmMeshMirrored;
     virtual void UpdateBBox();
     virtual void UpdateDrawObj();
 
