@@ -142,3 +142,6 @@ history is in [CHANGELOG.md](CHANGELOG.md).
 - Portability fixes so the OpenVSP core builds for WebAssembly: AngelScript calling conventions,
   NACA 6-series signatures, an OpenMP guard in VSPAERO, building without STEPcode
   (`VSP_NO_STEP`).
+- OpenVSP's custom geoms (Box, Cone, Disk, Duct, Seat, TransportFuse...) in the Geom Browser's
+  list: their scripts (`examples/CustomScripts`, which the desktop installs by the program) are
+  built into the engine.
