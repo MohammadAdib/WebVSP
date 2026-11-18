@@ -57,4 +57,9 @@ TARGET_LINK_OPTIONS( vsp_wasm PRIVATE
     -sINITIAL_MEMORY=256MB -sALLOW_MEMORY_GROWTH=1 -sMAXIMUM_MEMORY=4GB -sSTACK_SIZE=8MB
     -sEXPORTED_RUNTIME_METHODS=FS
     # Function names in stack traces (small; makes engine crashes diagnosable).
-    --profiling-funcs )
+    --profiling-funcs
+    # OpenVSP's custom geoms (Disk, Cone, Duct, ...): the desktop installs these scripts in a
+    # CustomScripts folder by the program; OpenVSP reads ./CustomScripts/ (the root here).
+    "SHELL:--embed-file ${CMAKE_SOURCE_DIR}/../examples/CustomScripts@/CustomScripts" )
+FILE( GLOB VSP_WASM_CUSTOM_SCRIPTS ${CMAKE_SOURCE_DIR}/../examples/CustomScripts/* )
+SET_PROPERTY( TARGET vsp_wasm APPEND PROPERTY LINK_DEPENDS ${VSP_WASM_CUSTOM_SCRIPTS} )
