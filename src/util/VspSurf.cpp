@@ -2600,6 +2600,7 @@ void VspSurf::FetchXFerSurf( const std::string &geom_id, const std::string &name
     }
 }
 
+#ifndef VSP_NO_STEP
 void VspSurf::ToSTEP_BSpline_Quilt( STEPutil *step, vector < SdaiB_spline_surface_with_knots * > &surfs,
                                     const string &labelprefix, bool splitsurf, bool mergepts, bool tocubic, double tol,
                                     bool trimte, bool mergeLETE, const vector < double > &USplit,
@@ -2714,6 +2715,7 @@ void VspSurf::ToSTEP_BSpline_Quilt( STEPutil *step, vector < SdaiB_spline_surfac
         surfs.push_back( nurbs );
     }
 }
+#endif // VSP_NO_STEP
 
 void VspSurf::ToIGES( IGESutil *iges, bool splitsurf, bool tocubic, double tol, bool trimTE, bool mergeLETE,
                       const vector < double > &USplit, const vector < double > &WSplit, const string &labelprefix,
@@ -3120,6 +3122,14 @@ double VspSurf::EvalUMapping( double u ) const
 
 void VspSurf::BuildLCurve()
 {
+    // An empty surface (a Blank's) has no curve to measure; reading it walks off its (empty)
+    // patch map, which faults in WebAssembly.  As OpenVSP 3.55 does.
+    if ( m_Surface.number_u_patches() == 0 || m_Surface.number_v_patches() == 0 )
+    {
+        m_Lmax = 0;
+        m_LCurve = Vsp1DCurve();
+        return;
+    }
     double umin, vmin, umax, vmax, dv;
     double vlow, vup;
 

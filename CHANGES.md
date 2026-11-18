@@ -1,0 +1,153 @@
+# WebVSP changes
+
+Everything WebVSP changes or adds on top of **OpenVSP 3.43.3** (commit `2dd441209`), on this
+`legacy` branch: `main`'s WebVSP, on OpenVSP 3.55.0, ported to 3.43. OpenVSP's own history is in
+[CHANGELOG.md](CHANGELOG.md).
+
+## The legacy branch
+
+- Live at `/legacy`, built and deployed by `main`'s Pages workflow (this branch's `legacy.yml`
+  only asks it to run).
+- What 3.43 doesn't have isn't here either: NGon meshes (VSPAERO's geometry is not left in
+  the model), and the screens and prompts 3.55 added.
+- Three API functions from 3.55 that the engine reads the model with, backported:
+  `GetGeomDrawType`, `GetGeomWireColor` and `GetXSecSurfIDVec`.
+- Built with CMake 4 like `main`: `build_wasm.ps1` sets `CMAKE_POLICY_VERSION_MINIMUM` for
+  3.43's older libraries, and libxml2 is OpenVSP's later 2.15.4 with its CMake build (from
+  OpenVSP's commit `2c814e75c`), since 2.9.10's `configure` can't be cross-built.
+
+## In the browser
+
+- OpenVSP, its FLTK GUI and VSPAERO compiled to WebAssembly and run entirely in the browser tab;
+  nothing to install. OpenVSP runs on its own thread; a service worker makes the page
+  cross-origin isolated for it.
+- Hosted on GitHub Pages; a push to `main` builds the engine and the page in CI and deploys them,
+  with nothing built or uploaded by hand.
+- The WebVSP icon as the favicon, and installable as an app (a web app manifest).
+
+## OpenVSP's GUI, mirrored
+
+- OpenVSP's real FLTK GUI kept off screen and mirrored, window by window and widget by widget, into
+  a React page in a dark theme; input goes back to the real widgets, so every screen's own logic
+  runs unchanged.
+- A headless FLTK platform: windows lay out but are never displayed, the event loop never blocks,
+  text is measured with the browser's canvas.
+- The Geom Browser docked on the left and the geom editor on the right, in resizable side panels
+  that re-lay out the real FLTK windows (the 3D view follows them smoothly). Other screens,
+  Group Modifications among them, and popups are floating windows, resizable like the desktop's
+  and never below their designed size.
+- The top bar: OpenVSP's menus, then any error, the OpenVSP version and a link to WebVSP's GitHub
+  repository. The model's file name is at the bottom left of the 3D view.
+- Prompts (`fl_choice`, `fl_alert`, `fl_message`) shown as page dialogs.
+- Plot widgets captured as SVG, axes and their numbers included; VSPAERO's solver consoles and
+  result plots mirrored.
+- Plots pan and zoom: the wheel zooms about the cursor, dragging pans (the right or middle
+  button on plots that use clicks, like the curve editor), a double-click resets. The axes
+  re-scale, so their numbers follow. The x and y under the mouse are shown in its top right corner.
+- FLTK symbol labels drawn with the right direction, size and flips (e.g. the Geom Browser's move
+  up/down buttons).
+
+## Files
+
+- File choosers use the browser's file pickers, and accept several files at once (a model together
+  with its results). File > Preferences (only a choice of file chooser) is left out of the menu.
+- Every model you open or save is linked to the file on your disk: File > Save (and Ctrl+S) writes
+  it back in place in Chrome and Edge (which ask once for permission to edit the file), and
+  downloads it in other browsers.
+- A finished VSPAERO run's result files (`.history`, `.polar`, `.lod`, `.adb`...) are saved next
+  to the model on disk: the first time, a toast asks for the model's folder (Chrome and Edge);
+  later runs of that model save there by themselves, and the folder is remembered across
+  visits (after a reload the browser may want one click to allow it again). Other browsers
+  download them. Opening the model together with them brings them back for Load Previous
+  Results.
+
+## The 3D view
+
+- A three.js 3D view drawing each geom from the GUI's own u/w tessellation, following each geom's
+  draw type (wire, hidden, shade, none) and the GUI's selection. Each geom draws OpenVSP's feature
+  lines (the desktop's black outline); disks (propellers in disk mode) are see-through (25%) when
+  shaded. A geom is drawn again whenever OpenVSP rebuilds it, including changes no parameter
+  shows (a cross section's or airfoil's type, an airfoil file) and updates of one geom alone.
+- Mesh and NGon Mesh geoms (CompGeom results, imported STL/TRI, NGon conversions, VSPAERO's
+  geometry) are drawn, per tag in the desktop's colour-wheel colours, NGon meshes with their
+  polygon edges.
+- Selection highlights like the desktop's: the selected geom's bounding box (red), the active wing
+  section's box (green), the cross sections with the active one in blue, and the skinning and
+  blending tangent vectors (dashed where the desktop stipples them, with arrowheads).
+- The screens' drawings in the main view mirrored: Mass Properties' CG (red point), and anything
+  else a screen adds. Blank geoms shown as circles at their origins: gray, red when selected,
+  clickable, and following the mouse (mirrored on their symmetric copies) while they're moved or
+  turned.
+- A toolbar (front, side, top, bottom, iso, fit), orthographic or perspective, and orbit, pan and
+  zoom to the cursor with the mouse.
+- Blender's view keys: numpad 1 / 3 / 7 (Ctrl for the other side), 5, 9, and 2 / 4 / 6 / 8 orbiting
+  30° per press (8 and 2 stopping at the top and bottom views); F (or Home, numpad .) fits the
+  model; C (View > Center) centers it, keeping the zoom. The side view (3) has the nose on the
+  left, as in Blender.
+- A model that grows to more than 10 times the size it was last fitted at is fitted again, as F
+  does, and so is whatever is shown after nothing was (everything hidden, or an empty model);
+  otherwise the view stays put and only its clip planes follow the model.
+- Moving to a view is animated (keys, F5-F12, toolbar, orbit steps, the orientation gizmo's
+  balls), turning in elevation and compass direction so top and bottom views arrive the right
+  way round.
+- Blender's auto perspective: axis views (front, side, top, bottom, rear) switch to
+  orthographic, and turning away (orbit keys, Iso, the mouse, as soon as it starts turning)
+  goes back to perspective if it was perspective before; 5 chooses by hand.
+- Split views like desktop OpenVSP's Window menu: one, two side by side, two stacked or four
+  panes (toolbar icons), each with its own camera; the toolbar, keys and View menu act on the
+  active pane, and a newly loaded model is framed in every pane. Changing the layout fades the
+  view out and in, taking no input meanwhile.
+- A Blender-style ground grid: lines at round spacings that follow the zoom, red X and green Y
+  axes, a square under the whole model (hidden geoms included) that fades out at 150% of its
+  footprint, and a toolbar switch to hide it.
+- A keyboard button beside the toolbar lists the 3D view's keys.
+
+## Selecting and editing
+
+- Click to select a geom in the 3D view; Shift-click or Ctrl-click (Cmd on a Mac) adds it to the
+  selection or takes it out; a click on nothing deselects everything.
+- Blender's select and hide keys, acting on every selected geom: A selects all, Alt+A deselects
+  all, H hides the selection, Shift+H hides everything else, Alt+H shows everything (the geoms
+  it reveals join the selection).
+- Z switches the selection between wireframe and shaded; Shift+Z does it for every geom
+  (shaded if every shown geom is wireframe, otherwise wireframe).
+- Move gizmo: Blender-style X/Y/Z arrows on the selection, at the middle of the selected geoms'
+  origins, always pointing the positive way along their axes (from any view). Dragging moves the
+  geoms along that axis, snapped to a 1-unit grid, by setting each geom's XForm location
+  (absolute or relative, converted into the frame it's attached to); a geom attached to a
+  selected parent moves with the parent. The move is applied when the arrow is let go.
+- Blender's G, R and S: G moves the selection, R rotates it and S scales it, each geom about its
+  own origin (S the same every way: OpenVSP's XForm Scale, which has no per-axis scale). The
+  mouse drives it; X, Y or Z holds a move or rotation to that axis (drawn through the selection
+  in the axis's colour); typing a number gives the exact distance, angle or factor (G X 10 moves
+  10 along X, R Z 90 turns 90° about Z, S 2 doubles the size). A move with the mouse goes in
+  whole units and a scale in steps of 0.1 (Ctrl: freely); a rotation is free (Ctrl: 5° steps).
+  Enter or a click applies it as one Edit > Undo step; Esc or a
+  right click cancels. Symmetric copies follow mirrored (or turned, for rotational symmetry)
+  while it runs, as OpenVSP places them.
+- Shift+D duplicates the selection in place (each copy under its original's parent, or under
+  the copy of its parent when that's duplicated too) and starts G on the copies; Esc leaves
+  them where they are.
+- X or Delete deletes the selection after asking (Enter or Delete to confirm, Esc to keep it);
+  OpenVSP's own question about clones follows when there are any.
+- Undo groups in OpenVSP's parm undo stack (`ParmMgr::BeginUndoGroup` / `EndUndoGroup`), so a
+  move or rotation of several geoms is a single step of Edit > Undo.
+
+## VSPAERO
+
+- VSPAERO runs in the browser: `vspaero` and `vsploads` compiled to WebAssembly and run in workers,
+  one fresh instance per run (single-threaded).
+- The VSPAERO window's title bar times the solver: counting while it runs, then how long the
+  last run took and whether it finished, failed or was stopped.
+- VSPAERO results viewer in the page (VSPAERO > Launch Viewer), in a movable, resizable window:
+  Cp, steady/unsteady Cp, vorticity or shaded, per solution case, with wakes and wake surfaces, a
+  desktop-style colour legend filling the window's height, smooth shading on by default, the
+  case's coefficients from the `.polar` file and the reference values.
+- The viewer's wakes drawn twice as long, the added half fading out, in place of the desktop
+  viewer's infinite wake option.
+
+## Building for WebAssembly
+
+- Portability fixes so the OpenVSP core builds for WebAssembly: AngelScript calling conventions,
+  NACA 6-series signatures, an OpenMP guard in VSPAERO, building without STEPcode
+  (`VSP_NO_STEP`).

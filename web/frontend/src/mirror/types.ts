@@ -1,0 +1,187 @@
+// Shapes produced by src/gui_and_draw/WebMirror.cpp.
+
+export type WindowRole = 'main' | 'browser' | 'geom' | 'screen' | 'dialog'
+
+export interface MWindow {
+  id: number
+  role: WindowRole
+  screen: string
+  si: number
+  title: string
+  w: number
+  h: number
+  /** Where VSP placed the window (screen coordinates) */
+  x: number
+  y: number
+  /** The size the window was designed at (before any client resized it) */
+  dw?: number
+  dh?: number
+  modal: boolean
+  /** The window can be resized (FLTK re-lays it out, as when resizing the desktop window) */
+  rs?: boolean
+  /** Set by the client while the window animates out after the GUI closed it */
+  closing?: boolean
+}
+
+export interface MenuItem {
+  i: number
+  label: string
+  d: number
+  flags: number
+  sc: number
+}
+
+export interface TreeItem {
+  n: number
+  label: string
+  d: number
+  open: boolean
+  sel: boolean
+  kids: number
+  x: number
+  y: number
+  w: number
+  h: number
+  lx: number
+  act: boolean
+  show?: boolean
+  surf?: number
+  ref?: string
+  showxy?: [number, number, number, number]
+  surfxy?: [number, number, number, number]
+}
+
+export interface BrowserLine {
+  t: string
+  s?: boolean
+  c?: boolean
+  v?: boolean
+}
+
+export type Kind =
+  | 'gl' | 'subwindow' | 'tabs' | 'scroll' | 'tree' | 'check_browser' | 'browser' | 'text_editor' | 'terminal'
+  | 'text_display' | 'table' | 'canvas' | 'input_choice' | 'menubar' | 'choice' | 'menubutton' | 'counter'
+  | 'value_slider' | 'scrollbar' | 'slider' | 'roller' | 'dial' | 'progress' | 'output' | 'input' | 'check'
+  | 'round' | 'light' | 'repeat' | 'button' | 'box' | 'group' | 'widget'
+
+export interface GlDrawObj {
+  /** tris only in the main view's overlay (arrowheads) */
+  t: 'lines' | 'strip' | 'loop' | 'points' | 'tris' | 'blank'
+  c: string
+  pc: string
+  lw: number
+  ps: number
+  /** Dashed (stippled) lines */
+  dash?: boolean
+  /** A bounding box: 1 a geom's, 2 the active wing section's */
+  box?: number
+  /** blank: the geom's id, and whether it's selected */
+  id?: string
+  sel?: boolean
+  /** blank: each point's transform (the original's, then each symmetric copy's), 16 numbers
+   *  column-major apiece */
+  m?: number[]
+  /** x,y,z triples */
+  p: number[]
+}
+
+export interface GlDraw {
+  zoom: number
+  px: number
+  py: number
+  /** 0: X,Y  1: X,Z  2: Z,Y */
+  plane: number
+  ppu: number
+  objs: GlDrawObj[]
+}
+
+export interface MWidget {
+  id: number
+  win: number
+  p: number
+  o: number
+  k: Kind
+  x: number
+  y: number
+  w: number
+  h: number
+  vis: boolean
+  act: boolean
+  label?: string
+  align: number
+  box: number
+  ls: number
+  lf: number
+  col: string
+  lcol: string
+  scol: string
+  tip?: string
+  parm?: string
+  desc?: string
+  // kind-specific
+  v?: number | string
+  type?: number
+  min?: number
+  max?: number
+  step?: number
+  ss?: number
+  ro?: boolean
+  ts?: number
+  tcol?: string
+  items?: MenuItem[] | TreeItem[]
+  lines?: BrowserLine[]
+  cols?: number[]
+  csep?: string
+  top?: number
+  rows?: number
+  ncols?: number
+  img?: string
+  /** The drawing as SVG, instead of img pixels (in-browser engine) */
+  svg?: string
+  /** A plot (Vsp_Canvas): pannable and zoomable; pcb: it handles clicks itself */
+  plot?: number
+  pcb?: number
+  /** A plot's axes: [pixel of min, pixel of max, min, max, 1 if log], pixels in window units */
+  px?: number[]
+  py?: number[]
+  py2?: number[]
+  iw?: number
+  ih?: number
+  draw?: GlDraw
+}
+
+export interface MDiff {
+  t: 'diff'
+  full: boolean
+  windows: MWindow[]
+  closed: number[]
+  widgets: MWidget[]
+  removed: number[]
+}
+
+export interface MDialog {
+  t: 'dialog'
+  seq: number
+  kind: 'choice' | 'alert' | 'message' | 'file'
+  msg?: string
+  b0?: string
+  b1?: string
+  b2?: string
+  title?: string
+  filter?: string
+  mode?: number
+  preset?: string
+  dir?: string
+  /** Answered by the engine with the browser's file pickers, not drawn by the page */
+  native?: boolean
+}
+
+/** What the main 3D view shows besides the model (the CG from Mass Properties, measures, ...) */
+export interface MOverlay {
+  t: 'overlay'
+  objs: GlDrawObj[]
+}
+
+export type MirrorMsg = MDiff | MDialog | MOverlay
+
+export type MirrorEvent = Record<string, string | number>

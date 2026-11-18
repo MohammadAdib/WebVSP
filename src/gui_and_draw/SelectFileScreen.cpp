@@ -7,6 +7,7 @@
 //
 //////////////////////////////////////////////////////////////////////
 
+#include "VspDialogs.h"
 #include "SelectFileScreen.h"
 #include "FileUtil.h"
 
@@ -346,7 +347,7 @@ string SelectFileScreen::FileChooser( const string &title, const string &filter,
 
     while ( m_SelectFileScreenIsOpen )
     {
-        Fl::wait();
+        VspModalWait();
     }
 
     if ( m_AcceptFlag )

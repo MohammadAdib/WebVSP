@@ -82,3 +82,8 @@ VspUtil.h
 WriteMatlab.h
 XferSurf.h
 )
+
+IF( EMSCRIPTEN )
+    # External programs are run by the web page (see WebProcess.h).
+    target_sources( util PRIVATE WebProcess.cpp WebProcess.h )
+ENDIF()

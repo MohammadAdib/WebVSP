@@ -6,6 +6,7 @@
 //
 //////////////////////////////////////////////////////////////////////
 
+#include "VspDialogs.h"
 #include "PickSetScreen.h"
 #include "ScreenMgr.h"
 
@@ -55,7 +56,7 @@ int PickSetScreen::PickSet( const string & title )
 
     while( IsShown() )
     {
-        Fl::wait();
+        VspModalWait();
     }
 
     if ( m_AcceptFlag )

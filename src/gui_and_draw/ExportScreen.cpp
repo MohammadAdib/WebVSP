@@ -5,6 +5,7 @@
 //
 //////////////////////////////////////////////////////////////////////
 
+#include "VspDialogs.h"
 #include "ExportScreen.h"
 #include "ScreenMgr.h"
 #include "STEPOptionsScreen.h"

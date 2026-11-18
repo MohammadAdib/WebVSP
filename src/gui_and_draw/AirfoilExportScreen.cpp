@@ -7,6 +7,7 @@
 //
 //////////////////////////////////////////////////////////////////////
 
+#include "VspDialogs.h"
 #include "AirfoilExportScreen.h"
 
 //////////////////////////////////////////////////////////////////////
@@ -101,7 +102,7 @@ bool SeligAirfoilExportScreen::ShowAirfoilExportScreen()
 
     while ( m_FLTK_Window->shown() )
     {
-        Fl::wait();
+        VspModalWait();
     }
 
     return m_OkFlag;
@@ -189,7 +190,7 @@ bool BezierAirfoilExportScreen::ShowAirfoilExportScreen()
 
     while ( m_FLTK_Window->shown() )
     {
-        Fl::wait();
+        VspModalWait();
     }
 
     return m_OkFlag;

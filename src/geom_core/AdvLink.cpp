@@ -15,6 +15,7 @@
 #include "StlHelper.h"
 
 #ifndef NOREGEXP
+#include <fstream>
 #include <regex>
 #endif
 

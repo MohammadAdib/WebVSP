@@ -26,9 +26,11 @@ NURBS_Curve::NURBS_Curve()
     m_SurfB_ID = -1;
     m_MergeTol = 0;
     m_Deg = 1;
+#ifndef VSP_NO_STEP
     m_STEP_Start_Vert = nullptr;
     m_STEP_End_Vert = nullptr;
     m_STEP_Edge = nullptr;
+#endif // VSP_NO_STEP
     m_IGES_Edge = nullptr;
     m_BBox = BndBox();
     m_Label = string();
@@ -59,6 +61,7 @@ void NURBS_Curve::WriteIGESEdge( IGESutil* iges, const string& label )
     m_IGES_Edge = new DLL_IGES_ENTITY_126( iges->MakeCurve( m_PntVec, m_Deg, label ) );
 }
 
+#ifndef VSP_NO_STEP
 void NURBS_Curve::WriteSTEPEdge( STEPutil* step, const string& label, bool mergepnts )
 {
     // Identify the start and end vertex points
@@ -98,6 +101,7 @@ void NURBS_Curve::WriteSTEPEdge( STEPutil* step, const string& label, bool merge
 
     m_STEP_Edge = edge_crv;
 }
+#endif // VSP_NO_STEP
 
 //////////////////////////////////////////////////////
 //================= NURBS_Loop ====================//
@@ -165,6 +169,7 @@ void NURBS_Loop::WriteIGESCutout( IGESutil* iges, DLL_IGES_ENTITY_128& parent_su
     iges->MakeCutout( parent_surf, trimmed_surf, nurbs_vec, label );
 }
 
+#ifndef VSP_NO_STEP
 SdaiEdge_loop* NURBS_Loop::WriteSTEPLoop( STEPutil* step, const string& label, bool mergepts )
 {
     if ( !m_ClosedFlag )
@@ -230,6 +235,7 @@ SdaiEdge_loop* NURBS_Loop::WriteSTEPLoop( STEPutil* step, const string& label, b
 
     return loop;
 }
+#endif // VSP_NO_STEP
 
 BndBox NURBS_Loop::GetBndBox()
 {
@@ -298,6 +304,7 @@ DLL_IGES_ENTITY_128 NURBS_Surface::WriteIGESSurf( IGESutil* iges, const string& 
     return iges->MakeSurf( *m_Surf, new_label.c_str() );
 }
 
+#ifndef VSP_NO_STEP
 SdaiSurface* NURBS_Surface::WriteSTEPSurf( STEPutil* step, const string& label, bool mergepts )
 {
     SdaiSurface* ret_surf = nullptr;
@@ -327,6 +334,7 @@ SdaiSurface* NURBS_Surface::WriteSTEPSurf( STEPutil* step, const string& label, 
 
     return ret_surf;
 }
+#endif // VSP_NO_STEP
 
 unordered_map< int, vector < pair < NURBS_Curve, bool > > > NURBS_Surface::BuildOrderedChains( vector < NURBS_Curve > chain_vec )
 {
@@ -628,6 +636,7 @@ void NURBS_Surface::WriteIGESLoops( IGESutil* iges, DLL_IGES_ENTITY_128& parent_
     }
 }
 
+#ifndef VSP_NO_STEP
 vector < SdaiAdvanced_face* > NURBS_Surface::WriteSTEPLoops( STEPutil* step, SdaiSurface* surf, const string& label, bool mergepts )
 {
     // Create surface curves for sub-surfaces and FEA Part intersections (if they are inside the parent Geom)
@@ -782,6 +791,7 @@ vector < SdaiAdvanced_face* > NURBS_Surface::WriteSTEPLoops( STEPutil* step, Sda
 
     return adv_vec;
 }
+#endif // VSP_NO_STEP
 
 vector < NURBS_Curve > NURBS_Surface::MatchNURBSCurves( const vector < NURBS_Curve > &all_curve_vec )
 {

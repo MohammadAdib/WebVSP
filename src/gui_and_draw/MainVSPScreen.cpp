@@ -15,6 +15,7 @@
 #endif
 
 #define _USE_MATH_DEFINES
+#include "VspDialogs.h"
 #include <cmath>
 
 #include "main.h"
@@ -368,7 +369,7 @@ void MainVSPScreen::SetFileLabel( const string &fname )
 
 void MainVSPScreen::ExitVSP()
 {
-    switch( fl_choice("VSP is exiting. Save or discard your changes.", "Cancel", "Discard", "Save") )
+    switch( VspChoice("VSP is exiting. Save or discard your changes.", "Cancel", "Discard", "Save") )
     {
         case(0):
             return;

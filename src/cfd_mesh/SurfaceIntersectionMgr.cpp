@@ -1340,6 +1340,9 @@ void SurfaceIntersectionSingleton::WriteSTEPFile( const string& filename, int le
                                                   bool merge_pnts, bool label_id, bool label_surf_num, bool label_split_num,
                                                   bool label_name, const string &label_delim, int representation )
 {
+#ifdef VSP_NO_STEP
+    printf( "ERROR: STEP export is not available in this build\n" );
+#else
     STEPutil step( len_unit, tol );
 
     // Identify the SdaiB_spline_curve_with_knots. This must come before BuildNURBSSurfMap for STEP files, or the 
@@ -1464,6 +1467,7 @@ void SurfaceIntersectionSingleton::WriteSTEPFile( const string& filename, int le
     }
 
     step.WriteFile( filename );
+#endif // VSP_NO_STEP
 }
 
 vector < vector < int > > SurfaceIntersectionSingleton::GetCompIDGroupVec()

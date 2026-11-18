@@ -7,6 +7,7 @@
 //
 //////////////////////////////////////////////////////////////////////
 
+#include "VspDialogs.h"
 #include "IGESOptionsScreen.h"
 
 //////////////////////////////////////////////////////////////////////
@@ -221,7 +222,7 @@ bool IGESOptionsScreen::ShowIGESOptionsScreen()
 
     while( m_FLTK_Window->shown() )
     {
-        Fl::wait();
+        VspModalWait();
     }
 
     return m_OkFlag;

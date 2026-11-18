@@ -1405,6 +1405,8 @@ void GeomXForm::AcceptScale()
 //===============================================================================//
 //===============================================================================//
 //==== Constructor ====//
+unsigned long Geom::s_ShapeRevs = 0;
+
 Geom::Geom( Vehicle* vehicle_ptr ) : GeomXForm( vehicle_ptr )
 {
     m_UpdateBlock = false;
@@ -1677,6 +1679,11 @@ void Geom::Update( bool fullupdate )
     m_LateUpdateFlag = false;
 
     m_CappingDone = false;
+
+    if ( m_SurfDirty || m_XFormDirty || m_TessDirty )
+    {
+        m_ShapeRev = ++s_ShapeRevs;
+    }
 
     if ( m_SurfDirty )
     {

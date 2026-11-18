@@ -7,6 +7,7 @@
 //
 //////////////////////////////////////////////////////////////////////
 
+#include "VspDialogs.h"
 #include "IGESStructureOptionsScreen.h"
 #include "StructureMgr.h"
 
@@ -199,7 +200,7 @@ bool IGESStructureOptionsScreen::ShowIGESOptionsScreen()
 
     while( m_FLTK_Window->shown() )
     {
-        Fl::wait();
+        VspModalWait();
     }
 
     return m_OkFlag;

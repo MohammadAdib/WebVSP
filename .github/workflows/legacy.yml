@@ -1,0 +1,25 @@
+# The legacy site (OpenVSP 3.43, at /legacy) is built and deployed by main's Pages workflow
+# (pages.yml on main), which builds both branches and deploys them as one site. A push here only
+# asks it to run.
+name: Deploy legacy
+
+on:
+  push:
+    branches: [legacy]
+    paths:
+      - 'src/**'
+      - 'Libraries/**'
+      - 'web/**'
+  workflow_dispatch:
+
+permissions:
+  actions: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run main's Pages workflow
+        run: gh workflow run pages.yml --ref main --repo "$GITHUB_REPOSITORY"
+        env:
+          GH_TOKEN: ${{ github.token }}

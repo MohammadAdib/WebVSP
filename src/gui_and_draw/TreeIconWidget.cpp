@@ -774,3 +774,16 @@ int TreeWithIcons::handle( int e )
     }
     return( Fl_Tree::handle(e) ? 1 : ret );
 }
+
+void TreeWithIcons::MirrorIconEvent( TreeIconItem* item, int icon_type )
+{
+    if ( !item || ( icon_type != 1 && icon_type != 2 ) )
+    {
+        return;
+    }
+    ClearEventItem();
+    item->SetIconEvent( icon_type );
+    Fl::event_clicks( 0 );
+    SetEventItem( item );
+    do_callback_for_item( item, FL_TREE_REASON_NONE );
+}

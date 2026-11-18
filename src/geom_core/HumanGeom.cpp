@@ -19,6 +19,8 @@
 
 #include "HumanGeomData.h"
 
+#include <fstream>
+
 unordered_set < int > HumanGeom::m_VertCopySet;
 Pinocchio::Mesh HumanGeom::m_MasterMesh;
 Pinocchio::Attachment *HumanGeom::m_MasterAttach = nullptr;

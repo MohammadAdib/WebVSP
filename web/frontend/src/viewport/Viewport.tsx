@@ -1,0 +1,1020 @@
+import { Html, Line, TransformControls } from '@react-three/drei'
+import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import * as THREE from 'three'
+import type { TransformControls as TransformControlsImpl } from 'three-stdlib'
+import { api } from '../api/client'
+import { decodeMesh, gridLineIndices, type SurfaceCopy } from '../api/mesh'
+import type { BBox } from '../api/types'
+import { NO_GEOMS, useStore, type Layout, type ViewName } from '../store'
+import { useViewer } from '../viewer/store'
+import { useMirror } from '../mirror/store'
+import type { GlDrawObj } from '../mirror/types'
+import { Navigation, useViewKeys, ViewTools } from './camera'
+import { KeysHelp } from './KeysHelp'
+import { previewMatrix, revsOf, TransformAxisLine, TransformDriver, TransformHud, usePreview, useTransform, type Preview } from './transform'
+
+/** Opacity of the selected geom's bounding box (red) and of the active wing section's box (green). */
+export const BBOX_ALPHA = 0.5
+export const SECTION_BOX_ALPHA = 0.5
+/** The move gizmo snaps a geom's origin to this grid (model units). */
+const MOVE_SNAP = 1
+/** Radius of the move gizmo's axis lines, in gizmo units (its cones are 0.05 at the base). */
+const GIZMO_AXIS_RADIUS = 0.008
+
+/** Shift- or Ctrl-click (Cmd on a Mac) adds a geom to the selection or takes it out. */
+const isToggleClick = (e: { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean }) => e.shiftKey || e.ctrlKey || e.metaKey
+
+/** When the move gizmo was last pressed: a click on it isn't a click on nothing. */
+let gizmoPressedAt = 0
+
+const ZERO: [number, number, number] = [0, 0, 0]
+const NO_IDS: string[] = []
+
+/** Opacity of disks (propellers in disk mode) when shaded. */
+const DISK_ALPHA = 0.25
+
+const SHADE = new THREE.Color('#a6a6a6')
+const SHADE_SEL = new THREE.Color('#dedede')
+const LINE_ON_SHADE = new THREE.Color('#202020')
+const LINE_WIRE = new THREE.Color('#8f8f8f')
+const LINE_SEL = new THREE.Color('#f2f2f2')
+/** The outline (OpenVSP's feature lines): black and 1 px, like the desktop's. */
+export const OUTLINE_COLOR = '#000000'
+export const OUTLINE_WIDTH = 1
+
+/** Per-frame view state of one pane, written by its camera rig, read by its meshes (avoids
+ *  React re-renders). */
+interface PaneView {
+  /** 1 when close, 0 when zoomed far out: dense wireframe on a tiny model reads as noise. */
+  wireFade: number
+}
+const PaneViewContext = createContext<PaneView>({ wireFade: 1 })
+
+/** A geom's mesh fetched once for the panes asking for it together (the same revision, within
+ *  a moment of each other); asked again later, it's fetched fresh, so a pane never gets one
+ *  that's out of date (a reopened model reuses its geoms' IDs, and revisions start over). */
+const meshFetches = new Map<string, { rev: number; at: number; buf: Promise<ArrayBuffer> }>()
+function fetchMesh(id: string, rev: number) {
+  const have = meshFetches.get(id)
+  if (have && have.rev === rev && performance.now() - have.at < 2000) return have.buf
+  const buf = api.mesh(id)
+  meshFetches.set(id, { rev, at: performance.now(), buf })
+  buf.catch(() => {
+    if (meshFetches.get(id)?.buf === buf) meshFetches.delete(id)
+  })
+  return buf
+}
+
+interface Built {
+  /** The meshRev it was built for */
+  rev?: number
+  surfaces: {
+    mesh: THREE.BufferGeometry
+    lines: THREE.BufferGeometry
+    /** The desktop's colour for this surface (a Mesh / NGon Mesh tag) */
+    color?: THREE.Color
+    /** A disk (a propeller in disk mode): see-through when shaded */
+    disk?: boolean
+    /** A symmetric copy: the map from its original onto it (world to world) */
+    symm?: THREE.Matrix4
+  }[]
+  /** The outline (feature lines) as segment end points, x,y,z flat: per surface when known,
+   *  each with its symmetric copy's map */
+  outline: { points: number[]; symm?: THREE.Matrix4 }[]
+}
+
+/** The map from each OpenVSP surface's original onto it (undefined for an original): its
+ *  transform times the inverse of the original's. */
+function copyMaps(copies: SurfaceCopy[] | undefined): (THREE.Matrix4 | undefined)[] {
+  return (copies ?? []).map((c, k) => {
+    const o = copies![c.original]
+    if (c.original === k || !o) return undefined
+    return new THREE.Matrix4().fromArray(c.transform).multiply(new THREE.Matrix4().fromArray(o.transform).invert())
+  })
+}
+
+function buildGeometry(buf: ArrayBuffer): Built {
+  const decoded = decodeMesh(buf)
+  const maps = copyMaps(decoded.copies)
+  const symmOfDrawn = new Map<number, THREE.Matrix4 | undefined>()
+  decoded.copies?.forEach((c, k) => c.drawn >= 0 && symmOfDrawn.set(c.drawn, maps[k]))
+  // The outline split by surface, when the engine could; otherwise whole.
+  const features = decoded.features ? Array.from(decoded.features) : []
+  const counts = decoded.copies?.map((c) => c.outline) ?? []
+  const split = counts.length > 0 && counts.reduce((a, b) => a + b, 0) * 3 === features.length && features.length > 0
+  let at = 0
+  const outline = split
+    ? counts.map((n, k) => ({ points: features.slice(at * 3, (at += n) * 3), symm: maps[k] })).filter((g) => g.points.length >= 6)
+    : [{ points: features }]
+  return {
+    outline,
+    surfaces: decoded.map((s, i) => {
+      const pos = new THREE.BufferAttribute(s.positions, 3)
+      const mesh = new THREE.BufferGeometry()
+      mesh.setAttribute('position', pos)
+      mesh.setAttribute('normal', new THREE.BufferAttribute(s.normals, 3))
+      mesh.setIndex(new THREE.BufferAttribute(s.indices, 1))
+      mesh.computeBoundingSphere()
+      const lines = new THREE.BufferGeometry()
+      if (s.edges) {
+        // NGon faces: their polygon edges, not the triangles'.
+        lines.setAttribute('position', new THREE.BufferAttribute(s.edges, 3))
+      } else {
+        lines.setAttribute('position', pos)
+        lines.setIndex(new THREE.BufferAttribute(gridLineIndices(s.nu, s.nw), 1))
+      }
+      return { mesh, lines, color: s.color ? new THREE.Color(...s.color) : undefined, disk: s.disk, symm: symmOfDrawn.get(i) }
+    }),
+  }
+}
+
+function GeomMesh({ id }: { id: string }) {
+  const paneView = useContext(PaneViewContext)
+  const rev = useStore((s) => s.meshRev[id] ?? 0)
+  const selected = useStore((s) => s.tree?.active?.includes(id) ?? false)
+  // Each geom's own draw type, as set in the Geom Browser (Wire / Hidden / Shade / Texture / None).
+  const drawType = useStore((s) => s.geomsById[id]?.drawType ?? 2)
+  const mode: 'wire' | 'hidden' | 'shaded' | 'none' =
+    drawType === 0 ? 'wire' : drawType === 1 ? 'hidden' : drawType === 4 ? 'none' : 'shaded'
+  const [built, setBuilt] = useState<Built | null>(null)
+  // Moved by the move gizmo or G / R: drawn moved until the moved geom's mesh arrives.
+  const preview = usePreview((s) => (s.ids.includes(id) && (built?.rev ?? 0) <= (s.revs[id] ?? -1) ? s : null))
+  const matrix = useMemo(() => previewMatrix(preview, id, new THREE.Matrix4()), [preview, id])
+  // A symmetric copy follows the move mirrored (or turned) like OpenVSP will place it: the
+  // preview conjugated by the map from its original onto it.
+  const forCopy = useMemo(() => {
+    const cache = new Map<THREE.Matrix4 | undefined, THREE.Matrix4>()
+    return (symm?: THREE.Matrix4) => {
+      if (!symm || !preview) return matrix
+      let m = cache.get(symm)
+      if (!m) cache.set(symm, (m = symm.clone().multiply(matrix).multiply(symm.clone().invert())))
+      return m
+    }
+  }, [matrix, preview])
+
+  useEffect(() => {
+    let cancelled = false
+    fetchMesh(id, rev)
+      .then((buf) => {
+        if (!cancelled) setBuilt({ ...buildGeometry(buf), rev })
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [id, rev])
+
+  useEffect(
+    () => () => {
+      built?.surfaces.forEach((s) => {
+        s.mesh.dispose()
+        s.lines.dispose()
+      })
+    },
+    [built],
+  )
+
+  const shadeMat = useMemo(
+    () =>
+      new THREE.MeshStandardMaterial({
+        side: THREE.DoubleSide,
+        flatShading: true, // faceted, one normal per triangle
+        roughness: 0.65,
+        metalness: 0.05,
+        polygonOffset: true,
+        polygonOffsetFactor: 1,
+        polygonOffsetUnits: 1,
+      }),
+    [],
+  )
+  const lineMat = useMemo(() => new THREE.LineBasicMaterial({ transparent: true }), [])
+  useEffect(() => () => {
+    shadeMat.dispose()
+    lineMat.dispose()
+  }, [shadeMat, lineMat])
+  // Disks (propellers in disk mode) are shaded see-through, so what's behind them shows.
+  const diskMat = useMemo(() => {
+    const m = shadeMat.clone()
+    m.transparent = true
+    m.opacity = DISK_ALPHA
+    m.depthWrite = false
+    return m
+  }, [shadeMat])
+  useEffect(() => () => diskMat.dispose(), [diskMat])
+  // Surfaces the desktop colours (Mesh / NGon Mesh tags) get materials of their own.
+  const tagMats = useMemo(
+    () =>
+      built?.surfaces.map((s) =>
+        s.color ? { color: s.color, shade: shadeMat.clone(), line: lineMat.clone() } : null,
+      ) ?? [],
+    [built, shadeMat, lineMat],
+  )
+  useEffect(() => () => tagMats.forEach((m) => {
+    m?.shade.dispose()
+    m?.line.dispose()
+  }), [tagMats])
+
+  if (mode === 'hidden') {
+    // Hidden-line: surfaces in the background color occlude the lines behind them.
+    shadeMat.color.set('#161616')
+    shadeMat.emissive.set('#161616')
+  } else {
+    shadeMat.color.copy(selected ? SHADE_SEL : SHADE)
+    shadeMat.emissive.set(selected ? '#262626' : '#000000')
+  }
+  lineMat.color.copy(selected ? LINE_SEL : mode === 'shaded' ? LINE_ON_SHADE : LINE_WIRE)
+  diskMat.color.copy(shadeMat.color)
+  diskMat.emissive.copy(shadeMat.emissive)
+  for (const m of tagMats) {
+    if (!m) continue
+    // Like the desktop's tag colours: shaded in a tint of the colour, edges in the colour.
+    m.shade.color.copy(shadeMat.color)
+    m.shade.emissive.copy(shadeMat.emissive)
+    if (mode !== 'hidden') m.shade.color.lerp(m.color, selected ? 0.5 : 0.6)
+    m.line.color.copy(mode === 'shaded' ? lineMat.color : m.color)
+    if (selected && mode !== 'shaded') m.line.color.lerp(LINE_SEL, 0.35)
+  }
+  useFrame(() => {
+    // Pure wire mode keeps its lines; over shading they fade out as the model gets small.
+    // Shaded geoms show their wireframe only when selected, as in the FLTK view.
+    const base = mode === 'shaded' ? (selected ? 0.9 : 0) : 1
+    const fade = mode === 'shaded' ? paneView.wireFade : 1
+    lineMat.opacity = base * fade
+    lineMat.visible = lineMat.opacity > 0.02
+    for (const m of tagMats) {
+      if (!m) continue
+      m.line.opacity = lineMat.opacity
+      m.line.visible = lineMat.visible
+    }
+  })
+
+  const onClick = (e: ThreeEvent<MouseEvent>) => {
+    if (e.delta > 4) return // was an orbit drag
+    e.stopPropagation()
+    void api.pick(id, isToggleClick(e.nativeEvent))
+  }
+
+  if (!built || mode === 'none') return null
+  return (
+    <group onClick={onClick}>
+      {built.surfaces.map((s, i) => (
+        <group key={i} matrix={forCopy(s.symm)} matrixAutoUpdate={false}>
+          {(mode === 'shaded' || mode === 'hidden') && <mesh geometry={s.mesh} material={s.disk && mode === 'shaded' ? diskMat : (tagMats[i]?.shade ?? shadeMat)} />}
+          <lineSegments geometry={s.lines} material={tagMats[i]?.line ?? lineMat} />
+          {mode === 'wire' && (
+            // invisible surface so wireframe geoms remain clickable
+            <mesh geometry={s.mesh} visible={false} />
+          )}
+        </group>
+      ))}
+      {built.outline.map(
+        (g, k) =>
+          g.points.length >= 6 && (
+            <group key={k} matrix={forCopy(g.symm)} matrixAutoUpdate={false}>
+              <Line points={g.points} segments color={OUTLINE_COLOR} lineWidth={OUTLINE_WIDTH} />
+            </group>
+          ),
+      )}
+    </group>
+  )
+}
+
+/** The ground grid's colours: its lines (fine, and every 10th brighter), and the X (red) and
+ *  Y (green) axes. */
+const GRID_COLOR = '#424242'
+const GRID_MAJOR_COLOR = '#575757'
+const GRID_X_AXIS = '#b04646'
+const GRID_Y_AXIS = '#5f9a3e'
+/** The finest grid spacing drawn, in pixels on screen; finer lines fade out (Blender-style). */
+const GRID_MIN_PIXELS = 14
+/** Where the grid has faded out, as a multiple of the model's footprint (fully drawn up to 1). */
+const GRID_FADE_END = 1.5
+/** At most this many lines each way per level: zoomed far in, only a window of them around the
+ *  point the view orbits is drawn, following it. */
+const GRID_MAX_LINES = 1500
+
+interface GridLines {
+  pos: number[]
+  col: number[]
+}
+
+/**
+ * Adds a line to `out` in pieces, each end with alpha fading out from the model's footprint
+ * (`half` around cx, cy) to GRID_FADE_END times it, so the fade along it is smooth.
+ */
+function fadedLine(out: GridLines, cx: number, cy: number, half: number, x0: number, y0: number, x1: number, y1: number, c: THREE.Color) {
+  const alpha = (x: number, y: number) => {
+    const u = THREE.MathUtils.clamp((Math.max(Math.abs(x - cx), Math.abs(y - cy)) / half - 1) / (GRID_FADE_END - 1), 0, 1)
+    return 1 - u * u * (3 - 2 * u)
+  }
+  const pieces = 32
+  for (let k = 0; k < pieces; k++) {
+    const a = k / pieces
+    const b = (k + 1) / pieces
+    const ax = x0 + (x1 - x0) * a, ay = y0 + (y1 - y0) * a
+    const bx = x0 + (x1 - x0) * b, by = y0 + (y1 - y0) * b
+    const fa = alpha(ax, ay), fb = alpha(bx, by)
+    if (fa <= 0 && fb <= 0) continue
+    out.pos.push(ax, ay, 0, bx, by, 0)
+    out.col.push(c.r, c.g, c.b, fa, c.r, c.g, c.b, fb)
+  }
+}
+
+/**
+ * One level of the grid: lines every `step`, aligned to the origin, over the square
+ * GRID_FADE_END times the footprint around the center, limited to GRID_MAX_LINES lines each way around (wx, wy). The
+ * axes are left out: they're drawn on their own.
+ */
+function gridLevel(cx: number, cy: number, half: number, step: number, wx: number, wy: number, color: THREE.Color): GridLines {
+  const reach = (GRID_MAX_LINES / 2) * step
+  const ext = GRID_FADE_END * half
+  const x0 = Math.max(cx - ext, wx - reach), x1 = Math.min(cx + ext, wx + reach)
+  const y0 = Math.max(cy - ext, wy - reach), y1 = Math.min(cy + ext, wy + reach)
+  const out: GridLines = { pos: [], col: [] }
+  if (x0 >= x1 || y0 >= y1) return out
+  for (let i = Math.ceil(x0 / step); i * step <= x1; i++) if (i !== 0) fadedLine(out, cx, cy, half, i * step, y0, i * step, y1, color)
+  for (let j = Math.ceil(y0 / step); j * step <= y1; j++) if (j !== 0) fadedLine(out, cx, cy, half, x0, j * step, x1, j * step, color)
+  return out
+}
+
+function toGeometry(parts: GridLines[]) {
+  const geo = new THREE.BufferGeometry()
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(parts.flatMap((p) => p.pos), 3))
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(parts.flatMap((p) => p.col), 4))
+  return geo
+}
+
+/**
+ * The ground grid on the Z = 0 plane: a square around the model as wide as its longest side in
+ * plan, fully drawn over it and fading out to GRID_FADE_END times its size. One spacing for the whole grid,
+ * from the zoom: the finest round spacing (..., 0.1, 1, 10, ...) at least GRID_MIN_PIXELS apart
+ * on screen, fading out as it nears that, with the next one (10x) over it; so zooming brings
+ * finer lines in and out, like Blender's grid. The X and Y axes are drawn in colour.
+ */
+function GroundGrid({ center, size }: { center: [number, number]; size: number }) {
+  const half = Math.max(size, 1e-6) / 2
+  const [cx, cy] = center
+  // The zoom level, and where the view orbits (the window drawn when zoomed far in).
+  const [view0, setView0] = useState<{ level: number; wx: number; wy: number } | null>(null)
+  const fineMat = useRef<THREE.LineBasicMaterial>(null)
+  const { camera, controls, size: screen } = useThree()
+
+  // The zoom: model units per pixel at the point the view orbits around.
+  useFrame(() => {
+    const target = (controls as unknown as { target?: THREE.Vector3 } | null)?.target ?? new THREE.Vector3(cx, cy, 0)
+    let perPixel: number
+    if ((camera as THREE.OrthographicCamera).isOrthographicCamera) {
+      const o = camera as THREE.OrthographicCamera
+      perPixel = (o.top - o.bottom) / o.zoom / Math.max(screen.height, 1)
+    } else {
+      const p = camera as THREE.PerspectiveCamera
+      perPixel = (2 * camera.position.distanceTo(target) * Math.tan(THREE.MathUtils.degToRad(p.fov / 2))) / Math.max(screen.height, 1)
+    }
+    const lod = Math.log10(Math.max(perPixel, 1e-12) * GRID_MIN_PIXELS)
+    const next = Math.floor(lod)
+    // Follow the view when it has moved a good part of the way across the drawn window.
+    const far = view0 && Math.max(Math.abs(target.x - view0.wx), Math.abs(target.y - view0.wy)) > (GRID_MAX_LINES / 8) * 10 ** (next + 1)
+    if (!view0 || next !== view0.level || far) setView0({ level: next, wx: target.x, wy: target.y })
+    // The finer level fades out as its lines close in on GRID_MIN_PIXELS apart.
+    if (fineMat.current) fineMat.current.opacity = 1 - (lod - next)
+  })
+
+  const geo = useMemo(() => {
+    if (!view0) return null
+    const { level, wx, wy } = view0
+    const fine = gridLevel(cx, cy, half, 10 ** (level + 1), wx, wy, new THREE.Color(GRID_COLOR))
+    const coarse = gridLevel(cx, cy, half, 10 ** (level + 2), wx, wy, new THREE.Color(GRID_MAJOR_COLOR))
+    const axes: GridLines = { pos: [], col: [] }
+    const ext = GRID_FADE_END * half
+    if (Math.abs(cy) <= ext) fadedLine(axes, cx, cy, half, cx - ext, 0, cx + ext, 0, new THREE.Color(GRID_X_AXIS))
+    if (Math.abs(cx) <= ext) fadedLine(axes, cx, cy, half, 0, cy - ext, 0, cy + ext, new THREE.Color(GRID_Y_AXIS))
+    return { fine: toGeometry([fine]), coarse: toGeometry([coarse, axes]) }
+  }, [view0, cx, cy, half])
+  useEffect(() => () => {
+    geo?.fine.dispose()
+    geo?.coarse.dispose()
+  }, [geo])
+
+  if (!geo) return null
+  return (
+    <group renderOrder={-1}>
+      <lineSegments geometry={geo.fine} raycast={() => {}}>
+        <lineBasicMaterial ref={fineMat} vertexColors transparent depthWrite={false} />
+      </lineSegments>
+      <lineSegments geometry={geo.coarse} raycast={() => {}}>
+        <lineBasicMaterial vertexColors transparent depthWrite={false} />
+      </lineSegments>
+    </group>
+  )
+}
+
+interface GridPlace {
+  center: [number, number]
+  size: number
+}
+
+/** A bounding box of the model (`api.bbox`: the shown geoms; `api.bboxAll`: every geom), read
+ *  again a moment after each change to the model. The same box keeps the same object. */
+function useModelBox(read: () => Promise<BBox | null>): BBox | null {
+  const valuesRev = useStore((s) => s.valuesRev)
+  const [key, setKey] = useState('')
+  useEffect(() => {
+    let stale = false
+    const t = window.setTimeout(() => {
+      read().then(
+        (b) => !stale && setKey(b ? JSON.stringify(b) : ''),
+        () => undefined,
+      )
+    }, 150)
+    return () => {
+      stale = true
+      window.clearTimeout(t)
+    }
+  }, [valuesRev, read])
+  return useMemo(() => (key ? (JSON.parse(key) as BBox) : null), [key])
+}
+
+/** Where the ground grid goes: under the whole model's footprint (hidden geoms too, so hiding
+ *  some doesn't shrink or move it), square on its longest side in plan. Read again whenever the
+ *  model changes (not only when the view is fitted). */
+function useGridPlace(): GridPlace {
+  const bounds = useStore((s) => s.bounds)
+  const all = useModelBox(api.bboxAll)
+  return useMemo(() => {
+    const b =
+      all ??
+      (bounds
+        ? {
+            min: bounds.center.map((c, k) => c - bounds.size[k] / 2) as [number, number, number],
+            max: bounds.center.map((c, k) => c + bounds.size[k] / 2) as [number, number, number],
+          }
+        : { min: [-10, -10, 0] as [number, number, number], max: [10, 10, 0] as [number, number, number] })
+    const center: [number, number] = [(b.min[0] + b.max[0]) / 2, (b.min[1] + b.max[1]) / 2]
+    return { center, size: Math.max(b.max[0] - b.min[0], b.max[1] - b.min[1]) }
+  }, [all, bounds])
+}
+
+/** One pane's 3D scene: its own camera (view and projection), the shared model. */
+function Scene({
+  ortho,
+  request,
+  gridPlace,
+  modelBox,
+  active,
+  onRotate,
+  onAxisView,
+}: {
+  ortho: boolean
+  /** The pane the keys and G / R act in */
+  active: boolean
+  request: { name: ViewName; n: number }
+  gridPlace: GridPlace
+  /** The shown geoms' bounding box, as the model changes */
+  modelBox: BBox | null
+  onRotate: () => void
+  onAxisView: (view: ViewName) => void
+}) {
+  const geoms = useStore((s) => s.tree?.geoms ?? NO_GEOMS)
+  const shown = geoms.filter((g) => g.shown)
+  const setBounds = useStore((s) => s.setBounds)
+  const showGrid = useStore((s) => s.grid)
+  const paneView = useMemo<PaneView>(() => ({ wireFade: 1 }), [])
+  return (
+    <PaneViewContext.Provider value={paneView}>
+      <color attach="background" args={['#161616']} />
+      <hemisphereLight args={['#ffffff', '#3a3a3a', 0.9]} />
+      <Navigation
+        ortho={ortho}
+        request={request}
+        onRotate={onRotate}
+        onAxisView={onAxisView}
+        getBounds={api.bbox}
+        bounds={modelBox}
+        onBounds={setBounds}
+        // Fade dense wireframe as the model gets small on screen.
+        onFrame={(radii) => (paneView.wireFade = THREE.MathUtils.clamp((14 - radii) / 8, 0, 1))}
+      />
+      {showGrid && <GroundGrid center={gridPlace.center} size={gridPlace.size} />}
+      {shown.map((g) => (
+        <GeomMesh key={g.id} id={g.id} />
+      ))}
+      <Overlay />
+      <MoveGizmo />
+      <TransformDriver active={active} />
+      <TransformAxisLine />
+    </PaneViewContext.Provider>
+  )
+}
+
+/** Each pane: its camera's view requests and projection. */
+interface Pane {
+  request: { name: ViewName; n: number }
+  /** The last view chosen for it (top, front, iso...): what it frames a new model from */
+  view: ViewName
+  ortho: boolean
+  /** Orthographic only because an axis view switched it (it was perspective): turning away
+   *  from the axis goes back to perspective, as Blender's auto perspective does. */
+  autoOrtho: boolean
+}
+
+/** Views along an axis: they switch the pane to orthographic. */
+const AXIS_VIEWS: ViewName[] = ['top', 'bottom', 'front', 'rear', 'left', 'right']
+/** Views that turn away from an axis: back to perspective if an axis view made it orthographic. */
+const OFF_AXIS_VIEWS: ViewName[] = ['leftiso', 'rightiso', 'orbit-left', 'orbit-right', 'orbit-up', 'orbit-down']
+
+/** A pane given a view: its request, and Blender's auto perspective. */
+function withView(p: Pane, name: ViewName): Pane {
+  const next: Pane = { ...p, request: { name, n: p.request.n + 1 }, view: isNamedView(name) ? name : p.view }
+  if (AXIS_VIEWS.includes(name)) {
+    if (!p.ortho) Object.assign(next, { ortho: true, autoOrtho: true })
+  } else if (OFF_AXIS_VIEWS.includes(name) && p.autoOrtho) {
+    Object.assign(next, { ortho: false, autoOrtho: false })
+  }
+  return next
+}
+
+/** Views that set a direction (not fits or relative orbits). */
+const isNamedView = (v: ViewName) => !['fit', 'center', 'orbit-left', 'orbit-right', 'orbit-up', 'orbit-down', 'flip'].includes(v)
+
+/** Changing the layout: how long the panes take to fade out, and how long the new ones get to
+ *  frame the model before fading in (ms). Keep LAYOUT_FADE_MS in step with the CSS. */
+const LAYOUT_FADE_MS = 160
+const LAYOUT_SETTLE_MS = 450
+
+/** The panes of each layout and the views they open with. */
+const LAYOUT_VIEWS: Record<Layout, ViewName[]> = {
+  one: ['leftiso'],
+  twoH: ['leftiso', 'top'],
+  twoV: ['leftiso', 'top'],
+  four: ['top', 'leftiso', 'front', 'left'],
+}
+
+/**
+ * The 3D view: one pane, or two or four (Window > One / Two Horizontal / Two Vertical / Four in
+ * desktop OpenVSP), each with its own camera. The toolbar, view keys and the View menu act on
+ * the active pane (outlined; click a pane to make it active).
+ */
+export function Viewport() {
+  const layout = useStore((s) => s.layout)
+  const setLayout = useStore((s) => s.setLayout)
+  const storeOrtho = useStore((s) => s.ortho)
+  const storeToggleOrtho = useStore((s) => s.toggleOrtho)
+  const viewRequest = useStore((s) => s.viewRequest)
+  const fitAll = useStore((s) => s.fitAll)
+  const grid = useStore((s) => s.grid)
+  const toggleGrid = useStore((s) => s.toggleGrid)
+  const gridPlace = useGridPlace()
+  const modelBox = useModelBox(api.bbox)
+  const count = LAYOUT_VIEWS[layout].length
+
+  // Splitting gives every pane its layout's view; going back to one view keeps the camera of
+  // the pane that was active.
+  const [panes, setPanes] = useState<Pane[]>(() =>
+    LAYOUT_VIEWS[layout].map((name) => withView({ request: { name: 'fit', n: 0 }, view: name, ortho: storeOrtho, autoOrtho: false }, name)),
+  )
+  const [active, setActive] = useState(0)
+  const firstLayout = useRef(true)
+  useEffect(() => {
+    if (firstLayout.current) {
+      firstLayout.current = false
+      return
+    }
+    setPanes((prev) => {
+      const n = Math.max(...prev.map((p) => p.request.n)) + 1
+      if (layout === 'one') {
+        const kept = prev[active] ?? prev[0]
+        return [{ ...kept, request: { ...kept.request, n: kept.request.n } }]
+      }
+      return LAYOUT_VIEWS[layout].map((name, i) =>
+        withView({ request: { name: 'fit', n: n + i - 1 }, view: name, ortho: prev[i]?.ortho ?? storeOrtho, autoOrtho: prev[i]?.autoOrtho ?? false }, name),
+      )
+    })
+    setActive(0)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [layout])
+
+  const requestView = useCallback(
+    (name: ViewName) =>
+      setPanes((prev) => prev.map((p, i) => (i === active ? withView(p, name) : p))),
+    [active],
+  )
+  // The View menu, and anything else asking the store for a view: the active pane.
+  const lastStoreRequest = useRef(viewRequest.n)
+  useEffect(() => {
+    if (viewRequest.n === lastStoreRequest.current) return
+    lastStoreRequest.current = viewRequest.n
+    requestView(viewRequest.name)
+  }, [viewRequest, requestView])
+  // A model loaded or replaced: every pane frames it again from its own view (top, front,
+  // iso...). Its view rather than 'fit' (keep the current direction): at startup a pane may not
+  // have reached its view yet when the model arrives.
+  const lastFitAll = useRef(fitAll)
+  useEffect(() => {
+    if (fitAll === lastFitAll.current) return
+    lastFitAll.current = fitAll
+    setPanes((prev) => prev.map((p) => withView(p, p.view)))
+  }, [fitAll])
+  const toggleOrtho = useCallback(() => {
+    // Chosen by hand: no longer automatic.
+    const ortho = !(panes[active] ?? panes[0]).ortho
+    setPanes((prev) => prev.map((p, i) => (i === active ? { ...p, ortho, autoOrtho: false } : p)))
+    // Remembered for the single view (the store keeps the last projection chosen by hand).
+    if (layout === 'one' && ortho !== useStore.getState().ortho) storeToggleOrtho()
+  }, [panes, active, layout, storeToggleOrtho])
+
+  // Changing the layout: the panes fade out, the layout changes while they're hidden, the new
+  // panes get a moment to frame the model, and they fade back in. The view takes no input
+  // meanwhile (and another layout click waits).
+  const [swapping, setSwapping] = useState(false)
+  const swappingRef = useRef(false)
+  const changeLayout = useCallback(
+    (l: Layout) => {
+      if (swappingRef.current || l === useStore.getState().layout) return
+      swappingRef.current = true
+      setSwapping(true)
+      window.setTimeout(() => {
+        setLayout(l)
+        window.setTimeout(() => {
+          swappingRef.current = false
+          setSwapping(false)
+        }, LAYOUT_SETTLE_MS)
+      }, LAYOUT_FADE_MS)
+    },
+    [setLayout],
+  )
+
+  // The keys are the results viewer's while it's open (it covers this view).
+  const keysActive = useCallback(
+    () => !swappingRef.current && !document.querySelector('.modal-backdrop') && !useViewer.getState().open,
+    [],
+  )
+  useViewKeys(requestView, toggleOrtho, keysActive)
+  const down = useRef<[number, number] | null>(null)
+  const current = panes[active] ?? panes[0]
+  return (
+    <div className="viewport">
+      {/* The view toolbar, and the keyboard shortcuts button floating beside it. */}
+      <div className="view-tools-row">
+        <ViewTools
+          onView={requestView}
+          ortho={current?.ortho ?? storeOrtho}
+          onToggleOrtho={toggleOrtho}
+          grid={grid}
+          onToggleGrid={toggleGrid}
+          layout={layout}
+          onLayout={changeLayout}
+        />
+        <KeysHelp />
+      </div>
+      <TransformHud />
+      <div className={`viewport-panes ${layout}` + (swapping ? ' swapping' : '')} aria-busy={swapping}>
+        {panes.slice(0, count).map((pane, i) => (
+          <div
+            key={i}
+            className={'viewport-pane' + (count > 1 && i === active ? ' active' : '')}
+            onPointerDownCapture={() => setActive(i)}
+          >
+            {/* Resize on every frame while the side panels slide: the default (debounced) resize
+                stretches the old frame for the whole animation and then snaps. */}
+            <Canvas
+              dpr={[1, 2]}
+              resize={{ scroll: false, debounce: 0 }}
+              onPointerDown={(e) => (down.current = [e.clientX, e.clientY])}
+              onPointerMissed={(e) => {
+                // A click on nothing deselects everything; an orbit or pan drag doesn't.
+                const d = down.current
+                if (performance.now() - gizmoPressedAt < 1000) return
+                if (e.button === 0 && !isToggleClick(e) && d && Math.hypot(e.clientX - d[0], e.clientY - d[1]) <= 4) void api.pick('')
+              }}
+            >
+              <Scene
+                ortho={pane.ortho}
+                request={pane.request}
+                gridPlace={gridPlace}
+                modelBox={modelBox}
+                active={i === active}
+                // Turning a pane with the mouse leaves its axis view: back to perspective if
+                // the axis view made it orthographic.
+                onRotate={() =>
+                  setPanes((prev) => prev.map((p, k) => (k === i && p.autoOrtho ? { ...p, ortho: false, autoOrtho: false } : p)))
+                }
+                // The orientation gizmo's balls: that axis view in this pane, as the keys give it.
+                onAxisView={(view) => setPanes((prev) => prev.map((p, k) => (k === i ? withView(p, view) : p)))}
+              />
+            </Canvas>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+type GizmoHandle = THREE.Object3D & { tag?: string }
+interface Gizmo extends THREE.Object3D {
+  showX: boolean
+  showY: boolean
+  showZ: boolean
+  gizmo: Record<string, THREE.Object3D>
+  picker: Record<string, THREE.Object3D>
+  outward?: boolean
+}
+
+/**
+ * Keep the move arrows (lines and cones) pointing the positive way along their axes wherever
+ * the camera is. three.js mirrors an axis to the camera's side whenever it points even slightly
+ * away (so from straight above, X and Y would flip back and forth); undo that after each update.
+ */
+function keepArrowsOutward(controls: TransformControlsImpl) {
+  const gz = (controls as unknown as { gizmo: Gizmo }).gizmo
+  if (!gz || gz.outward) return
+  gz.outward = true
+  // WebGL draws lines 1 px wide: thicken each axis line with a thin cylinder along it, drawn
+  // like the line (same colour and highlighting, always on top).
+  const thick: [THREE.Line, THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>][] = []
+  for (const h of gz.gizmo.translate.children) {
+    if (!(h instanceof THREE.Line) || !['X', 'Y', 'Z'].includes(h.name)) continue
+    const geo = new THREE.CylinderGeometry(GIZMO_AXIS_RADIUS, GIZMO_AXIS_RADIUS, 1, 12, 1, true)
+    geo.rotateZ(-Math.PI / 2) // along +X, like the line's geometry (0,0,0)-(1,0,0)
+    geo.translate(0.5, 0, 0)
+    const mat = new THREE.MeshBasicMaterial({ depthTest: false, depthWrite: false, transparent: true, fog: false, toneMapped: false })
+    const tube = new THREE.Mesh(geo, mat)
+    tube.raycast = () => {} // picking stays with the gizmo's own pick areas
+    h.add(tube)
+    thick.push([h, tube])
+  }
+  const update = gz.updateMatrixWorld.bind(gz)
+  gz.updateMatrixWorld = (force?: boolean) => {
+    update(force)
+    for (const [line, tube] of thick) {
+      const m = line.material as THREE.LineBasicMaterial
+      tube.material.color.copy(m.color)
+      tube.material.opacity = m.opacity
+    }
+    for (const group of [gz.gizmo.translate, gz.picker.translate]) {
+      for (const h of group.children as GizmoHandle[]) {
+        h.scale.set(Math.abs(h.scale.x), Math.abs(h.scale.y), Math.abs(h.scale.z))
+        // An axis pointing at the camera is shrunk to nothing; leave it hidden.
+        const shrunk = h.scale.x < 1e-8
+        const a = h.name
+        const shown = (!a.includes('X') || gz.showX) && (!a.includes('Y') || gz.showY) && (!a.includes('Z') || gz.showZ)
+        if (h.tag === 'bwd') h.visible = false
+        else if (h.tag === 'fwd') h.visible = shown && !shrunk
+        h.updateMatrixWorld(true)
+      }
+    }
+  }
+}
+
+/**
+ * Blender-style move arrows on the selection, at the middle of the selected geoms' origins:
+ * dragging an arrow moves them all along that axis, the arrows snapped to the grid, by setting
+ * their XForm locations (one step of Edit > Undo).
+ */
+function MoveGizmo() {
+  const ids = useStore((s) => s.tree?.active ?? NO_IDS)
+  const key = ids.join(',')
+  // Out of the way while G / R moves the selection.
+  const transforming = useTransform((s) => !!s.mode)
+  // Re-read the origins when any of the selected geoms changes.
+  const revs = useStore((s) => ids.map((id) => s.meshRev[id] ?? 0).join(','))
+  const [center, setCenter] = useState<[number, number, number] | null>(null)
+  const obj = useRef<THREE.Group>(null)
+  const controls = useRef<TransformControlsImpl>(null)
+  const dragging = useRef(false)
+  const start = useRef<[number, number, number]>(ZERO)
+
+  const refresh = useCallback(() => {
+    const sel = key ? key.split(',') : []
+    if (!sel.length) return setCenter(null)
+    Promise.all(sel.map((id) => api.geomOrigin(id))).then(
+      (ps) => {
+        if (dragging.current) return
+        const c: [number, number, number] = [0, 0, 0]
+        for (const p of ps) for (let k = 0; k < 3; k++) c[k] += p[k] / ps.length
+        setCenter(c)
+      },
+      () => undefined,
+    )
+  }, [key])
+
+  useEffect(() => {
+    if (!dragging.current) refresh()
+  }, [revs, refresh])
+
+  const where = (): [number, number, number] => {
+    const p = obj.current?.position
+    return p ? [p.x, p.y, p.z] : start.current
+  }
+  const delta = (): [number, number, number] => {
+    const p = where()
+    const s = start.current
+    return [p[0] - s[0], p[1] - s[1], p[2] - s[2]]
+  }
+
+  // While dragging, only the drawing moves; the geoms are moved when the arrow is let go,
+  // since every move re-tessellates them.
+  const onChange = () => {
+    if (!dragging.current) return
+    usePreview.setState({ ids, d: delta(), rot: null, scale: null, revs: revsOf(ids) })
+  }
+
+  // drei builds new controls whenever the camera changes (a switch to or from orthographic, as
+  // the top view makes), so check every frame: patching is done once per controls.
+  useFrame(() => {
+    if (controls.current) keepArrowsOutward(controls.current)
+  })
+
+  if (!ids.length || !center || transforming) return null
+  return (
+    <>
+      <group ref={obj} position={center} />
+      <TransformControls
+        ref={controls}
+        object={obj as unknown as React.RefObject<THREE.Object3D>}
+        mode="translate"
+        space="world"
+        translationSnap={MOVE_SNAP}
+        size={0.9}
+        onMouseDown={() => {
+          gizmoPressedAt = performance.now()
+          dragging.current = true
+          start.current = where()
+        }}
+        onMouseUp={() => {
+          gizmoPressedAt = performance.now()
+          dragging.current = false
+          const d = delta()
+          if (d.every((v) => v === 0)) return usePreview.setState({ ids: [] })
+          api.moveGeoms(ids, d).then(refresh, () => {
+            usePreview.setState({ ids: [] })
+            refresh()
+          })
+        }}
+        onObjectChange={onChange}
+      />
+    </>
+  )
+}
+
+type Vec3 = [number, number, number]
+
+/** After a blank's move or rotation is applied, how long at most its markers stay where the
+ *  preview put them, waiting for the overlay to show them there (ms). */
+const BLANK_HOLD_MS = 1500
+
+/** A blank's marker points under the preview: the original's moved or turned, each symmetric
+ *  copy's mirrored (or turned) to match, with the map from the original onto it (its transform
+ *  times the inverse of the original's), as the surfaces' copies are. */
+function previewPoints(p: Preview, id: string, pts: Vec3[], m?: number[]): Vec3[] {
+  const P = previewMatrix(p, id, new THREE.Matrix4())
+  const inv0 = m && m.length >= 16 * pts.length ? new THREE.Matrix4().fromArray(m, 0).invert() : null
+  return pts.map((q, j) => {
+    let M = P
+    if (j > 0 && inv0) {
+      const S = new THREE.Matrix4().fromArray(m!, 16 * j).multiply(inv0)
+      M = S.clone().multiply(P).multiply(S.invert())
+    }
+    return new THREE.Vector3(...q).applyMatrix4(M).toArray() as Vec3
+  })
+}
+
+const samePoints = (a: Vec3[], b: Vec3[]) =>
+  a.length === b.length && a.every((p, i) => p.every((v, k) => Math.abs(v - b[i][k]) <= 1e-5 * Math.max(1, Math.abs(v))))
+
+/**
+ * A blank geom: a circle at its origin (and each symmetric copy), gray, or red when it's
+ * selected. Clicking one selects it, like clicking a surface. Moved or turned with the selection
+ * by the move gizmo and G / R, like the surfaces; once that's applied, the markers stay put until
+ * the overlay shows them there (it comes a moment after the model changes).
+ */
+function BlankMarkers({ o }: { o: GlDrawObj }) {
+  const id = o.id ?? ''
+  const name = useStore((s) => (id ? s.geomsById[id]?.name : undefined))
+  const rev = useStore((s) => s.meshRev[id] ?? 0)
+  const preview = usePreview((s) => (id && s.ids.includes(id) ? s : null))
+  const [, recheck] = useState(0)
+  const held = useRef<{ pts: Vec3[]; until: number } | null>(null)
+  const from: Vec3[] = []
+  for (let i = 0; i + 2 < o.p.length; i += 3) from.push([o.p[i], o.p[i + 1], o.p[i + 2]])
+  let at = from
+  if (!preview) {
+    held.current = null // cancelled, or another preview
+  } else if (rev <= (preview.revs[id] ?? -1)) {
+    // Previewed (the model hasn't changed since it began).
+    at = previewPoints(preview, id, from, o.m)
+    held.current = { pts: at, until: 0 }
+  } else if (held.current) {
+    // Applied: held until the overlay has them there too, or for BLANK_HOLD_MS at most.
+    const h = held.current
+    if (!h.until) h.until = performance.now() + BLANK_HOLD_MS
+    if (performance.now() < h.until && !samePoints(h.pts, from)) at = h.pts
+    else held.current = null
+  }
+  const holding = !!held.current?.until
+  useEffect(() => {
+    if (!holding) return
+    const t = window.setTimeout(() => recheck((n) => n + 1), Math.max(0, (held.current?.until ?? 0) - performance.now()) + 10)
+    return () => window.clearTimeout(t)
+  }, [holding])
+  return (
+    <>
+      {at.map((p, i) => (
+        <Html key={i} position={p} center zIndexRange={[5, 0]}>
+          <div
+            className={'blank-marker' + (o.sel ? ' sel' : '')}
+            title={name}
+            onClick={(e) => {
+              e.stopPropagation()
+              if (o.id) void api.pick(o.id, isToggleClick(e))
+            }}
+          />
+        </Html>
+      ))}
+    </>
+  )
+}
+
+/** A draw object's lines as segment end points (strips and loops joined up). */
+function segmentPoints(o: GlDrawObj): [number, number, number][] {
+  const n = o.p.length / 3
+  const v = (i: number): [number, number, number] => [o.p[3 * i], o.p[3 * i + 1], o.p[3 * i + 2]]
+  const out: [number, number, number][] = []
+  if (o.t === 'lines') {
+    for (let i = 0; i + 1 < n; i += 2) out.push(v(i), v(i + 1))
+  } else {
+    for (let i = 0; i + 1 < n; i++) out.push(v(i), v(i + 1))
+    if (o.t === 'loop' && n > 2) out.push(v(n - 1), v(0))
+  }
+  return out
+}
+
+/**
+ * What the main 3D view shows besides the model, mirrored from OpenVSP: the screens' draw
+ * objects (the CG from Mass Properties, measures, CFD sources, ...), blank and hinge geoms,
+ * and the selected geom's boxes, cross sections and skinning/blending tangents. Drawn on top,
+ * like a highlight, so a CG inside the model or a section on its surface still shows.
+ */
+function Overlay() {
+  const objs = useMirror((s) => s.overlay)
+  const items = useMemo(
+    () =>
+      objs.map((o) => {
+        if (o.t === 'blank') return { o, geo: null, seg: null }
+        if (o.t === 'points' || o.t === 'tris') {
+          const geo = new THREE.BufferGeometry()
+          geo.setAttribute('position', new THREE.Float32BufferAttribute(o.p, 3))
+          if (o.t === 'tris') geo.computeVertexNormals()
+          return { o, geo, seg: null }
+        }
+        const seg = segmentPoints(o)
+        // Dashes about an eighth of the average segment, so short vectors still read as dashed.
+        let len = 0
+        for (let i = 0; i + 1 < seg.length; i += 2) {
+          const [a, b] = [seg[i], seg[i + 1]]
+          len += Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2])
+        }
+        const dash = seg.length ? len / (seg.length / 2) / 8 : 1
+        return { o, geo: null, seg, dash }
+      }),
+    [objs],
+  )
+  useEffect(() => () => items.forEach((i) => i.geo?.dispose()), [items])
+  return (
+    <>
+      {items.map((it, k) => {
+        const o = it.o
+        if (o.t === 'blank') return <BlankMarkers key={'blank:' + o.id} o={o} />
+        if (o.t === 'points')
+          return (
+            <points key={k} geometry={it.geo!} renderOrder={12}>
+              <pointsMaterial color={o.pc} size={Math.max(4, o.ps || 6)} sizeAttenuation={false} depthTest={false} transparent />
+            </points>
+          )
+        if (o.t === 'tris')
+          return (
+            <mesh key={k} geometry={it.geo!} renderOrder={11}>
+              <meshBasicMaterial color={o.c} side={THREE.DoubleSide} depthTest={false} transparent />
+            </mesh>
+          )
+        if (!it.seg?.length) return null
+        return (
+          <Line
+            key={k}
+            points={it.seg}
+            segments
+            color={o.c}
+            lineWidth={Math.max(1, o.lw || 1)}
+            dashed={!!o.dash}
+            opacity={o.box === 1 ? BBOX_ALPHA : o.box === 2 ? SECTION_BOX_ALPHA : 1}
+            dashSize={it.dash}
+            gapSize={it.dash}
+            depthTest={false}
+            transparent
+            renderOrder={10}
+          />
+        )
+      })}
+    </>
+  )
+}

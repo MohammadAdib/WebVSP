@@ -126,6 +126,10 @@ public:
     vector< string > PasteClipboard();
     bool IDinClipboard( const string & id );
     vector< string > CopyGeomVec( const vector<string> & geom_vec );
+    // Copies these Geoms into the model in place, as Blender's Shift+D does: each copy goes under
+    // its original's parent (or stays under the copy of its parent, when that was copied too),
+    // at the same spot.  The clipboard is left alone.  Returns the copies' IDs.
+    vector< string > DuplicateGeomVec( const vector<string> & geom_vec );
 
     void LoadDrawObjs( vector< DrawObj* > & draw_obj_vec );
 

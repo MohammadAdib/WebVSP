@@ -13,6 +13,9 @@
 #define _HAS_STD_BYTE 0
 #endif
 
+#include <cmath>
+#include <unordered_set>
+
 #include "AdvLinkMgr.h"
 #include "AnalysisMgr.h"
 #include "AttributeManager.h"
@@ -39,6 +42,8 @@
 #include "VSPAEROMgr.h"
 #include "VspUtil.h"
 #include "WingGeom.h"
+#include "MeshGeom.h"
+#include "PtCloudGeom.h"
 #include "StlHelper.h"
 #include "ModeMgr.h"
 
@@ -2046,6 +2051,333 @@ extern void Unlock( )
 #endif
 }
 
+extern void MirrorEnable()
+{
+#ifdef VSP_USE_FLTK
+    GuiInterface::getInstance().MirrorEnable();
+#endif
+    ErrorMgr.NoError();
+}
+
+extern void MirrorPump( double timeout )
+{
+#ifdef VSP_USE_FLTK
+    GuiInterface::getInstance().MirrorPump( timeout );
+#endif
+    ErrorMgr.NoError();
+}
+
+extern void MirrorPostEvent( const std::string & json )
+{
+#ifdef VSP_USE_FLTK
+    GuiInterface::getInstance().MirrorPostEvent( json );
+#endif
+}
+
+extern std::string MirrorTakeOutput()
+{
+    // Called from any thread: leave the (single-threaded) error state alone.
+#ifdef VSP_USE_FLTK
+    return GuiInterface::getInstance().MirrorTakeOutput();
+#else
+    return std::string( "[]" );
+#endif
+}
+
+extern void MirrorRequestFull()
+{
+#ifdef VSP_USE_FLTK
+    GuiInterface::getInstance().MirrorRequestFull();
+#endif
+}
+
+std::vector<std::string> GetActiveGeoms()
+{
+    Vehicle* veh = GetVehicle();
+    ErrorMgr.NoError();
+    return veh->GetActiveGeomVec();
+}
+
+extern void MirrorPickGeom( const std::string & geom_id, bool toggle )
+{
+#ifdef VSP_USE_FLTK
+    GuiInterface::getInstance().MirrorPickGeom( geom_id, toggle );
+#endif
+    ErrorMgr.NoError();
+}
+
+extern vec3d MirrorGeomOrigin( const std::string & geom_id )
+{
+    Vehicle* veh = GetVehicle();
+    Geom* geom = veh->FindGeom( geom_id );
+    if ( !geom )
+    {
+        ErrorMgr.AddError( VSP_INVALID_GEOM_ID, "MirrorGeomOrigin::Can't Find Geom " + geom_id );
+        return vec3d();
+    }
+    ErrorMgr.NoError();
+    return geom->getModelMatrix().getTranslation();
+}
+
+extern std::vector< vec3d > MirrorFeatureLines( const std::string & geom_id )
+{
+    std::vector< vec3d > pts;
+    Vehicle* veh = GetVehicle();
+    Geom* geom = veh->FindGeom( geom_id );
+    if ( !geom )
+    {
+        ErrorMgr.AddError( VSP_INVALID_GEOM_ID, "MirrorFeatureLines::Can't Find Geom " + geom_id );
+        return pts;
+    }
+    vector< DrawObj* > objs;
+    geom->LoadDrawObjs( objs );
+    for ( DrawObj* d : objs )
+    {
+        if ( d->m_GeomID.rfind( geom_id + "Feature_", 0 ) == 0 && d->m_Visible && d->m_Type == DrawObj::VSP_LINES )
+        {
+            pts.insert( pts.end(), d->m_PntVec.begin(), d->m_PntVec.end() );
+        }
+    }
+    ErrorMgr.NoError();
+    return pts;
+}
+
+extern void MirrorMoveGeoms( const std::vector< std::string > & geom_ids, const vec3d & delta )
+{
+    Vehicle* veh = GetVehicle();
+    std::unordered_set< std::string > sel( geom_ids.begin(), geom_ids.end() );
+
+    // Work out every location change first, in the frames as they are now.
+    struct Change
+    {
+        Parm* parm;
+        double val;
+    };
+    std::vector< Change > changes;
+    for ( const std::string & id : geom_ids )
+    {
+        Geom* geom = veh->FindGeom( id );
+        if ( !geom )
+        {
+            ErrorMgr.AddError( VSP_INVALID_GEOM_ID, "MirrorMoveGeoms::Can't Find Geom " + id );
+            return;
+        }
+        // A geom whose position follows a selected ancestor moves with it already.
+        bool follows = false;
+        for ( Geom* g = geom; !follows && g->m_TransAttachFlag() != vsp::ATTACH_TRANS_NONE; )
+        {
+            g = veh->FindGeom( g->GetParentID() );
+            if ( !g )
+            {
+                break;
+            }
+            follows = sel.count( g->GetID() ) > 0;
+        }
+        if ( follows )
+        {
+            continue;
+        }
+        // The absolute location is in the world frame; the relative one in the frame the geom
+        // is attached to.
+        bool abs = geom->m_AbsRelFlag() == vsp::ABS;
+        Parm *loc[3] = { &geom->m_XRelLoc, &geom->m_YRelLoc, &geom->m_ZRelLoc };
+        vec3d d = delta;
+        if ( abs )
+        {
+            loc[0] = &geom->m_XLoc;
+            loc[1] = &geom->m_YLoc;
+            loc[2] = &geom->m_ZLoc;
+        }
+        else
+        {
+            Matrix4d inv = geom->getAttachMatrix();
+            inv.affineInverse();
+            vec3d now = geom->getModelMatrix().getTranslation();
+            d = inv.xform( now + delta ) - inv.xform( now );
+        }
+        for ( int i = 0; i < 3; i++ )
+        {
+            if ( std::abs( d.v[i] ) > 1e-12 )
+            {
+                changes.push_back( { loc[i], loc[i]->Get() + d.v[i] } );
+            }
+        }
+    }
+
+    // As the GUI sets them, all one step of Edit > Undo.
+    ParmMgr.BeginUndoGroup();
+    for ( const Change & c : changes )
+    {
+        c.parm->SetFromDevice( c.val );
+    }
+    ParmMgr.EndUndoGroup();
+    veh->Update();
+    ErrorMgr.NoError();
+}
+
+extern std::vector< std::string > MirrorDuplicateGeoms( const std::vector< std::string > & geom_ids )
+{
+    Vehicle* veh = GetVehicle();
+    for ( const std::string & id : geom_ids )
+    {
+        if ( !veh->FindGeom( id ) )
+        {
+            ErrorMgr.AddError( VSP_INVALID_GEOM_ID, "MirrorDuplicateGeoms::Can't Find Geom " + id );
+            return {};
+        }
+    }
+    std::vector< std::string > copies = veh->DuplicateGeomVec( geom_ids );
+    veh->Update();
+    ErrorMgr.NoError();
+    return copies;
+}
+
+extern void MirrorRotateGeoms( const std::vector< std::string > & geom_ids, const vec3d & axis, double angle )
+{
+    Vehicle* veh = GetVehicle();
+    std::unordered_set< std::string > sel( geom_ids.begin(), geom_ids.end() );
+
+    vec3d a = axis;
+    if ( a.mag() < 1e-12 )
+    {
+        ErrorMgr.AddError( VSP_INVALID_INPUT_VAL, "MirrorRotateGeoms::Zero axis" );
+        return;
+    }
+    a.normalize();
+    // Rotation by angle (degrees, right-handed) about a through the origin, column-major.
+    double th = angle * M_PI / 180.0;
+    double c = cos( th ), s = sin( th ), m = 1.0 - c;
+    double x = a.x(), y = a.y(), z = a.z();
+    double rot[16] = { x * x * m + c,     x * y * m + z * s, x * z * m - y * s, 0,
+                       x * y * m - z * s, y * y * m + c,     y * z * m + x * s, 0,
+                       x * z * m + y * s, y * z * m - x * s, z * z * m + c,     0,
+                       0, 0, 0, 1 };
+
+    // Work out every rotation and location first, in the frames as they are now.
+    struct Change
+    {
+        Parm* parm;
+        double val;
+    };
+    std::vector< Change > changes;
+    for ( const std::string & id : geom_ids )
+    {
+        Geom* geom = veh->FindGeom( id );
+        if ( !geom )
+        {
+            ErrorMgr.AddError( VSP_INVALID_GEOM_ID, "MirrorRotateGeoms::Can't Find Geom " + id );
+            return;
+        }
+        // A geom whose orientation follows a selected ancestor turns with it already.
+        bool follows = false;
+        for ( Geom* g = geom; !follows && g->m_RotAttachFlag() != vsp::ATTACH_ROT_NONE; )
+        {
+            g = veh->FindGeom( g->GetParentID() );
+            if ( !g )
+            {
+                break;
+            }
+            follows = sel.count( g->GetID() ) > 0;
+        }
+        if ( follows )
+        {
+            continue;
+        }
+
+        // The model matrix turned about the geom's own origin: T(o) R T(-o) M.
+        Matrix4d model = geom->getModelMatrix();
+        vec3d o = model.getTranslation();
+        Matrix4d next;
+        next.loadIdentity();
+        next.translatef( o.x(), o.y(), o.z() );
+        next.matMult( rot );
+        next.translatef( -o.x(), -o.y(), -o.z() );
+        next.matMult( model.data() );
+
+        // Back to the geom's parameters, as GeomXForm::ComposeModelMatrix does: the absolute
+        // location is where the rotation center lands; the relative one comes from the matrix
+        // relative to the attach frame.
+        vec3d center = geom->m_Center;
+        vec3d loc, ang;
+        if ( geom->m_AbsRelFlag() == vsp::ABS )
+        {
+            loc = next.xform( center );
+            ang = next.getAngles();
+        }
+        else
+        {
+            Matrix4d rel = geom->getAttachMatrix();
+            rel.affineInverse();
+            rel.matMult( next.data() );
+            double t[16];
+            rel.getMat( t );
+            vec3d rc = rel.xformnorm( center );
+            loc = vec3d( t[12], t[13], t[14] ) + rc - center;
+            ang = rel.getAngles();
+        }
+        bool abs = geom->m_AbsRelFlag() == vsp::ABS;
+        Parm *lp[3] = { &geom->m_XRelLoc, &geom->m_YRelLoc, &geom->m_ZRelLoc };
+        Parm *rp[3] = { &geom->m_XRelRot, &geom->m_YRelRot, &geom->m_ZRelRot };
+        if ( abs )
+        {
+            lp[0] = &geom->m_XLoc; lp[1] = &geom->m_YLoc; lp[2] = &geom->m_ZLoc;
+            rp[0] = &geom->m_XRot; rp[1] = &geom->m_YRot; rp[2] = &geom->m_ZRot;
+        }
+        for ( int i = 0; i < 3; i++ )
+        {
+            if ( std::abs( lp[i]->Get() - loc.v[i] ) > 1e-12 )
+            {
+                changes.push_back( { lp[i], loc.v[i] } );
+            }
+            if ( std::abs( rp[i]->Get() - ang.v[i] ) > 1e-12 )
+            {
+                changes.push_back( { rp[i], ang.v[i] } );
+            }
+        }
+    }
+
+    ParmMgr.BeginUndoGroup();
+    for ( const Change & ch : changes )
+    {
+        ch.parm->SetFromDevice( ch.val );
+    }
+    ParmMgr.EndUndoGroup();
+    veh->Update();
+    ErrorMgr.NoError();
+}
+
+extern void MirrorScaleGeoms( const std::vector< std::string > & geom_ids, double factor )
+{
+    Vehicle* veh = GetVehicle();
+    if ( !( factor > 0 ) || !std::isfinite( factor ) )
+    {
+        ErrorMgr.AddError( VSP_INVALID_INPUT_VAL, "MirrorScaleGeoms::Scale factor must be positive" );
+        return;
+    }
+    std::vector< Geom* > geoms;
+    for ( const std::string & id : geom_ids )
+    {
+        Geom* geom = veh->FindGeom( id );
+        if ( !geom )
+        {
+            ErrorMgr.AddError( VSP_INVALID_GEOM_ID, "MirrorScaleGeoms::Can't Find Geom " + id );
+            return;
+        }
+        geoms.push_back( geom );
+    }
+
+    // The Scale factor, as the XForm tab's slider sets it: Geom::Update scales the dimensions by
+    // its change since the last update, and Edit > Undo sets it back, scaling them back.
+    ParmMgr.BeginUndoGroup();
+    for ( Geom* geom : geoms )
+    {
+        geom->m_Scale.SetFromDevice( geom->m_Scale() * factor );
+    }
+    ParmMgr.EndUndoGroup();
+    veh->Update();
+    ErrorMgr.NoError();
+}
+
 extern bool IsEventLoopRunning( )
 {
 #ifdef VSP_USE_FLTK
@@ -2089,6 +2421,21 @@ void SetGeomDrawType(const string &geom_id, int type)
     ErrorMgr.NoError();
 }
 
+// Backported from OpenVSP 3.55 for WebVSP.
+int GetGeomDrawType( const std::string &geom_id )
+{
+    Vehicle* veh = GetVehicle();
+    Geom* geom_ptr = veh->FindGeom( geom_id );
+    if ( !geom_ptr )
+    {
+        ErrorMgr.AddError( VSP_INVALID_GEOM_ID, "GetGeomDrawType::Can't Find Geom " + geom_id );
+        return GEOM_DRAW_WIRE;
+    }
+
+    ErrorMgr.NoError();
+    return geom_ptr->m_GuiDraw.GetDrawType();
+}
+
 void SetGeomWireColor( const string &geom_id, int r, int g, int b )
 {
     Vehicle* veh = GetVehicle();
@@ -2101,6 +2448,21 @@ void SetGeomWireColor( const string &geom_id, int r, int g, int b )
     geom_ptr->SetColor( r, g, b );
 
     ErrorMgr.NoError();
+}
+
+// Backported from OpenVSP 3.55 for WebVSP.
+vec3d GetGeomWireColor( const std::string &geom_id )
+{
+    Vehicle* veh = GetVehicle();
+    Geom* geom_ptr = veh->FindGeom( geom_id );
+    if ( !geom_ptr )
+    {
+        ErrorMgr.AddError( VSP_INVALID_GEOM_ID, "GetGeomWireColor::Can't Find Geom " + geom_id );
+        return vec3d();
+    }
+
+    ErrorMgr.NoError();
+    return geom_ptr->m_GuiDraw.GetWireColor();
 }
 
 void SetGeomDisplayType(const string &geom_id, int type)
@@ -2614,6 +2976,27 @@ int GetNumXSecSurfs( const string & geom_id )
     return geom_ptr->GetNumXSecSurfs();
 }
 
+// Backported from OpenVSP 3.55 for WebVSP.
+std::vector < std::string > GetXSecSurfIDVec( const std::string & geom_id )
+{
+    std::vector < std::string > ret_vec;
+
+    Geom* geom_ptr = GetVehicle()->FindGeom( geom_id );
+    if ( !geom_ptr )
+    {
+        ErrorMgr.AddError( VSP_INVALID_GEOM_ID, "GetXSecSurfIDVec::Can't Find Geom " + geom_id );
+        return ret_vec;
+    }
+
+    for ( int i = 0; i < geom_ptr->GetNumXSecSurfs(); i++ )
+    {
+        ret_vec.push_back( geom_ptr->GetXSecSurf( i )->GetID() );
+    }
+
+    ErrorMgr.NoError();
+    return ret_vec;
+}
+
 /// Get the number of main surfs for this geom
 int GetNumMainSurfs( const string & geom_id )
 {
@@ -2642,6 +3025,19 @@ int GetTotalNumSurfs( const string& geom_id )
 
     ErrorMgr.NoError();
     return geom_ptr->GetNumTotalSurfs();
+}
+
+std::vector < double > GetMeshGeomTriPnts( const std::string& geom_id )
+{
+    Vehicle* veh = GetVehicle();
+    Geom* geom_ptr = veh->FindGeom( geom_id );
+    if ( MeshGeom* mesh_ptr = dynamic_cast< MeshGeom* >( geom_ptr ) )
+    {
+        ErrorMgr.NoError();
+        return mesh_ptr->GetDrawTriPnts();
+    }
+    ErrorMgr.AddError( VSP_INVALID_GEOM_ID, "GetMeshGeomTriPnts::Can't Find Mesh Geom " + geom_id );
+    return std::vector < double >();
 }
 
 // Get the maximum bounding box point for the Geom in absolute or body axes
@@ -7795,6 +8191,18 @@ string GetParmDescript( const string & parm_id )
     }
     ErrorMgr.NoError();
     return p->GetDescript();
+}
+
+bool GetParmActiveFlag( const std::string & parm_id )
+{
+    Parm* p = ParmMgr.FindParm( parm_id );
+    if ( !p )
+    {
+        ErrorMgr.AddError( VSP_CANT_FIND_PARM, "GetParmActiveFlag::Can't Find Parm " + parm_id );
+        return false;
+    }
+    ErrorMgr.NoError();
+    return p->GetActiveFlag();
 }
 
 ///  Find a parm id given parm container, name and group

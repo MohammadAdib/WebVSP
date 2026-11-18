@@ -5942,6 +5942,156 @@ extern void Lock( );
 
 extern void Unlock( );
 
+/*!
+    \ingroup Visualization
+*/
+/*!
+    Mirror the GUI to a web client instead of showing it on screen. Call once, after InitGUI,
+    from the same thread. Windows are kept off screen; their widgets are reported by
+    MirrorTakeOutput and driven by MirrorPostEvent. Has no effect without the GUI.
+*/
+
+extern void MirrorEnable();
+
+/*!
+    \ingroup Visualization
+*/
+/*!
+    Apply pending web client events, run the GUI event loop for up to timeout seconds and
+    queue a description of what changed. Call repeatedly from the GUI thread.
+    \param [in] timeout double Maximum time to wait for GUI events (seconds)
+*/
+
+extern void MirrorPump( double timeout );
+
+/*!
+    \ingroup Visualization
+*/
+/*!
+    Queue an input event from the web client (a JSON object). Safe to call from any thread.
+    \param [in] json string Event
+*/
+
+extern void MirrorPostEvent( const std::string & json );
+
+/*!
+    \ingroup Visualization
+*/
+/*!
+    Take the queued mirror output (window and widget changes, prompts) as a JSON array.
+    Safe to call from any thread.
+    \return string JSON array
+*/
+
+extern std::string MirrorTakeOutput();
+
+/*!
+    \ingroup Visualization
+*/
+/*!
+    Ask for the next mirror output to describe every window and widget in full.
+*/
+
+extern void MirrorRequestFull();
+
+/*!
+    \ingroup Visualization
+*/
+/*!
+    Select a Geom as if it were picked in the 3D view (an empty ID deselects everything).
+    \param [in] geom_id string Geom ID
+    \param [in] toggle bool Add it to the selection, or take it out (a shift click)
+*/
+
+extern void MirrorPickGeom( const std::string & geom_id, bool toggle = false );
+
+/*!
+    \ingroup Visualization
+*/
+/*!
+    The origin of a Geom in the 3D view (its model matrix translation).
+    \param [in] geom_id string Geom ID
+    \return vec3d origin
+*/
+
+extern vec3d MirrorGeomOrigin( const std::string & geom_id );
+
+/*!
+    \ingroup Visualization
+*/
+/*!
+    The feature lines the 3D view draws for a Geom (its outline), as line segment end points.
+    Empty when the Geom doesn't show them.
+    \param [in] geom_id string Geom ID
+    \return vector<vec3d> Pairs of points, one per segment
+*/
+
+extern std::vector< vec3d > MirrorFeatureLines( const std::string & geom_id );
+
+/*!
+    \ingroup Visualization
+*/
+/*!
+    Move Geoms by an offset in the 3D view, as dragging them would: sets each one's absolute or
+    relative location, whichever it uses, as one step of Edit > Undo. A Geom attached to a
+    selected ancestor moves with it.
+    \param [in] geom_ids vector<string> Geom IDs
+    \param [in] delta vec3d How far to move them
+*/
+
+extern void MirrorMoveGeoms( const std::vector< std::string > & geom_ids, const vec3d & delta );
+
+/*!
+    \ingroup Visualization
+*/
+/*!
+    Rotate Geoms in the 3D view, each about its own origin, as Blender's R does: turns each one's
+    model matrix about a world axis and sets its absolute or relative location and rotation to
+    match, as one step of Edit > Undo. A Geom whose rotation is attached to a selected ancestor
+    turns with it.
+    \param [in] geom_ids vector<string> Geom IDs
+    \param [in] axis vec3d World axis to rotate about
+    \param [in] angle double Angle (degrees, right-handed about the axis)
+*/
+
+extern void MirrorRotateGeoms( const std::vector< std::string > & geom_ids, const vec3d & axis, double angle );
+
+/*!
+    \ingroup Visualization
+*/
+/*!
+    Scale Geoms in the 3D view, each about its own origin, as Blender's S does: multiplies each
+    one's XForm Scale factor (which resizes all of its dimensions, as the XForm tab's Scale
+    slider does), as one step of Edit > Undo. OpenVSP scales a Geom the same in every direction.
+    \param [in] geom_ids vector<string> Geom IDs
+    \param [in] factor double How much bigger (above 1) or smaller (below 1) to make them
+*/
+
+extern void MirrorScaleGeoms( const std::vector< std::string > & geom_ids, double factor );
+
+/*!
+    \ingroup Visualization
+*/
+/*!
+    Duplicate Geoms in place, as Blender's Shift+D does: each copy goes under its original's
+    parent (or under the copy of its parent, when that is duplicated too), at the same spot. The
+    clipboard is left alone.
+    \param [in] geom_ids vector<string> Geom IDs
+    \return vector<string> The copies' IDs, in the same order
+*/
+
+extern std::vector< std::string > MirrorDuplicateGeoms( const std::vector< std::string > & geom_ids );
+
+/*!
+    \ingroup Geom
+*/
+/*!
+    Get the IDs of the active (selected) Geoms, as highlighted in the GUI.
+    \return vector<string> Vector of active Geom IDs
+*/
+
+extern std::vector<std::string> GetActiveGeoms();
+
 
 /*!
     \ingroup Visualization
@@ -6081,6 +6231,16 @@ extern void SetShowBorders( bool brdr );
 extern void SetGeomDrawType(const string &geom_id, int type);
 
 /*!
+    Get the draw type of the wireframe or solid (i.e. shaded, textured, etc.) for a Geom
+    (backported from OpenVSP 3.55 for WebVSP)
+    \sa DRAW_TYPE, SetGeomDrawType
+    \param [in] geom_id string Geom ID
+    \return int Draw type enum (i.e. GEOM_DRAW_SHADE)
+*/
+
+extern int GetGeomDrawType( const std::string &geom_id );
+
+/*!
     \ingroup Visualization
 */
 /*!
@@ -6107,6 +6267,15 @@ extern void SetGeomDrawType(const string &geom_id, int type);
 */
 
 extern void SetGeomWireColor( const string &geom_id, int r, int g, int b );
+
+/*!
+    Get the wireframe color of a Geom (backported from OpenVSP 3.55 for WebVSP)
+    \sa SetGeomWireColor
+    \param [in] geom_id string Geom ID
+    \return vec3d Red, green and blue components of the wireframe color
+*/
+
+extern vec3d GetGeomWireColor( const std::string &geom_id );
 
 /*!
     \ingroup Visualization
@@ -7179,6 +7348,15 @@ extern std::vector< std::string > GetGeomChildren( const std::string& geom_id );
 extern int GetNumXSecSurfs( const std::string & geom_id );
 
 /*!
+    Get the IDs of every XSecSurf of a Geom (backported from OpenVSP 3.55 for WebVSP)
+    \sa GetXSecSurf, GetNumXSecSurfs
+    \param [in] geom_id string Geom ID
+    \return array<string> Array of XSecSurf IDs
+*/
+
+extern std::vector < std::string > GetXSecSurfIDVec( const std::string & geom_id );
+
+/*!
     \ingroup Geom
 */
 /*!
@@ -7259,6 +7437,17 @@ extern int GetNumMainSurfs( const std::string & geom_id );
 */
 
 extern int GetTotalNumSurfs( const std::string& geom_id );
+
+/*!
+    \ingroup Geom
+*/
+/*!
+    Get the triangles a Mesh Geom draws (it has no parametric surfaces to tessellate).
+    \param [in] geom_id string Mesh Geom ID
+    \return vector<double> x, y, z of each triangle corner, three corners per triangle; empty if the mesh is hidden
+*/
+
+extern std::vector < double > GetMeshGeomTriPnts( const std::string& geom_id );
 
 /*!
     \ingroup Geom
@@ -16083,6 +16272,37 @@ extern void SetParmDescript( const std::string & parm_id, const std::string & de
 */
 
 extern std::string GetParmDescript( const std::string & parm_id );
+
+/*!
+    \ingroup Parm
+*/
+/*!
+    Check whether a Parm is active. Inactive Parms are driven by other inputs (e.g. the
+    absolute placement Parms while a Geom is positioned relative to its parent) and are
+    shown greyed out in the GUI; setting them has no lasting effect.
+    \forcpponly
+    \code{.cpp}
+    string pod_id = AddGeom( "POD" );
+
+    string length = FindParm( pod_id, "Length", "Design" );
+
+    if ( !GetParmActiveFlag( length ) )             { Print( "ERROR: GetParmActiveFlag" ); __failure++; }
+    \endcode
+    \endforcpponly
+    \beginPythonOnly
+    \code{.py}
+    pod_id = AddGeom( "POD" )
+
+    length = FindParm( pod_id, "Length", "Design" )
+
+    assert GetParmActiveFlag( length ), "GetParmActiveFlag: Length should be active"
+    \endcode
+    \endPythonOnly
+    \param [in] parm_id string Parm ID
+    \return bool True if the Parm is active
+*/
+
+extern bool GetParmActiveFlag( const std::string & parm_id );
 
 /*!
     \ingroup Parm

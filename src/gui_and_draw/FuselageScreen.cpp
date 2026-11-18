@@ -5,6 +5,7 @@
 //
 //////////////////////////////////////////////////////////////////////
 
+#include "VspDialogs.h"
 #include "FuselageScreen.h"
 #include "ScreenMgr.h"
 #include "FuselageGeom.h"

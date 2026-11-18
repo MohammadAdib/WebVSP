@@ -7,6 +7,7 @@
 //
 //////////////////////////////////////////////////////////////////////
 
+#include "VspDialogs.h"
 #include "STLOptionsScreen.h"
 
 //////////////////////////////////////////////////////////////////////
@@ -114,7 +115,7 @@ bool STLOptionsScreen::ShowSTLOptionsScreen()
 
     while( m_FLTK_Window->shown() )
     {
-        Fl::wait();
+        VspModalWait();
     }
 
     return m_OkFlag;

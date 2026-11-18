@@ -42,7 +42,7 @@ static integer c__251 = 251;
 
     /* Builtin functions */
     double atan(doublereal);
-    /* Subroutine */ int s_copy(char *, char *, ftnlen, ftnlen);
+    /* Subroutine */ void s_copy(char *, char *, ftnlen, ftnlen); /* void, as in s_copy.c */
     double log(doublereal);
     integer s_cmp(char *, char *, ftnlen, ftnlen);
     double cosh(doublereal), cos(doublereal), sinh(doublereal), sin(

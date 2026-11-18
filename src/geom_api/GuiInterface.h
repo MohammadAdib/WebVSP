@@ -63,6 +63,13 @@ public:
     void SetGUIElementDisable( int e, bool state );
     void SetGUIScreenDisable( int s, bool state );
     void SetGeomScreenDisable( int s, bool state );
+
+    void MirrorEnable();
+    void MirrorPump( double timeout );
+    void MirrorPostEvent( const std::string & json );
+    std::string MirrorTakeOutput();
+    void MirrorRequestFull();
+    void MirrorPickGeom( const std::string & geom_id, bool toggle = false );
 };
 
 #endif // !defined(GUIINTERFACE__INCLUDED_)

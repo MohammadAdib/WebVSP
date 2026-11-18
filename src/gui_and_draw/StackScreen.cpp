@@ -5,6 +5,7 @@
 //
 //////////////////////////////////////////////////////////////////////
 
+#include "VspDialogs.h"
 #include "StackScreen.h"
 #include "ScreenMgr.h"
 #include "StackGeom.h"

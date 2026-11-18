@@ -175,6 +175,10 @@ public:
 
     virtual TMesh* GetMeshByID( const string & id );
 
+    // The triangles as drawn (empty when the mesh is hidden): x, y, z of each corner, three
+    // corners per triangle, placed by the Geom's transform.
+    vector< double > GetDrawTriPnts();
+
     virtual void UpdateSurf()
     {
         m_MainSurfVec.clear();

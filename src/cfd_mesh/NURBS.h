@@ -33,8 +33,10 @@ public:
     // saved to m_control_pnts_xyz.
     void InitNURBSCurve( SCurve curve, double curve_tol );
 
+#ifndef VSP_NO_STEP
     // Define the NURBS curve as a SdaiEdge_curve
     void WriteSTEPEdge( STEPutil* step, const string& label = "", bool mergepnts = false );
+#endif // VSP_NO_STEP
 
     // Defines m_IGES_Edge by as an IGES type 126 entity
     void WriteIGESEdge( IGESutil* iges, const string& label = "" );
@@ -65,10 +67,12 @@ public:
     // Flag that indicates one of the parent surfaces of the curve is a wake
     bool m_WakeFlag;
 
+#ifndef VSP_NO_STEP
     // Pointers for the STEP representation of the NURBS curve
     SdaiVertex_point* m_STEP_Start_Vert;
     SdaiVertex_point* m_STEP_End_Vert;
     SdaiEdge_curve* m_STEP_Edge;
+#endif // VSP_NO_STEP
 
     // Pointer for the IGES representation of the NURBS curve
     DLL_IGES_ENTITY_126* m_IGES_Edge;
@@ -111,8 +115,10 @@ public:
     // Add a cutout or hole to a boundedor trimmed surface
     void WriteIGESCutout( IGESutil* iges, DLL_IGES_ENTITY_128& parent_surf, DLL_IGES_ENTITY_144& trimmed_surf, const string& label = "" );
 
+#ifndef VSP_NO_STEP
     // Write the NURBS loop to STEP
     SdaiEdge_loop* WriteSTEPLoop( STEPutil* step, const string& label = "", bool mergepts = false );
+#endif // VSP_NO_STEP
 
     // Based on all control points for theloop, get the bounding box
     BndBox GetBndBox();
@@ -165,12 +171,14 @@ public:
     // in the process. 
     void WriteIGESLoops( IGESutil* iges, DLL_IGES_ENTITY_128& parent_surf, const string& label = "" );
 
+#ifndef VSP_NO_STEP
     // Write the NURBS surface to STEP and optionally merge points that are close together
     SdaiSurface* WriteSTEPSurf( STEPutil* step, const string& label = "", bool mergepts = false );
 
     // Write the NURBS loops for this NURBS surface to STEP, trimming the parent surface
     // in the process. 
     vector < SdaiAdvanced_face* > WriteSTEPLoops( STEPutil* step, SdaiSurface* surf, const string& label = "", bool mergepts = false );
+#endif // VSP_NO_STEP
 
     // Identifies the internal and external NURBS curves on the surface, organizes
     // them into connected chains, and forms loops.  

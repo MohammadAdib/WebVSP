@@ -12,6 +12,7 @@
 #define _HAS_STD_BYTE 0
 #endif
 
+#include "VspDialogs.h"
 #include "ScreenBase.h"
 #include "ScreenMgr.h"
 #include "SubSurfaceMgr.h"

@@ -196,6 +196,12 @@ IF( NOT VSP_NO_VSPAERO )
     ADD_SUBDIRECTORY( vsp_aero )
 ENDIF()
 
+# In-browser engine (web/wasm): only when building with Emscripten. After vsp_aero, whose
+# programs it builds for the page to run.
+IF( EMSCRIPTEN )
+    ADD_SUBDIRECTORY( ${PROJECT_SOURCE_DIR}/../web/wasm/engine ${CMAKE_BINARY_DIR}/wasm_engine )
+ENDIF()
+
 IF( NOT VSP_NO_HELP )
     ADD_SUBDIRECTORY( help )
 ENDIF()

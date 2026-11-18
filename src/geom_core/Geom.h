@@ -395,6 +395,14 @@ public:
     Geom( Vehicle* vehicle_ptr );
     virtual ~Geom();
 
+    // Each Update that rebuilds the Geom's surface, placement or tessellation counts once:
+    // s_ShapeRevs over every Geom, m_ShapeRev the count when this one last changed.  Lets a
+    // viewer (WebVSP) see which Geoms look different, including changes made outside Parms
+    // (a type of cross section changed, an airfoil file read) and updates that bypass
+    // Vehicle::Update.
+    static unsigned long s_ShapeRevs;
+    unsigned long m_ShapeRev = 0;
+
     virtual void Update( bool fullupdate = true );
     virtual void LoadMainDrawObjs( vector< DrawObj* > & draw_obj_vec );
     virtual void LoadDrawObjs( vector< DrawObj* > & draw_obj_vec );
@@ -525,6 +533,12 @@ public:
     vector < Matrix4d > GetTransMatVec()
     {
         return m_TransMatVec;
+    }
+
+    // Each surface's feature lines (the outline), as the 3D view draws them.
+    const vector < SimpleFeatureTess > &GetFeatureTessVec() const
+    {
+        return m_FeatureTessVec;
     }
 
     //==== XSec Surfs ====//

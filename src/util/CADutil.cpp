@@ -17,6 +17,8 @@
 //=================        STEP Functions         ===================//
 //===================================================================//
 
+#ifndef VSP_NO_STEP
+
 STEPutil::STEPutil( const int & len, const double & tol )
 {
     context = nullptr;
@@ -1301,6 +1303,8 @@ void STEPutil::RepresentUntrimmedSurfs( const vector < SdaiB_spline_surface_with
     shapereprelay->rep_1_( shape_rep );
     shapereprelay->rep_2_( gbshape );
 }
+
+#endif // VSP_NO_STEP
 
 //===================================================================//
 //=================        IGES Functions         ===================//

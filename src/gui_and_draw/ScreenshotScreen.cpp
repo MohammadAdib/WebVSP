@@ -10,6 +10,7 @@
 #define _HAS_STD_BYTE 0
 #endif
 
+#include "VspDialogs.h"
 #include "ScreenshotScreen.h"
 #include "ScreenMgr.h"
 
@@ -131,7 +132,7 @@ void ScreenshotScreen::Show()
     //===== GLEW associates the framebuffer calls to their appropriate extension calls. =====//
     if ( !glewIsSupported( "GL_ARB_framebuffer_object" ) && !m_showedOpenGLErrorMessage )
     {
-        fl_message( "Some features may be disabled due to a lower version of OpenGL.\nUpgrade to OpenGL 2.1 or higher." );
+        VspMessage( "Some features may be disabled due to a lower version of OpenGL.\nUpgrade to OpenGL 2.1 or higher." );
         m_showedOpenGLErrorMessage = true;
     }
 }

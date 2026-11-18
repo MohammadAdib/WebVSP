@@ -7,6 +7,7 @@
 //
 //////////////////////////////////////////////////////////////////////
 
+#include "VspDialogs.h"
 #include "SnapToScreen.h"
 #include "ModeMgr.h"
 
@@ -285,7 +286,7 @@ bool SnapToScreen::ShowSnapToScreen()
 
     while( m_FLTK_Window->shown() )
     {
-        Fl::wait();
+        VspModalWait();
     }
 
     return true;
