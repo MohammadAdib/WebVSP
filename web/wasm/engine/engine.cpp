@@ -366,11 +366,23 @@ bool IsWireShadeObj( const string &geom_id, const string &obj_id )
     return true;
 }
 
+// For each surface TagSurfaces writes: the one it is a copy of (itself for the mesh's own) and
+// where it is placed, as the copies section of the payload describes OpenVSP surfaces.
+struct TagCopies
+{
+    vector< uint32_t > original;
+    vector< Matrix4d > trans;
+    bool any = false; // some surface is a symmetric copy
+};
+
 // A Mesh or NGon Mesh geom as the desktop draws it, from its own draw objects: one triangle
 // list per tag (component), coloured round the colour wheel when the desktop colours them
 // (always for NGon meshes; for Mesh geoms when they're drawn by tag), with each tag's polygon
-// edges (NGon meshes draw their faces' edges, not the triangles').
-bool TagSurfaces( const string &id, vector< Surface > &surfs, vector< Part > &parts )
+// edges (NGon meshes draw their faces' edges, not the triangles'). A Mesh geom's draw objects
+// hold the mesh and then each symmetric copy (MeshGeom::GetSymmMeshMats), the same triangles
+// each time: each copy is written as a surface of its own, so a move previewed on the mesh is
+// mirrored onto them.
+bool TagSurfaces( const string &id, vector< Surface > &surfs, vector< Part > &parts, TagCopies &copies )
 {
     Vehicle *veh = VehicleMgr.GetVehicle();
     Geom *g = veh ? veh->FindGeom( id ) : nullptr;
@@ -379,9 +391,12 @@ bool TagSurfaces( const string &id, vector< Surface > &surfs, vector< Part > &pa
         return false;
     }
     bool colored = false; // (OpenVSP 3.43 has no NGon meshes)
+    vector< Matrix4d > symm( 1 );
+    vector< bool > mirrored( 1, false );
     if ( MeshGeom *mg = dynamic_cast< MeshGeom* >( g ) )
     {
         colored = mg->m_DrawType() == MeshGeom::DRAW_TAGS && g->m_GuiDraw.GetDispSubSurfFlag();
+        mg->GetSymmMeshMats( symm, mirrored );
     }
     vector< DrawObj* > objs;
     g->LoadDrawObjs( objs );
@@ -412,42 +427,53 @@ bool TagSurfaces( const string &id, vector< Surface > &surfs, vector< Part > &pa
             continue;
         }
         bool normals = d->m_NormVec.size() == d->m_PntVec.size();
-        Surface sf;
-        sf.nu = ( uint32_t ) nv;
-        sf.nw = 0;
-        for ( size_t v = 0; v < nv; v++ )
+        // The mesh and its copies, when the triangles divide evenly among them (a slice, drawn
+        // only once, doesn't).
+        size_t ncopy = symm.size() > 1 && nv % ( 3 * symm.size() ) == 0 ? symm.size() : 1;
+        size_t per = nv / ncopy;
+        uint32_t first = ( uint32_t ) surfs.size();
+        for ( size_t c = 0; c < ncopy; c++ )
         {
-            const vec3d &p = d->m_PntVec[v];
-            vec3d n;
-            if ( normals )
+            Surface sf;
+            sf.nu = ( uint32_t ) per;
+            sf.nw = 0;
+            for ( size_t v = c * per; v < ( c + 1 ) * per; v++ )
             {
-                n = d->m_NormVec[v];
+                const vec3d &p = d->m_PntVec[v];
+                vec3d n;
+                if ( normals )
+                {
+                    n = d->m_NormVec[v];
+                }
+                else
+                {
+                    size_t t = v / 3 * 3;
+                    n = cross( d->m_PntVec[t + 1] - d->m_PntVec[t], d->m_PntVec[t + 2] - d->m_PntVec[t] );
+                    n.normalize();
+                }
+                sf.pos.insert( sf.pos.end(), { ( float ) p.x(), ( float ) p.y(), ( float ) p.z() } );
+                sf.nrm.insert( sf.nrm.end(), { ( float ) n.x(), ( float ) n.y(), ( float ) n.z() } );
+                sf.idx.push_back( ( uint32_t ) ( v - c * per ) );
             }
-            else
+            Part part;
+            part.colored = colored;
+            for ( int i = 0; i < 3; i++ )
             {
-                size_t t = v / 3 * 3;
-                n = cross( d->m_PntVec[t + 1] - d->m_PntVec[t], d->m_PntVec[t + 2] - d->m_PntVec[t] );
-                n.normalize();
+                part.rgb[i] = ( float ) d->m_LineColor.v[i];
             }
-            sf.pos.insert( sf.pos.end(), { ( float ) p.x(), ( float ) p.y(), ( float ) p.z() } );
-            sf.nrm.insert( sf.nrm.end(), { ( float ) n.x(), ( float ) n.y(), ( float ) n.z() } );
-            sf.idx.push_back( ( uint32_t ) v );
-        }
-        Part part;
-        part.colored = colored;
-        for ( int c = 0; c < 3; c++ )
-        {
-            part.rgb[c] = ( float ) d->m_LineColor.v[c];
-        }
-        if ( k < lines.size() )
-        {
-            for ( const vec3d &p : lines[k]->m_PntVec )
+            if ( c == 0 && k < lines.size() )
             {
-                part.edges.insert( part.edges.end(), { ( float ) p.x(), ( float ) p.y(), ( float ) p.z() } );
+                for ( const vec3d &p : lines[k]->m_PntVec )
+                {
+                    part.edges.insert( part.edges.end(), { ( float ) p.x(), ( float ) p.y(), ( float ) p.z() } );
+                }
             }
+            surfs.push_back( std::move( sf ) );
+            parts.push_back( std::move( part ) );
+            copies.original.push_back( first );
+            copies.trans.push_back( symm[ncopy > 1 ? c : 0] );
+            copies.any = copies.any || c > 0;
         }
-        surfs.push_back( std::move( sf ) );
-        parts.push_back( std::move( part ) );
     }
     return !surfs.empty();
 }
@@ -490,8 +516,9 @@ vector< uint8_t > MeshBytes( const string &id )
             flags.push_back( vs && vs->GetSurfType() == vsp::DISK_SURF ? 1u : 0u );
         }
     }
+    TagCopies tag_copies;
     if ( surfs.empty() && nsurf == 0 && std::find( geoms.begin(), geoms.end(), id ) != geoms.end() &&
-         IsTriMesh( vsp::GetGeomTypeName( id ) ) && !TagSurfaces( id, surfs, parts ) )
+         IsTriMesh( vsp::GetGeomTypeName( id ) ) && !TagSurfaces( id, surfs, parts, tag_copies ) )
     {
         Surface sf;
         if ( TriangleSurface( id, sf ) )
@@ -543,7 +570,22 @@ vector< uint8_t > MeshBytes( const string &id )
     // by surface), and its transform (main surface to world, column-major). A move previewed on
     // the original is mirrored onto each copy with copy * original^-1.
     vector< Matrix4d > trans = geom ? geom->GetTransMatVec() : vector< Matrix4d >();
-    if ( geom && ( int ) trans.size() == nsurf )
+    if ( tag_copies.any && tag_copies.original.size() == surfs.size() )
+    {
+        // A Mesh geom with symmetric copies: one entry per surface written (TagSurfaces).
+        Put32( b, ( uint32_t ) surfs.size() );
+        for ( size_t s = 0; s < surfs.size(); s++ )
+        {
+            Put32( b, ( uint32_t ) s );
+            Put32( b, tag_copies.original[s] );
+            Put32( b, 0 );
+            double m[16];
+            tag_copies.trans[s].getMat( m );
+            vector< float > mf( m, m + 16 );
+            PutVec( b, mf );
+        }
+    }
+    else if ( geom && ( int ) trans.size() == nsurf )
     {
         vector< uint32_t > outline( nsurf, 0 );
         const vector< SimpleFeatureTess > &ft = geom->GetFeatureTessVec();

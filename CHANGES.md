@@ -71,6 +71,9 @@ Everything WebVSP changes or adds on top of **OpenVSP 3.43.3** (commit `2dd44120
 - Mesh and NGon Mesh geoms (CompGeom results, imported STL/TRI, NGon conversions, VSPAERO's
   geometry) are drawn, per tag in the desktop's colour-wheel colours, NGon meshes with their
   polygon edges.
+- Symmetry works on Mesh geoms (imported STL/TRI, CompGeom results), which OpenVSP ignored for
+  them, desktop too: planar and rotational copies are drawn, included in the selection box,
+  and seen by CompGeom and the other analyses, mirror images with their normals outward.
 - Selection highlights like the desktop's: the selected geom's bounding box (red), the active wing
   section's box (green), the cross sections with the active one in blue, and the skinning and
   blending tangent vectors (dashed where the desktop stipples them, with arrowheads).

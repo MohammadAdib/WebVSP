@@ -102,7 +102,7 @@ the work lives in a handful of files.
 | `src/geom_core/Vehicle.{h,cpp}` | `DuplicateGeomVec` for Shift+D: copies in place under the originals' parents, clipboard untouched. |
 | `src/geom_core/Geom.h` | `GetFeatureTessVec`: each surface's outline, so the mesh payload can split it by symmetric copy. `s_ShapeRevs` / `m_ShapeRev`: rebuilds counted in `Geom::Update`, for the engine's change watcher. |
 | `src/geom_core/ParmMgr.{h,cpp}`, `ParmUndo.h` | Undo groups (`BeginUndoGroup`/`EndUndoGroup`): changes in a group are one `UnDo()` step. |
-| `src/geom_core/MeshGeom`, `NGonMeshGeom` | Triangles for drawing Mesh / NGon Mesh geoms (`GetDrawTriPnts`). |
+| `src/geom_core/MeshGeom`, `NGonMeshGeom` | Triangles for drawing Mesh / NGon Mesh geoms (`GetDrawTriPnts`). Mesh geoms' symmetry (`MeshGeom::UpdateSymmAttach`, `GetSymmMeshMats`): OpenVSP copies only surfaces, which a Mesh geom has none of, so its copies are placed there, the same way, and drawn, bounded and handed to analyses (`CreateTMeshVec`). |
 | `src/geom_core/ScriptCall.h`, `ScriptMgr.cpp` | AngelScript registrations through calling-convention macros (generic wrappers in WebAssembly). |
 | `src/util/WebProcess.{h,cpp}`, `ProcessUtil.cpp` | Under Emscripten, external programs (vspaero, vsploads) are run by the page in workers. |
 | `src/external/sixseries/NACA_6_series.c`, `Airfoil.h` | Signature fixes that trap in WebAssembly. |
@@ -214,7 +214,10 @@ edges for NGon meshes. Then a flag per surface (bit 0: a disk, `DISK_SURF`, draw
 `DISK_ALPHA` when shaded). Last, per OpenVSP surface (symmetric copies included): which written
 surface it is, the surface it is a copy of, its share of the outline points, and its transform
 (`Geom::GetTransMatVec`); `copyMaps` in `Viewport.tsx` turns these into each copy's map from
-its original, so a move or rotation preview is drawn mirrored on the copies (S·P·S⁻¹).
+its original, so a move or rotation preview is drawn mirrored on the copies (S·P·S⁻¹). A Mesh
+geom with symmetric copies has no OpenVSP surfaces: its draw objects hold the mesh and then each
+copy (`MeshGeom::GetSymmMeshMats`), so `TagSurfaces` writes each tag once per copy and this
+section then has one entry per surface written.
 **Change the writer and the reader together.**
 
 ---
