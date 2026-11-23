@@ -106,7 +106,6 @@ export default function App() {
   const browserWin = all.find((w) => w.role === 'browser' && !w.closing) ?? all.find((w) => w.role === 'browser')
   const editorWin = all.find((w) => isDocked(w) && w.role !== 'browser' && !w.closing)
   const floating = all.filter((w) => w.role !== 'main' && !isDocked(w))
-  const mainWin = all.find((w) => w.role === 'main')
 
   return (
     <div className="app">
@@ -125,8 +124,8 @@ export default function App() {
           <ViewerOverlay fullscreen={fullscreen} onToggle={() => setFullscreen(!fullscreen)} />
         </div>
         <SidePanel side="right" win={editorWin} open={!fullscreen} height={panelHeight} />
-        {floating.map((w, i) => (
-          <FloatingWindow key={w.id} win={w} index={i} origin={mainWin} />
+        {floating.map((w) => (
+          <FloatingWindow key={w.id} win={w} />
         ))}
         <ResultsViewer />
       </div>

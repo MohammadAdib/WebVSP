@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { setSolverRunning, useSolverRun } from '../api/solverRun'
 import { useStore, type ViewName } from '../store'
 import { MENU, labelText, shortcutOf, shortcutText } from './fltk'
@@ -40,19 +40,38 @@ export function nextZ() {
 /** Whether z is the frontmost window's level. */
 export const isTopZ = (z: number) => z === topZ
 
+/** Where each open floating window is, so a new one doesn't open exactly on top of another. */
+const openAt = new Map<number, { x: number; y: number }>()
+const CASCADE_STEP = 28
+
 /** A floating, draggable frame around a mirrored window (screens and popups). */
-export function FloatingWindow({ win, index, origin }: { win: MWindow; index: number; origin?: MWindow }) {
-  // Open where VSP placed the window relative to its main window; cascade if unknown.
-  const [pos, setPos] = useState(() => {
-    const vw = window.innerWidth
-    const vh = window.innerHeight - 60
-    if (origin && win.x > -10000 && win.y > -10000) {
-      const x = win.x - origin.x
-      const y = win.y - origin.y
-      return { x: Math.min(Math.max(0, x), Math.max(0, vw - win.w - 20)), y: Math.min(Math.max(0, y), Math.max(0, vh - 60)) }
+export function FloatingWindow({ win }: { win: MWindow }) {
+  // Opens centered in the page (measured before it's first drawn, title bar included), a step
+  // down and right of any window already there.
+  const frame = useRef<HTMLDivElement>(null)
+  const [pos, setPos] = useState({ x: 0, y: 0 })
+  useLayoutEffect(() => {
+    const el = frame.current
+    const area = el?.offsetParent as HTMLElement | null
+    if (!el || !area) return
+    const maxX = Math.max(0, area.clientWidth - el.offsetWidth)
+    const maxY = Math.max(0, area.clientHeight - el.offsetHeight)
+    let x = Math.round(maxX / 2)
+    let y = Math.round(maxY / 2)
+    const taken = (px: number, py: number) =>
+      [...openAt].some(([id, p]) => id !== win.id && Math.abs(p.x - px) < 8 && Math.abs(p.y - py) < 8)
+    for (let n = 0; n < 10 && taken(x, y) && x + CASCADE_STEP <= maxX && y + CASCADE_STEP <= maxY; n++) {
+      x += CASCADE_STEP
+      y += CASCADE_STEP
     }
-    return { x: 60 + (index % 6) * 28, y: 40 + (index % 6) * 28 }
-  })
+    setPos({ x, y })
+    // Only when it opens; afterwards it stays where it is (or is dragged).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  useEffect(() => {
+    openAt.set(win.id, pos)
+  }, [win.id, pos])
+  useEffect(() => () => void openAt.delete(win.id), [win.id])
   const drag = useRef<{ dx: number; dy: number } | null>(null)
   const [z, setZ] = useState(() => ++topZ)
   const avail = Math.max(200, window.innerHeight - 120)
@@ -100,6 +119,7 @@ export function FloatingWindow({ win, index, origin }: { win: MWindow; index: nu
   }
   return (
     <div
+      ref={frame}
       className={'m-float' + (win.closing ? ' closing' : '')}
       style={{ left: pos.x, top: pos.y, zIndex: win.modal ? 1000 + z : z }}
       onPointerDownCapture={() => z !== topZ && setZ(++topZ)}

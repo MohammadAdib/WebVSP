@@ -34,8 +34,9 @@ Everything WebVSP changes or adds on top of **OpenVSP 3.43.3** (commit `2dd44120
   text is measured with the browser's canvas.
 - The Geom Browser docked on the left and the geom editor on the right, in resizable side panels
   that re-lay out the real FLTK windows (the 3D view follows them smoothly). Other screens,
-  Group Modifications among them, and popups are floating windows, resizable like the desktop's
-  and never below their designed size.
+  Group Modifications among them, and popups are floating windows, opening in the middle of the
+  page (a step down and right of one already there), resizable like the desktop's and never
+  below their designed size.
 - The top bar: OpenVSP's menus, then any error, the OpenVSP version and a link to WebVSP's GitHub
   repository. The model's file name is at the bottom left of the 3D view.
 - Prompts (`fl_choice`, `fl_alert`, `fl_message`) shown as page dialogs.
