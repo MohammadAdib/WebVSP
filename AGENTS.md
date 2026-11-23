@@ -156,8 +156,10 @@ callbacks like the Gen tab's sets expect), `pick` (menu item), `tab`, `browser`,
 
 `mirror/store.ts` holds windows and widgets by id and children by `win:parent`.
 `Widgets.tsx` draws each widget at its exact FLTK position with a component per `kind`.
-`Window.tsx` draws floating windows (with resize grips when `rs`: resizing sends `resize`, and
-the real window re-lays itself out, never below `dw/dh`) and handles menu shortcuts;
+`Window.tsx` draws floating windows (opened centered in the page, measured before they're first
+drawn, a `CASCADE_STEP` down and right of one already there; with resize grips when `rs`:
+resizing sends `resize`, and the real window re-lays itself out, never below `dw/dh`) and
+handles menu shortcuts;
 `Dock.tsx` the side panels. The
 left panel shows the `browser` window and the right one the first docked editor (`isDocked` in
 `App.tsx`: `geom` windows except Group Modifications, and the Vehicle screen). Resizing a panel
