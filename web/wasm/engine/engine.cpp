@@ -154,6 +154,23 @@ void Emit( const string &json )
 
 //==== Model ====//
 
+// A geom's Material (its shading on the desktop) when one is chosen: the name, the diffuse colour
+// and alpha, the specular colour and the shininess (0-128); null for OpenVSP's Default, which the
+// page shades in its own grey.
+string MaterialJson( const string &id )
+{
+    Vehicle *veh = VehicleMgr.GetVehicle();
+    Geom *g = veh ? veh->FindGeom( id ) : nullptr;
+    const Material *m = g ? g->GetMaterial() : nullptr;
+    if ( !m || m->m_Name == "Default" )
+    {
+        return "null";
+    }
+    return "{\"name\":" + Quote( m->m_Name ) + ",\"diff\":[" + Num( m->m_Diff[0] ) + "," + Num( m->m_Diff[1] ) + "," +
+           Num( m->m_Diff[2] ) + "," + Num( m->m_Diff[3] ) + "],\"spec\":[" + Num( m->m_Spec[0] ) + "," +
+           Num( m->m_Spec[1] ) + "," + Num( m->m_Spec[2] ) + "],\"shin\":" + Num( m->m_Shininess ) + "}";
+}
+
 string ModelJson()
 {
     string geoms = "[";
@@ -173,6 +190,7 @@ string ModelJson()
                  ",\"drawType\":" + std::to_string( vsp::GetGeomDrawType( id ) ) +
                  ",\"color\":[" + Num( color.x() / 255.0 ) + "," + Num( color.y() / 255.0 ) + "," +
                  Num( color.z() / 255.0 ) + "]" +
+                 ",\"material\":" + MaterialJson( id ) +
                  ",\"numXSecSurfs\":" + std::to_string( vsp::GetNumXSecSurfs( id ) ) + "}";
     }
     geoms += "]";
@@ -634,14 +652,16 @@ bool g_Dirty = false;
 string g_TreeSig;
 std::unordered_map< string, size_t > g_Fingerprints;
 
-// What the Geom Browser shows: changes here re-send the tree.
+// What the Geom Browser shows, and how each geom is coloured: changes here re-send the tree.
 string TreeSignature()
 {
     string sig;
     for ( const string &g : vsp::FindGeoms() )
     {
+        vec3d c = vsp::GetGeomWireColor( g );
         sig += g + '\x1f' + vsp::GetGeomName( g ) + '\x1f' + vsp::GetGeomParent( g ) + '\x1f' +
-               ( vsp::GetSetFlag( g, vsp::SET_SHOWN ) ? "1" : "0" ) + std::to_string( vsp::GetGeomDrawType( g ) ) + '\x1e';
+               ( vsp::GetSetFlag( g, vsp::SET_SHOWN ) ? "1" : "0" ) + std::to_string( vsp::GetGeomDrawType( g ) ) + '\x1f' +
+               Num( c.x() ) + ',' + Num( c.y() ) + ',' + Num( c.z() ) + '\x1f' + MaterialJson( g ) + '\x1e';
     }
     for ( const string &g : vsp::GetActiveGeoms() )
     {

@@ -230,6 +230,11 @@ section then has one entry per surface written.
   geom from the Geom Browser (wire / hidden / shade / none). Mesh / NGon Mesh tags get their own
   materials: shaded in a tint of the tag colour, edges in the colour (NGon meshes draw their
   polygon edges, not the triangles').
+- **Colours**: each geom's Gen tab Color and Material, from the tree (`color`, `material`;
+  `MaterialJson` in `engine.cpp`): wire and hidden lines in the Color, shading in the Material's
+  diffuse colour, alpha and shininess, or in the Color when the Material is OpenVSP's Default.
+  OpenVSP's default Color (blue) counts as none: such geoms keep the page's greys. Both are in
+  the engine's `TreeSignature`, so changing either re-sends the tree.
 - **VSPAERO's geometry**: Launch Solver leaves an NGon mesh (`MeshGeom_NGon`) of what it solved
   on, shown, as the desktop does; control surfaces in a used group are tags of their own.
 - **Overlay**: `MainOverlayJson()` in WebMirror.cpp sends draw objects the page doesn't get
@@ -241,9 +246,14 @@ section then has one entry per surface written.
     blending vectors), hinge geoms whole, and **blank geoms as `{"t":"blank", id, sel, p, m}`
     markers** (drawn as clickable HTML circles; `m` is each point's transform, so the move and
     rotate preview reaches the markers and is mirrored onto the copies' like the surfaces'; once
-    applied, `BlankMarkers` holds them there until the overlay agrees, `BLANK_HOLD_MS` at most).
+    applied, `BlankMarkers` holds them there until the overlay agrees, `BLANK_HOLD_MS` at most);
+  - the geoms' sub-surfaces: outlines, and a control surface's hinge line and deflection arrow
+    (black, the active one red), marked `depth`. OpenVSP draws an outline as many short
+    segments (some 30,000 points for one control surface), so `MergeStraightSegments` joins
+    their straight runs first.
   Visibility follows OpenVSP's own `m_Visible`, so the page shows what the desktop shows.
-  Overlay items are drawn on top (no depth test).
+  Overlay items are drawn on top (no depth test), except `depth` ones, which lie on the
+  surfaces and are hidden behind them like the model's own lines.
 - **Move gizmo** (`MoveGizmo`): drei `TransformControls` on an empty object at the mean of the
   selected origins (`api.geomOrigin`). Dragging only offsets the drawn meshes
   (`usePreview`); on release `api.moveGeoms(ids, delta)` → `MirrorMoveGeoms`, which

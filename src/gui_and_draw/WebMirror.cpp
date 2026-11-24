@@ -41,6 +41,7 @@
 #include "MainVSPScreen.h"
 #include "Vehicle.h"
 #include "VehicleMgr.h"
+#include "SubSurface.h"
 #include "GuiDevice.h"
 #include "TreeIconWidget.h"
 #include "ParmMgr.h"
@@ -610,7 +611,8 @@ const Capture *CaptureWidget( Fl_Widget *w )
 }
 
 
-vector< string > DrawObjItems( const vector< DrawObj* > &objs, DrawObj::ScreenEnum screen, size_t max_pts = 500000, bool tris = false );
+vector< string > DrawObjItems( const vector< DrawObj* > &objs, DrawObj::ScreenEnum screen, size_t max_pts = 500000, bool tris = false,
+                               bool depth = false );
 
 // Lines and points a GL view draws, plus its 2D camera, so the client can draw them.
 string GlDrawJson( Fl_Widget *w )
@@ -644,9 +646,41 @@ string GlDrawJson( Fl_Widget *w )
     return v.Done();
 }
 
+// Line segments (end point pairs) with each run of segments that carry straight on joined into
+// one: a sub-surface's outline is drawn finely along the surface, so its straight edges are many
+// short segments. Bends (off the run's line by more than 1e-4 of its length) are kept.
+vector< vec3d > MergeStraightSegments( const vector< vec3d > &pts )
+{
+    vector< vec3d > out;
+    out.reserve( pts.size() );
+    for ( size_t i = 0; i + 1 < pts.size(); i += 2 )
+    {
+        const vec3d &a = pts[i];
+        const vec3d &b = pts[i + 1];
+        if ( out.size() >= 2 )
+        {
+            const vec3d &s = out[out.size() - 2];
+            vec3d &e = out.back();
+            vec3d run = e - s;
+            vec3d ext = b - s;
+            double len = ext.mag();
+            if ( dist( a, e ) <= 1e-12 * ( 1.0 + len ) && run.mag() > 0 && len > 0 && dot( run, b - a ) > 0 &&
+                 cross( run, ext ).mag() / run.mag() <= 1e-4 * len )
+            {
+                e = b;
+                continue;
+            }
+        }
+        out.push_back( a );
+        out.push_back( b );
+    }
+    return out;
+}
+
 // The visible line and point draw objects of a view, as JSON items (at most max_pts points).
-// With tris, shaded triangles too (arrowheads), coloured by their diffuse colour.
-vector< string > DrawObjItems( const vector< DrawObj* > &objs, DrawObj::ScreenEnum screen, size_t max_pts, bool tris )
+// With tris, shaded triangles too (arrowheads), coloured by their diffuse colour. With depth,
+// marked to be hidden behind the model's surfaces, like its own lines, rather than drawn on top.
+vector< string > DrawObjItems( const vector< DrawObj* > &objs, DrawObj::ScreenEnum screen, size_t max_pts, bool tris, bool depth )
 {
     vector< string > items;
     size_t total = 0;
@@ -656,7 +690,14 @@ vector< string > DrawObjItems( const vector< DrawObj* > &objs, DrawObj::ScreenEn
         {
             continue;
         }
-        if ( total + d->m_PntVec.size() > max_pts )
+        // Lines on a surface (sub-surfaces) with their straight runs joined: far fewer points.
+        vector< vec3d > merged;
+        if ( depth && d->m_Type == DrawObj::VSP_LINES )
+        {
+            merged = MergeStraightSegments( d->m_PntVec );
+        }
+        const vector< vec3d > &pv = depth && d->m_Type == DrawObj::VSP_LINES ? merged : d->m_PntVec;
+        if ( total + pv.size() > max_pts )
         {
             break;
         }
@@ -676,9 +717,9 @@ vector< string > DrawObjItems( const vector< DrawObj* > &objs, DrawObj::ScreenEn
         }
         string pts = "[";
         char buf[64];
-        for ( size_t i = 0; i < d->m_PntVec.size(); i++ )
+        for ( size_t i = 0; i < pv.size(); i++ )
         {
-            const vec3d &v = d->m_PntVec[i];
+            const vec3d &v = pv[i];
             snprintf( buf, sizeof( buf ), "%s%.6g,%.6g,%.6g", i ? "," : "", v.x(), v.y(), v.z() );
             pts += buf;
         }
@@ -703,13 +744,17 @@ vector< string > DrawObjItems( const vector< DrawObj* > &objs, DrawObj::ScreenEn
         {
             o.Bool( "dash", true );
         }
+        if ( depth )
+        {
+            o.Bool( "depth", true );
+        }
         if ( d->m_GeomID.rfind( BBOXHEADER, 0 ) == 0 )
         {
             // 1: a geom's bounding box, 2: the active wing section's
             o.Int( "box", d->m_GeomID.size() > 11 && d->m_GeomID.compare( d->m_GeomID.size() - 11, 11, "ACTIVE_SECT" ) == 0 ? 2 : 1 );
         }
         items.push_back( o.Done() );
-        total += d->m_PntVec.size();
+        total += pv.size();
     }
     return items;
 }
@@ -1270,7 +1315,11 @@ string MainOverlayJson()
     // surface (Blank, Hinge) are only their points and axes, and the selected geom's boxes
     // (red around it, green around the active wing section), its cross sections (the active
     // one blue) and the skinning and blending tangents. Their visibility follows the desktop.
+    // And the sub-surfaces (control surfaces among them): their outlines, a control surface's
+    // hinge line and deflection arrow, black (the active one red), hidden behind the model's
+    // surfaces like the desktop's.
     vector< string > markers;
+    vector< DrawObj* > on_surface;
     for ( Geom *g : veh->FindGeomVec( veh->GetGeomVec() ) )
     {
         if ( !g )
@@ -1332,15 +1381,29 @@ string MainOverlayJson()
             continue;
         }
         bool whole = type == HINGE_GEOM_TYPE;
+        // The sub-surfaces' draw objects, as loaded (and shown or hidden) with the geom's above.
+        std::unordered_set< DrawObj* > subsurf;
+        for ( SubSurface *ss : g->GetSubSurfVec() )
+        {
+            vector< DrawObj* > ssdo;
+            ss->LoadDrawObjs( ssdo );
+            subsurf.insert( ssdo.begin(), ssdo.end() );
+        }
         for ( DrawObj *d : objs )
         {
             if ( whole || d->m_GeomID.rfind( BBOXHEADER, 0 ) == 0 || d->m_GeomID.rfind( XSECHEADER, 0 ) == 0 )
             {
                 extra.push_back( d );
             }
+            else if ( subsurf.count( d ) )
+            {
+                on_surface.push_back( d );
+            }
         }
     }
     vector< string > items = DrawObjItems( extra, DrawObj::VSP_MAIN_SCREEN, 200000, true );
+    vector< string > surf_items = DrawObjItems( on_surface, DrawObj::VSP_MAIN_SCREEN, 200000, true, true );
+    items.insert( items.end(), surf_items.begin(), surf_items.end() );
     items.insert( items.end(), markers.begin(), markers.end() );
     return JoinArray( items );
 }
