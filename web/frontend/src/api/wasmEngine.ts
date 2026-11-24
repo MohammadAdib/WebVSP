@@ -15,6 +15,8 @@
 import type { SocketMessage } from './client'
 import type { MDialog } from '../mirror/types'
 import { useViewer } from '../viewer/store'
+import { fileNote } from './fileNote'
+import { addRecent, updateRecent } from './recentFiles'
 import { offerResults } from './solverResults'
 import { onSolverEnded, solverExited, solverSpawned } from './solverRun'
 
@@ -137,6 +139,7 @@ export async function wasmRequest(method: string, path: string, body?: unknown):
 
   if (route === 'GET /model') {
     const tree = (await call('model')) as { fileName: string }
+    noteModelFile(tree.fileName)
     // A model never saved has OpenVSP's bare default name: no file name at all. A file the user
     // opened or saved is in HOME, so one actually called Unnamed.vsp3 still shows.
     return { ...tree, fileName: tree.fileName === 'Unnamed.vsp3' ? '' : displayName(tree.fileName) }
@@ -235,6 +238,37 @@ function link(vsp: VspModule, path: string, handle: FileSystemFileHandle | null,
   linked.set(path, { path, handle, name, mtime: st ? st.mtime.getTime() : 0, size: st ? st.size : -1, pending: false, writing: false })
 }
 
+/** The model's file as last seen. A new one that stands for a file on the user's disk (a model
+ *  opened, or saved under a new name) goes to the top of File > Open Recent. */
+let modelPath = ''
+function noteModelFile(path: string) {
+  if (path === modelPath) return
+  modelPath = path
+  const f = linked.get(path)
+  if (!f || !modulePromise) return
+  void modulePromise.then((vsp) => {
+    // Without a handle the list keeps the contents (a copy: the module's memory is shared).
+    const data = !f.handle && vsp.FS.analyzePath(path).exists ? new Uint8Array(vsp.FS.readFile(path)) : null
+    void addRecent(f.name, f.handle, data)
+  })
+}
+
+/** A file for the next model file chooser to be answered with instead of the browser's picker
+ *  (File > Open Recent's, opened through OpenVSP's own File > Open), until QUEUED_MS from now. */
+let queued: { path: string; until: number } | null = null
+const QUEUED_MS = 10000
+
+/** Puts a file the page already has (File > Open Recent's) where a picked one would go, linked to
+ *  its file on disk, for the File > Open about to be chosen. */
+export async function queueOpen(f: { name: string; data: Uint8Array; handle: FileSystemFileHandle | null }) {
+  const vsp = await load()
+  vsp.FS.mkdirTree(HOME)
+  const path = `${HOME}/${f.name}`
+  vsp.FS.writeFile(path, f.data)
+  link(vsp, path, f.handle, f.name)
+  queued = { path, until: Date.now() + QUEUED_MS }
+}
+
 /**
  * A GUI file chooser: pick with the browser, then answer with a path in the module's file
  * system. Opened files are copied in first; files OpenVSP writes are copied back out
@@ -252,6 +286,11 @@ async function answerFileDialog(vsp: VspModule, d: MDialog) {
   try {
     vsp.FS.mkdirTree(HOME)
     if (!d.mode) {
+      const q = queued
+      if (q && exts.includes('vsp3')) {
+        queued = null
+        if (Date.now() < q.until) return answer(q.path)
+      }
       // Several files can be picked: all are copied in (e.g. a model with its VSPAERO results,
       // for Load Previous Results), and OpenVSP gets the one its filter asks for.
       const picked = await pickFiles(exts, types)
@@ -360,6 +399,7 @@ async function deliver(f: LinkedFile, bytes: Uint8Array<ArrayBuffer>) {
       const out = await f.handle.createWritable()
       await out.write(bytes)
       await out.close()
+      fileNote('Saved', { file: f.name })
       return
     } catch (err) {
       // Not allowed to write to it (the user declined): hand it over as a download instead.
@@ -371,6 +411,9 @@ async function deliver(f: LinkedFile, bytes: Uint8Array<ArrayBuffer>) {
   a.download = f.name
   a.click()
   setTimeout(() => URL.revokeObjectURL(a.href), 10000)
+  fileNote('Downloaded', { file: f.name })
+  // File > Open Recent keeps this copy, in browsers without file handles.
+  if (!f.handle) void updateRecent(f.name, bytes)
 }
 
 // ------------------------------------------------------------------ programs

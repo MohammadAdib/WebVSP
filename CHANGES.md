@@ -42,7 +42,11 @@ history is in [CHANGELOG.md](CHANGELOG.md).
   with its results). File > Preferences (only a choice of file chooser) is left out of the menu.
 - Every model you open or save is linked to the file on your disk: File > Save (and Ctrl+S) writes
   it back in place in Chrome and Edge (which ask once for permission to edit the file), and
-  downloads it in other browsers.
+  downloads it in other browsers. A moment's "Saved" (or "Downloaded") beside the file name
+  says when it's done.
+- Ctrl+O for File > Open, and File > Open Recent: the last 10 models opened or saved, kept
+  across visits. Chrome and Edge open the file on disk as it is now (asking once a visit to
+  allow it), and save back to it; other browsers open the copy last opened or saved here.
 - A finished VSPAERO run's result files (`.history`, `.polar`, `.lod`, `.adb`...) are saved next
   to the model on disk: the first time, a toast asks for the model's folder (Chrome and Edge);
   later runs of that model save there by themselves, and the folder is remembered across

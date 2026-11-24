@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { openDb } from './idb'
 
 /**
  * VSPAERO's result files saved next to the model on the user's disk, as the desktop leaves them,
@@ -101,22 +102,12 @@ async function permission(dir: DirHandle) {
 // ------------------------------------------------------------------ remembered folders
 
 /** Each model's results folder, kept across visits: { model: its file, folder } records in
- *  IndexedDB (file and folder handles can be stored there). Matched by isSameEntry, so two models
- *  with the same name in different folders keep their own. Any failure: just this session. */
-const DB = 'webvsp'
+ *  IndexedDB (idb.ts). Matched by isSameEntry, so two models with the same name in different
+ *  folders keep their own. Any failure: just this session. */
 const STORE = 'resultFolders'
 interface FolderRecord {
   model: FileSystemFileHandle
   folder: DirHandle
-}
-
-function openDb(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB, 1)
-    req.onupgradeneeded = () => req.result.createObjectStore(STORE, { autoIncrement: true })
-    req.onsuccess = () => resolve(req.result)
-    req.onerror = () => reject(req.error)
-  })
 }
 
 /** All records, with their keys. */
