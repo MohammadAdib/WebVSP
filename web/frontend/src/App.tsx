@@ -42,15 +42,24 @@ function TopBarStatus() {
   )
 }
 
-/** The model's file name, in the bottom-left corner of the 3D view, and beside it a moment's note
- *  when a save is on disk (or why a file couldn't be saved or opened: api/fileNote.ts). */
+/** The model's file name, in the bottom-left corner of the 3D view, and beside it "Unsaved
+ *  changes" while the model has changes its file doesn't, and a moment's note when a save is on
+ *  disk (or why a file couldn't be saved or opened: api/fileNote.ts). */
 function FileName() {
   const name = useStore((s) => s.tree?.fileName)
+  const unsaved = useStore((s) => s.unsaved)
   const note = useFileNote((s) => s.note)
-  if (!name && !note) return null
+  // A model never saved has no name, but can have changes.
+  if (!name && !note && !unsaved) return null
   return (
     <div className="viewer-file">
       {name && <span className="viewer-file-name">{name}</span>}
+      {unsaved && (
+        <span className="file-unsaved" role="status">
+          <span className="file-unsaved-dot" aria-hidden="true" />
+          Unsaved changes
+        </span>
+      )}
       {note && (
         <span
           key={note.n}

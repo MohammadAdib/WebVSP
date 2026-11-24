@@ -10,7 +10,8 @@
 //                                       {"out":[results and model events],"mirror":[GUI output]}
 //       takeBinary( id )              a request's binary result (meshes), as a Uint8Array
 //   - Between requests the engine pumps the GUI and watches the model for changes made in the
-//     GUI, emitting "model_changed" events.
+//     GUI, emitting "model_changed" events, and "dirty" ones when the model comes to have
+//     unsaved changes or no longer has (saved, or changed back).
 //
 // Requests (op, a, b, value) and their results (the page's side is wasmRequest, wasmEngine.ts):
 //   model, geomTypes, bbox              JSON (bbox: the shown geoms', or a="all" every geom's)
@@ -648,12 +649,24 @@ vector< uint8_t > MeshBytes( const string &id )
 //==== Change detection: which geoms changed, from parm fingerprints ====//
 
 int g_Rev = 0;
-bool g_Dirty = false;
 string g_TreeSig;
 std::unordered_map< string, size_t > g_Fingerprints;
 
-// What the Geom Browser shows, and how each geom is coloured: changes here re-send the tree.
-string TreeSignature()
+// Unsaved changes: the model's state (ModelState) differs from its state when it was last opened
+// or saved, which the watcher takes whenever the model's file (its name, or the file itself) changes.
+size_t g_State = 0;
+size_t g_CleanState = 0;
+string g_FileKey;
+bool g_Dirty = false;
+
+void Mix( size_t &h, size_t v )
+{
+    h ^= v + 0x9e3779b97f4a7c15ULL + ( h << 6 ) + ( h >> 2 );
+}
+
+// The geoms as a .vsp3 keeps them, besides their Parms: order, names, parents, shown or not, draw
+// type, colour and material. What the Geom Browser shows, so changes here re-send the tree too.
+string GeomsSignature()
 {
     string sig;
     for ( const string &g : vsp::FindGeoms() )
@@ -663,6 +676,13 @@ string TreeSignature()
                ( vsp::GetSetFlag( g, vsp::SET_SHOWN ) ? "1" : "0" ) + std::to_string( vsp::GetGeomDrawType( g ) ) + '\x1f' +
                Num( c.x() ) + ',' + Num( c.y() ) + ',' + Num( c.z() ) + '\x1f' + MaterialJson( g ) + '\x1e';
     }
+    return sig;
+}
+
+// Everything the tree (GET /model) shows: the geoms, the selection and the file name.
+string TreeSignature( const string &geoms_sig )
+{
+    string sig = geoms_sig;
     for ( const string &g : vsp::GetActiveGeoms() )
     {
         sig += g + ',';
@@ -670,10 +690,30 @@ string TreeSignature()
     return sig + vsp::GetVSPFileName();
 }
 
+// The model's file: its name, and when the file in the module's file system was last written
+// (by a save, or by the page putting a file there to be opened) and its size.
+string ModelFileKey()
+{
+    string name = vsp::GetVSPFileName();
+    struct stat st;
+    if ( stat( name.c_str(), &st ) != 0 )
+    {
+        return name;
+    }
+    return name + '|' + std::to_string( ( long long )st.st_mtim.tv_sec ) + '.' + std::to_string( ( long long )st.st_mtim.tv_nsec ) +
+           '|' + std::to_string( ( long long )st.st_size );
+}
+
+struct GeomPrint
+{
+    size_t shape;   // Changes whenever its surfaces may have: Parms, rebuilds, its parent's
+    size_t content; // Its own Parms and its XSecs' (what the .vsp3 keeps of it, as far as Parms show)
+};
+
 // Everything that shapes a Geom's surfaces: its Parms, its XSecs' Parms, its parent's, and how
 // many times it has been rebuilt (Geom::m_ShapeRev: what no Parm shows, such as a cross section's
 // type changed or an airfoil file read).
-size_t Fingerprint( const string &gid, std::unordered_map< string, size_t > &cache )
+GeomPrint Fingerprint( const string &gid, std::unordered_map< string, GeomPrint > &cache )
 {
     auto hit = cache.find( gid );
     if ( hit != cache.end() )
@@ -683,50 +723,62 @@ size_t Fingerprint( const string &gid, std::unordered_map< string, size_t > &cac
     std::hash< string > hs;
     std::hash< double > hd;
     size_t h = hs( gid );
-    auto mix = [&h]( size_t v ) { h ^= v + 0x9e3779b97f4a7c15ULL + ( h << 6 ) + ( h >> 2 ); };
-    Vehicle *veh = VehicleMgr.GetVehicle();
-    if ( Geom *g = veh ? veh->FindGeom( gid ) : nullptr )
-    {
-        mix( std::hash< unsigned long >()( g->m_ShapeRev ) );
-    }
     for ( const string &pid : vsp::GetGeomParmIDs( gid ) )
     {
-        mix( hs( pid ) );
-        mix( hd( vsp::GetParmVal( pid ) ) );
+        Mix( h, hs( pid ) );
+        Mix( h, hd( vsp::GetParmVal( pid ) ) );
     }
     for ( const string &surf : vsp::GetXSecSurfIDVec( gid ) )
     {
-        mix( hs( surf ) );
+        Mix( h, hs( surf ) );
         for ( int xi = 0; xi < vsp::GetNumXSec( surf ); xi++ )
         {
             string xs = vsp::GetXSec( surf, xi );
-            mix( hs( xs ) );
+            Mix( h, hs( xs ) );
             for ( const string &pid : vsp::GetXSecParmIDs( xs ) )
             {
-                mix( hs( pid ) );
-                mix( hd( vsp::GetParmVal( pid ) ) );
+                Mix( h, hs( pid ) );
+                Mix( h, hd( vsp::GetParmVal( pid ) ) );
             }
         }
+    }
+    GeomPrint p{ h, h };
+    Vehicle *veh = VehicleMgr.GetVehicle();
+    if ( Geom *g = veh ? veh->FindGeom( gid ) : nullptr )
+    {
+        Mix( p.shape, std::hash< unsigned long >()( g->m_ShapeRev ) );
     }
     string parent = vsp::GetGeomParent( gid );
     if ( !parent.empty() && parent != "NONE" )
     {
         // Children move with their parent.
-        mix( Fingerprint( parent, cache ) );
+        Mix( p.shape, Fingerprint( parent, cache ).shape );
     }
-    cache[gid] = h;
-    return h;
+    cache[gid] = p;
+    return p;
 }
 
-void RefreshFingerprints( vector< string > &changed, vector< string > &removed )
+// Which geoms changed (and which are gone) since last time, and the model's state: its geoms
+// (GeomsSignature and each one's Parms) and the vehicle's own Parms. Not the selection, nor
+// rebuilds, which a .vsp3 doesn't keep: undoing a change back to the file's state is no change.
+size_t RefreshFingerprints( const string &geoms_sig, vector< string > &changed, vector< string > &removed )
 {
-    std::unordered_map< string, size_t > cache;
+    std::hash< string > hs;
+    std::hash< double > hd;
+    size_t state = hs( geoms_sig );
+    for ( const string &pid : vsp::FindContainerParmIDs( vsp::GetVehicleID() ) )
+    {
+        Mix( state, hs( pid ) );
+        Mix( state, hd( vsp::GetParmVal( pid ) ) );
+    }
+    std::unordered_map< string, GeomPrint > cache;
     vector< string > current = vsp::FindGeoms();
     for ( const string &g : current )
     {
-        size_t fp = Fingerprint( g, cache );
+        GeomPrint p = Fingerprint( g, cache );
+        Mix( state, p.content );
         auto it = g_Fingerprints.find( g );
-        if ( it == g_Fingerprints.end() || it->second != fp )
+        if ( it == g_Fingerprints.end() || it->second != p.shape )
         {
             changed.push_back( g );
         }
@@ -741,9 +793,28 @@ void RefreshFingerprints( vector< string > &changed, vector< string > &removed )
     g_Fingerprints.clear();
     for ( const string &g : current )
     {
-        g_Fingerprints[g] = cache[g];
+        g_Fingerprints[g] = cache[g].shape;
     }
     TakeErrors();
+    return state;
+}
+
+// Tells the page when the model comes to have unsaved changes, or no longer has.
+void SetDirty( bool dirty )
+{
+    if ( dirty != g_Dirty )
+    {
+        g_Dirty = dirty;
+        Emit( string( "{\"type\":\"dirty\",\"dirty\":" ) + ( dirty ? "true" : "false" ) + "}" );
+    }
+}
+
+// The model as it is now is what its file holds (opened, saved, or a new model).
+void MarkClean()
+{
+    g_CleanState = g_State;
+    g_FileKey = ModelFileKey();
+    SetDirty( false );
 }
 
 const char *NO_UNDO = "{\"canUndo\":false,\"canRedo\":false,\"undoLabel\":null,\"redoLabel\":null}";
@@ -770,19 +841,24 @@ void Watch( const string &label = "", bool force = false )
         g_ShapeRevs = Geom::s_ShapeRevs;
         updated = true;
     }
-    string sig = TreeSignature();
+    string geoms_sig = GeomsSignature();
+    string sig = TreeSignature( geoms_sig );
     bool tree_changed = sig != g_TreeSig;
-    if ( !updated && !tree_changed && !force )
+    // A model opened, saved or new: what the model is now is what its file holds.
+    string file_key = ModelFileKey();
+    bool file_changed = file_key != g_FileKey;
+    if ( !updated && !tree_changed && !force && !file_changed )
     {
         return;
     }
     g_TreeSig = sig;
     vector< string > changed, removed;
-    RefreshFingerprints( changed, removed );
-    if ( !changed.empty() || !removed.empty() )
+    g_State = RefreshFingerprints( geoms_sig, changed, removed );
+    if ( file_changed )
     {
-        g_Dirty = true;
+        MarkClean();
     }
+    SetDirty( g_State != g_CleanState );
     if ( !changed.empty() || !removed.empty() || tree_changed || force )
     {
         EmitModelChanged( tree_changed, changed, removed, label );
@@ -933,9 +1009,8 @@ void Run( const Job &j )
         vsp::ClearVSPModel();
         vsp::Update();
         string err = TakeErrors();
-        g_Dirty = false;
         Watch( "New", true );
-        g_Dirty = false;
+        MarkClean();
         return Result( j.id, err, "{\"ok\":true}" );
     }
     if ( j.op == "readFile" )
@@ -945,7 +1020,7 @@ void Run( const Job &j )
         vsp::Update();
         string err = TakeErrors();
         Watch( "Open", true );
-        g_Dirty = false;
+        MarkClean();
         return Result( j.id, err, "{\"ok\":true}" );
     }
     if ( j.op == "writeFile" )
@@ -953,7 +1028,8 @@ void Run( const Job &j )
         vsp::SetVSP3FileName( j.a );
         vsp::WriteVSPFile( j.a );
         string err = TakeErrors();
-        g_Dirty = false;
+        Watch();
+        MarkClean();
         Emit( "{\"type\":\"saved\",\"fileName\":" + Quote( j.a ) + "}" );
         return Result( j.id, err, "{\"path\":" + Quote( j.a ) + "}" );
     }
@@ -994,9 +1070,11 @@ int main()
     g_Gui = true;
 #endif
     TakeErrors();
-    g_TreeSig = TreeSignature();
+    string geoms_sig = GeomsSignature();
+    g_TreeSig = TreeSignature( geoms_sig );
     vector< string > changed, removed;
-    RefreshFingerprints( changed, removed );
+    g_State = RefreshFingerprints( geoms_sig, changed, removed );
+    MarkClean();
     Emit( "{\"type\":\"engine_ready\",\"gui\":" + string( g_Gui ? "true" : "false" ) + "}" );
 
     auto last_watch = std::chrono::steady_clock::now();

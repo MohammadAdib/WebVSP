@@ -55,7 +55,10 @@ Everything WebVSP changes or adds on top of **OpenVSP 3.43.3** (commit `2dd44120
 - Every model you open or save is linked to the file on your disk: File > Save (and Ctrl+S) writes
   it back in place in Chrome and Edge (which ask once for permission to edit the file), and
   downloads it in other browsers. A moment's "Saved" (or "Downloaded") beside the file name
-  says when it's done.
+  says when it's done. Only a model opened with File > Open asks for that permission; files
+  only read (an STL to import, an airfoil, a model to insert) don't.
+- "Unsaved changes" beside the file name while the model has changes its file doesn't (not
+  counting the selection); undoing them all clears it, as does a save.
 - Ctrl+O for File > Open, and File > Open Recent: the last 10 models opened or saved, kept
   across visits. Chrome and Edge open the file on disk as it is now (asking once a visit to
   allow it), and save back to it; other browsers open the copy last opened or saved here.
@@ -94,6 +97,11 @@ Everything WebVSP changes or adds on top of **OpenVSP 3.43.3** (commit `2dd44120
   turned.
 - A toolbar (front, side, top, bottom, iso, fit), orthographic or perspective, and orbit, pan and
   zoom to the cursor with the mouse.
+- View > Blender mouse controls (remembered): Blender's navigation with the mouse and touchpad
+  instead. Middle drag orbits, Shift + middle drag pans, Ctrl + middle drag zooms; the wheel
+  zooms (toward the cursor), Ctrl + wheel pans sideways and Shift + wheel up or down. On a
+  touchpad two fingers orbit, Shift + two fingers pan, Ctrl + two fingers or a pinch zoom. The
+  left button only selects.
 - Blender's view keys: numpad 1 / 3 / 7 (Ctrl for the other side), 5, 9, and 2 / 4 / 6 / 8 orbiting
   30° per press (8 and 2 stopping at the top and bottom views); F (or Home, numpad .) fits the
   model; C (View > Center) centers it, keeping the zoom. The side view (3) has the nose on the

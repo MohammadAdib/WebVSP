@@ -117,6 +117,14 @@ input:focus, select:focus, textarea:focus, button:focus-visible {
   animation: file-note 2000ms ease-out forwards;
 }
 .file-note.failed { color: var(--danger); background: rgba(199, 106, 106, 0.12); border-color: rgba(199, 106, 106, 0.4); }
+/* "Unsaved changes" beside the file name, for as long as there are (the engine's "dirty") */
+.file-unsaved {
+  flex: none; display: inline-flex; align-items: center; gap: 5px; padding: 1px 7px 1px 6px;
+  border-radius: 9px; white-space: nowrap; color: #d4b062;
+  background: rgba(212, 176, 98, 0.1); border: 1px solid rgba(212, 176, 98, 0.32);
+  animation: drop-in 150ms ease-out;
+}
+.file-unsaved-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 @keyframes file-note {
   0% { opacity: 0; transform: translateX(-4px); }
   8% { opacity: 1; transform: none; }
