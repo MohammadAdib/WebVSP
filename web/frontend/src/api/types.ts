@@ -38,7 +38,6 @@ export interface ModelTree {
   fileName: string
   version: string
   rev: number
-  dirty: boolean
   undo: UndoState
 }
 
@@ -57,7 +56,14 @@ export interface SavedEvent {
   fileName: string
 }
 
-export type ServerEvent = ModelChangedEvent | SavedEvent
+/** The model came to have changes its file doesn't, or no longer has (saved, opened, or changed
+ *  back): the engine compares the model with its state when it was last opened or saved. */
+export interface DirtyEvent {
+  type: 'dirty'
+  dirty: boolean
+}
+
+export type ServerEvent = ModelChangedEvent | SavedEvent | DirtyEvent
 
 export interface BBox {
   min: [number, number, number]

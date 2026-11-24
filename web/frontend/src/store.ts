@@ -29,6 +29,9 @@ interface State {
   /** Bumped when a geom's parm *structure* may have changed (sections added, etc). */
   schemaRev: number
   connected: boolean
+  /** The model has changes its file doesn't (the engine's "dirty" events). Not read from the
+   *  tree: a tree can arrive after a later event. */
+  unsaved: boolean
   error: string | null
   lastAction: string | null
   displayMode: DisplayMode
@@ -42,6 +45,9 @@ interface State {
   grid: boolean
   /** The 3D view's split (remembered) */
   layout: Layout
+  /** View > Blender mouse controls: the 3D views navigate with Blender's mouse and trackpad
+   *  bindings (camera.tsx) instead of left-drag orbit (remembered) */
+  blenderMouse: boolean
   /** Bounding sphere of the shown model, set when the view is fitted. */
   bounds: { center: [number, number, number]; size: [number, number, number]; radius: number } | null
 
@@ -55,6 +61,7 @@ interface State {
   refitAll: () => void
   toggleOrtho: () => void
   toggleGrid: () => void
+  toggleBlenderMouse: () => void
   setLayout: (l: Layout) => void
   setConnected: (c: boolean) => void
   setBounds: (b: State['bounds']) => void
@@ -70,6 +77,7 @@ export const useStore = create<State>((set, get) => ({
   valuesRev: 0,
   schemaRev: 0,
   connected: false,
+  unsaved: false,
   error: null,
   lastAction: null,
   displayMode: 'both',
@@ -104,9 +112,13 @@ export const useStore = create<State>((set, get) => ({
   select: (id) => set({ selectedId: id }),
 
   handleEvent: (e) => {
+    if (e.type === 'dirty') {
+      set({ unsaved: e.dirty })
+      return
+    }
     if (e.type === 'saved') {
       const tree = get().tree
-      if (tree) set({ tree: { ...tree, fileName: e.fileName, dirty: false } })
+      if (tree) set({ tree: { ...tree, fileName: e.fileName } })
       return
     }
     const meshRev = { ...get().meshRev }
@@ -119,7 +131,7 @@ export const useStore = create<State>((set, get) => ({
       // Structural edits (sections, shapes, undo of those) arrive with a label.
       schemaRev: e.label ? get().schemaRev + 1 : get().schemaRev,
       lastAction: e.label ?? get().lastAction,
-      tree: tree ? { ...tree, undo: e.undo as UndoState, rev: e.rev, dirty: true } : tree,
+      tree: tree ? { ...tree, undo: e.undo as UndoState, rev: e.rev } : tree,
     })
     if (e.tree || e.label) void get().loadTree()
   },
@@ -169,6 +181,22 @@ export const useStore = create<State>((set, get) => ({
       /* storage unavailable */
     }
     set({ grid })
+  },
+  blenderMouse: (() => {
+    try {
+      return localStorage.getItem('webvsp-blender-mouse') === '1'
+    } catch {
+      return false
+    }
+  })(),
+  toggleBlenderMouse: () => {
+    const blenderMouse = !get().blenderMouse
+    try {
+      localStorage.setItem('webvsp-blender-mouse', blenderMouse ? '1' : '0')
+    } catch {
+      /* storage unavailable */
+    }
+    set({ blenderMouse })
   },
   toggleOrtho: () => {
     const ortho = !get().ortho

@@ -208,7 +208,7 @@ interface MenuNode {
   action?: () => void
 }
 
-function buildMenu(bar: MWidget | undefined, recent: RecentFile[]): MenuNode[] {
+function buildMenu(bar: MWidget | undefined, recent: RecentFile[], blenderMouse: boolean): MenuNode[] {
   const items = (bar?.items ?? []) as MenuItem[]
   const root: MenuNode[] = []
   const stack: MenuNode[][] = [root]
@@ -230,6 +230,17 @@ function buildMenu(bar: MWidget | undefined, recent: RecentFile[]): MenuNode[] {
   if (bar && file && open) {
     if (!open.item.sc) open.item = { ...open.item, sc: CTRL_O }
     file.children.splice(file.children.indexOf(open) + 1, 0, recentMenu(recent, () => activate(bar, open, ['File'])))
+  }
+  // View > Blender mouse controls, the page's own (the 3D view is ours), after a divider.
+  const view = root.find((n) => labelText(n.item.label) === 'View')
+  if (view) {
+    const last = view.children[view.children.length - 1]
+    if (last) last.item = { ...last.item, flags: last.item.flags | MENU.DIVIDER }
+    view.children.push({
+      item: { i: -3, d: 0, label: 'Blender mouse controls', flags: MENU.TOGGLE | (blenderMouse ? MENU.VALUE : 0), sc: 0 },
+      children: [],
+      action: () => useStore.getState().toggleBlenderMouse(),
+    })
   }
   return root
 }
@@ -329,7 +340,8 @@ export function MirrorMenuBar() {
   const [open, setOpen] = useState<number | null>(null)
   const ref = useRef<HTMLDivElement>(null)
   const recent = useRecent((s) => s.list)
-  const tree = useMemo(() => buildMenu(bar, recent), [bar, recent])
+  const blenderMouse = useStore((s) => s.blenderMouse)
+  const tree = useMemo(() => buildMenu(bar, recent, blenderMouse), [bar, recent, blenderMouse])
 
   useEffect(() => {
     if (open === null) return

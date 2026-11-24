@@ -253,7 +253,12 @@ function noteModelFile(path: string) {
   })
 }
 
-/** A file for the next model file chooser to be answered with instead of the browser's picker
+/** The title of OpenVSP's File > Open chooser (MainVSPScreen): the one file chooser that opens
+ *  the model, which File > Save writes back to. Every other one opens a file OpenVSP only reads
+ *  (an STL to import, an airfoil, a model to insert). */
+const MODEL_OPEN_TITLE = 'Open VSP File'
+
+/** A file for the next File > Open chooser to be answered with instead of the browser's picker
  *  (File > Open Recent's, opened through OpenVSP's own File > Open), until QUEUED_MS from now. */
 let queued: { path: string; until: number } | null = null
 const QUEUED_MS = 10000
@@ -286,8 +291,9 @@ async function answerFileDialog(vsp: VspModule, d: MDialog) {
   try {
     vsp.FS.mkdirTree(HOME)
     if (!d.mode) {
+      const opensModel = d.title === MODEL_OPEN_TITLE
       const q = queued
-      if (q && exts.includes('vsp3')) {
+      if (q && opensModel) {
         queued = null
         if (Date.now() < q.until) return answer(q.path)
       }
@@ -298,9 +304,11 @@ async function answerFileDialog(vsp: VspModule, d: MDialog) {
       for (const f of picked) vsp.FS.writeFile(`${HOME}/${f.name}`, new Uint8Array(await f.arrayBuffer()))
       const main = picked.find((f) => exts.some((e) => f.file.name.toLowerCase().endsWith('.' + e.toLowerCase()))) ?? picked[0]
       const path = `${HOME}/${main.name}`
-      // File > Save writes the opened file again: that goes back to the file on disk.
+      // File > Save writes the opened model again: that goes back to the file on disk, so the
+      // browser's permission to write to it is asked for now. Other files are only read: should
+      // OpenVSP write one anyway, it's asked for then.
       link(vsp, path, main.handle, main.name)
-      if (main.handle) void askToWrite(main.handle)
+      if (main.handle && opensModel) void askToWrite(main.handle)
       return answer(path)
     }
     const suggested = (d.preset || '').split(/[\\/]/).pop() || (exts[0] ? `Unnamed.${exts[0]}` : 'Unnamed')

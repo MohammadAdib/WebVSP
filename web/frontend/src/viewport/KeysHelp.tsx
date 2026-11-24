@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useStore } from '../store'
 
 /** The 3D view's keys, Blender's, grouped as the popup lists them. */
 const SECTIONS: { title: string; keys: [string, string][] }[] = [
@@ -43,12 +44,29 @@ const SECTIONS: { title: string; keys: [string, string][] }[] = [
       ['F5 – F12', 'Top, front, left, left iso, bottom, rear, right, right iso'],
       ['F / Home / .', 'Fit the model'],
       ['C', 'Center the model (zoom kept)'],
-      ['Left drag', 'Orbit'],
-      ['Right drag', 'Pan'],
-      ['Wheel', 'Zoom to the cursor'],
     ],
   },
 ]
+
+/** The mouse in the 3D view, by default and with View > Blender mouse controls. */
+const MOUSE: Record<'default' | 'blender', [string, string][]> = {
+  default: [
+    ['Left drag', 'Orbit'],
+    ['Right drag', 'Pan'],
+    ['Wheel', 'Zoom to the cursor'],
+  ],
+  blender: [
+    ['Middle drag', 'Orbit'],
+    ['Shift + middle drag', 'Pan'],
+    ['Ctrl + middle drag', 'Zoom (down: in)'],
+    ['Wheel', 'Zoom to the cursor'],
+    ['Ctrl + wheel', 'Pan sideways'],
+    ['Shift + wheel', 'Pan up or down'],
+    ['Two fingers', 'Orbit (touchpad)'],
+    ['Shift + two fingers', 'Pan'],
+    ['Ctrl + two fingers / pinch', 'Zoom'],
+  ],
+}
 
 function KeyboardIcon() {
   return (
@@ -62,6 +80,11 @@ function KeyboardIcon() {
 /** A keyboard button, floating beside the view toolbar, that shows the 3D view's keys. */
 export function KeysHelp() {
   const [open, setOpen] = useState(false)
+  const blenderMouse = useStore((s) => s.blenderMouse)
+  const sections = [
+    ...SECTIONS,
+    { title: blenderMouse ? 'Mouse (Blender mouse controls)' : 'Mouse', keys: MOUSE[blenderMouse ? 'blender' : 'default'] },
+  ]
   const ref = useRef<HTMLSpanElement>(null)
   useEffect(() => {
     if (!open) return
@@ -89,7 +112,7 @@ export function KeysHelp() {
       </button>
       {open && (
         <div className="keys-popup" role="dialog" aria-label="Keyboard shortcuts">
-          {SECTIONS.map((s) => (
+          {sections.map((s) => (
             <section key={s.title}>
               <h4>{s.title}</h4>
               <dl>

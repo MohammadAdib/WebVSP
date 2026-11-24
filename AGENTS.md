@@ -72,7 +72,7 @@ the work lives in a handful of files.
 | `vite.config.ts` | Relative base path (works under `/WebVSP/`), isolation headers for dev/preview. |
 | `src/main.tsx` | Makes the page cross-origin isolated (registers the service worker, reloads once), mounts `App`. |
 | `src/App.tsx` | Layout: top bar (mirrored menu, loading hint, errors, OpenVSP version, GitHub link), left panel (Geom Browser), 3D view (with the file name), right panel (geom editor), floating windows, results viewer. `isDocked()` decides docked vs floating. |
-| `src/store.ts` | Model store (zustand): tree, `geomsById`, `meshRev` (bumped per geom on change → mesh refetch), `valuesRev`, view requests, ortho. |
+| `src/store.ts` | Model store (zustand): tree, `geomsById`, `meshRev` (bumped per geom on change → mesh refetch), `valuesRev`, `unsaved`, view requests, ortho, grid, layout, `blenderMouse`. |
 | `src/api/client.ts` | `api.*` (model, geomTypes, bbox, mesh, pick, geomOrigin, moveGeoms, rotateGeoms, scaleGeoms, duplicateGeoms, setDrawType) and `connectEvents`. |
 | `src/api/wasmEngine.ts` | The engine's page side: loads the module, `wasmRequest(method, path)` → `call`, a polling loop over `take()` delivering results/events/mirror output, file choosers via the browser's pickers, `runProgram` for VSPAERO, `openViewer` for the results viewer. `window.__webvspEngine.request(...)` is exposed for the console. |
 | `src/api/recentFiles.ts` | File > Open Recent's list (`useRecent`): the last 10 models opened or saved under a new name, with their file handles (Chrome/Edge) or contents (other browsers), kept in IndexedDB per site; `readRecent` reads one back (asking to allow it). |
@@ -82,7 +82,7 @@ the work lives in a handful of files.
 | `src/api/types.ts` | Model tree, events, bbox. |
 | `src/mirror/` | The GUI mirror client: `types.ts` (message shapes), `store.ts` (windows, widgets, overlay, dialogs), `Window.tsx` (floating windows, menus, keyboard shortcuts, z-order), `Dock.tsx` (side panels), `Widgets.tsx` (one component per FLTK widget kind), `Custom.tsx` (GL sub-views and images), `Dialogs.tsx` (choice/alert/message prompts), `DeleteConfirm.tsx` (X / Delete's "are you sure"), `blenderKeys.ts` (Blender's keys), `fltk.ts` (FLTK constants, symbol labels, shortcuts). |
 | `src/viewport/Viewport.tsx` | Main 3D view: `GeomMesh` (surfaces, wireframe, outline), `Overlay` (mirrored draw objects), `BlankMarkers`, `MoveGizmo`, click selection. Tunables at the top (`BBOX_ALPHA`, `SECTION_BOX_ALPHA`, `OUTLINE_COLOR/WIDTH`, `MOVE_SNAP`, `GIZMO_AXIS_RADIUS`). |
-| `src/viewport/camera.tsx` | Camera shared with the results viewer: perspective/ortho with pose carry-over, orbit/pan/zoom-to-cursor, fit, view keys (Blender numpad), view toolbar. |
+| `src/viewport/camera.tsx` | Camera shared with the results viewer: perspective/ortho with pose carry-over, orbit/pan/zoom-to-cursor (or Blender's mouse and touchpad bindings, `useBlenderMouse`), fit, view keys (Blender numpad), view toolbar. |
 | `src/viewport/transform.tsx` | Blender's G / R / S: the run's state, mouse driver, axis line, status bar, and the preview (`usePreview`) shared with the move gizmo. |
 | `src/viewport/KeysHelp.tsx` | The keyboard button beside the view toolbar and its list of the 3D view's keys. |
 | `src/viewer/` | VSPAERO results viewer: `adb.ts` (binary `.adb` reader, `.adb.cases`, `.polar`), `store.ts`, `ResultsViewer.tsx` (floating window, colour legend, case/coefficients panel), `ResultsSaveToast.tsx` (saving a run's results next to the model). |
@@ -202,7 +202,18 @@ files are copied in, and every opened or Save-As'd file is **linked** to the fil
 `FileSystemFileHandle` in Chrome/Edge). `watchLinked` notices whenever OpenVSP writes a linked
 file (Save, Save As, Ctrl+S) and, once it stops changing, writes it back through the handle
 (asking for readwrite permission, which Chrome grants per file) or downloads it, then says so
-beside the file name (`fileNote`: "Saved" or "Downloaded").
+beside the file name (`fileNote`: "Saved" or "Downloaded"). Only File > Open's chooser (its
+title, `MODEL_OPEN_TITLE`) asks for that permission as the file is picked; other files opened
+(an STL to import, an airfoil, a model to insert) are only read, so Chrome's "save changes"
+prompt isn't shown for them.
+
+Unsaved changes: each time the watcher looks, `RefreshFingerprints` also hashes the model's state
+(the geoms' parms and `GeomsSignature`: order, names, parents, shown, draw type, colour, material;
+the vehicle's parms; not the selection or rebuilds, which a `.vsp3` doesn't keep), and compares
+it with the state when the model's file last changed (`ModelFileKey`: its name, and the file's
+modification time and size in the module's file system, so a model opened, saved or new). It
+emits `{"type":"dirty", dirty}` when that flips; the store's `unsaved` shows "Unsaved changes"
+beside the file name. Undoing back to the file's state clears it.
 
 File > Open Recent: whenever the model's file changes (`GET /model`'s file name, so a model
 opened or saved under a new name) to a linked file, `noteModelFile` puts it at the top of
@@ -314,6 +325,16 @@ section then has one entry per surface written.
   one set of orbit controls for the life of a pane and hands it the new camera on a projection
   switch, so a drag carries on across it. An orthographic camera keeps its framing when the view
   resizes.
+- **Blender mouse controls** (View > Blender mouse controls, the store's `blenderMouse`,
+  remembered): `useBlenderMouse` (`camera.tsx`) turns the orbit controls' mouse buttons off
+  (`mouseButtons` all -1; touch screens keep theirs) and drives them itself with Blender's
+  bindings: middle drag orbits (`BLENDER_ORBIT_PER_PX`, 0.4°/px), Shift pans, Ctrl zooms (down
+  in); the wheel zooms 1.2 times a notch toward the cursor, Ctrl + wheel pans sideways and
+  Shift + wheel up or down (`BLENDER_PAN_STEP`). Its wheel listener captures on the canvas's
+  parent, ahead of the orbit controls'. A touchpad's events are told from a wheel's by
+  `fromTouchpad` (once per gesture, `WHEEL_GESTURE_MS`): two fingers orbit, Shift pans, Ctrl /
+  Cmd or a pinch zoom (Safari's pinch: gesture events). It sends the controls' `start` / `end`,
+  so a move to a view stops and auto perspective (`RotateWatch`) still sees a turn.
 - **Auto perspective**: each pane's `autoOrtho` (`withView` in `Viewport.tsx`): axis views
   (`AXIS_VIEWS`) switch to orthographic, turning away (`OFF_AXIS_VIEWS`, or `RotateWatch` as soon
   as the mouse turns the view) goes back to perspective only if it switched automatically; 5 or
@@ -333,7 +354,8 @@ section then has one entry per surface written.
 - **Menus**: `buildMenu` (`mirror/Window.tsx`) leaves out `HIDDEN_ITEMS` (File > Preferences:
   the page always uses the browser's file pickers), gives File > Open Ctrl+O, and adds the
   page's own File > Open Recent submenu (`recentMenu`: items with negative indices and an
-  `action`, which `activate` runs instead of picking an FLTK item).
+  `action`, which `activate` runs instead of picking an FLTK item) and View > Blender mouse
+  controls (a toggle item, last, after a divider).
 
 ---
 

@@ -3,12 +3,13 @@ import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
-import type { Layout, ViewName } from '../store'
+import { useStore, type Layout, type ViewName } from '../store'
 
 /**
  * 3D navigation shared by the main view and the VSPAERO results viewer: the camera (perspective
- * or orthographic, keeping the view when switching), orbit/pan/zoom-to-cursor with the mouse,
- * the view presets and Blender-style keys, fitting, clip planes and a headlight.
+ * or orthographic, keeping the view when switching), orbit/pan/zoom-to-cursor with the mouse
+ * (or Blender's mouse and touchpad bindings: useBlenderMouse), the view presets and Blender-style
+ * keys, fitting, clip planes and a headlight.
  */
 
 // OpenVSP is Z-up: X aft, Y starboard, Z up.
@@ -384,10 +385,231 @@ function RotateWatch({ onRotate }: { onRotate: () => void }) {
   return null
 }
 
+// ------------------------------------------------------------------ Blender mouse controls
+
+/** Blender's orbit sensitivity (Preferences > Navigation > Orbit): radians per pixel dragged. */
+const BLENDER_ORBIT_PER_PX = THREE.MathUtils.degToRad(0.4)
+/** Blender's wheel zoom: each notch zooms by this factor. */
+const BLENDER_WHEEL_ZOOM = 1.2
+/** Ctrl + middle drag zooms by e^(this × pixels dragged): down zooms in, up out, as Blender's. */
+const BLENDER_DRAG_ZOOM = 0.005
+/** Ctrl / Shift + wheel: pixels the view pans per notch, sideways and up or down (Blender's steps). */
+const BLENDER_PAN_STEP: [number, number] = [32, 25]
+/** A touchpad's zoom (pinch, or Ctrl + two fingers) is e^(this × the wheel delta). */
+const TOUCHPAD_ZOOM = 0.01
+/** Wheel events less than this apart (ms) are one gesture: whether it comes from a touchpad or
+ *  a mouse wheel is decided once for it, and the controls' start and end span it. */
+const WHEEL_GESTURE_MS = 250
+
+type WheelDeltas = WheelEvent & { wheelDeltaX?: number; wheelDeltaY?: number }
+
+/**
+ * Whether a wheel event comes from a touchpad (two fingers, or a pinch) rather than a mouse
+ * wheel; the browser doesn't say. A wheel turns in notches: whole lines (Firefox), or a
+ * `wheelDelta` in steps of 120 (Chrome, Edge, Safari). A touchpad scrolls by pixels, small and
+ * uneven ones; Chrome and Safari give it a `wheelDelta` of 3 times its delta.
+ */
+function fromTouchpad(e: WheelEvent) {
+  if (e.deltaMode !== WheelEvent.DOM_DELTA_PIXEL) return false
+  const w = e as WheelDeltas
+  const vertical = Math.abs(e.deltaY) >= Math.abs(e.deltaX)
+  const d = Math.abs(vertical ? e.deltaY : e.deltaX)
+  const wd = Math.abs((vertical ? w.wheelDeltaY : w.wheelDeltaX) ?? 0)
+  if (wd && d) {
+    if (Math.abs(wd - 3 * d) < 1) return true
+    if (wd % 120 === 0) return false
+  }
+  return d < 50 || !Number.isInteger(d)
+}
+
+/** How many notches a mouse wheel turned. */
+function wheelNotches(e: WheelEvent) {
+  const w = e as WheelDeltas
+  const wd = Math.abs(w.wheelDeltaY || w.wheelDeltaX || 0)
+  if (wd >= 120) return Math.round(wd / 120)
+  const d = Math.abs(e.deltaY || e.deltaX)
+  if (e.deltaMode === WheelEvent.DOM_DELTA_LINE) return Math.max(1, Math.round(d / 3))
+  if (e.deltaMode === WheelEvent.DOM_DELTA_PAGE) return 1
+  return Math.max(1, Math.round(d / 100))
+}
+
+type ViewCamera = THREE.PerspectiveCamera | THREE.OrthographicCamera
+
+/** Turn the view as dragging the model (dx, dy) pixels does: about Z, and up or down. */
+function orbitBy(ctl: OrbitControlsImpl, dx: number, dy: number) {
+  ctl.setAzimuthalAngle(ctl.getAzimuthalAngle() - dx * BLENDER_ORBIT_PER_PX)
+  ctl.setPolarAngle(ctl.getPolarAngle() - dy * BLENDER_ORBIT_PER_PX)
+}
+
+/** Slide the view so the model moves (dx, dy) pixels on screen. */
+function panBy(ctl: OrbitControlsImpl, el: HTMLElement, dx: number, dy: number) {
+  const cam = ctl.object as ViewCamera
+  const perPx = visibleHeight(cam, ctl.target) / Math.max(el.clientHeight, 1)
+  cam.updateMatrix()
+  const move = new THREE.Vector3()
+    .setFromMatrixColumn(cam.matrix, 0)
+    .multiplyScalar(-dx * perPx)
+    .addScaledVector(new THREE.Vector3().setFromMatrixColumn(cam.matrix, 1), dy * perPx)
+  cam.position.add(move)
+  ctl.target.add(move)
+  ctl.update()
+}
+
+/** Zoom by `factor` (over 1: out) toward the point under (x, y) on the page, as the wheel does. */
+function zoomAt(ctl: OrbitControlsImpl, el: HTMLElement, x: number, y: number, factor: number) {
+  const cam = ctl.object as ViewCamera
+  const r = el.getBoundingClientRect()
+  const ndc = new THREE.Vector3(((x - r.left) / Math.max(r.width, 1)) * 2 - 1, -((y - r.top) / Math.max(r.height, 1)) * 2 + 1, 0)
+  cam.updateMatrixWorld()
+  if ((cam as THREE.OrthographicCamera).isOrthographicCamera) {
+    // Zoom, then slide so the point under the cursor stays there.
+    const o = cam as THREE.OrthographicCamera
+    const before = ndc.clone().unproject(o)
+    o.zoom = THREE.MathUtils.clamp(o.zoom / factor, ctl.minZoom, ctl.maxZoom)
+    o.updateProjectionMatrix()
+    const shift = before.sub(ndc.clone().unproject(o))
+    o.position.add(shift)
+    ctl.target.add(shift)
+  } else {
+    // Move along the ray through the cursor, the orbit target kept straight ahead.
+    const dist = cam.position.distanceTo(ctl.target)
+    const next = THREE.MathUtils.clamp(dist * factor, ctl.minDistance, ctl.maxDistance)
+    const ray = ndc.clone().setZ(0.5).unproject(cam).sub(cam.position).normalize()
+    cam.position.addScaledVector(ray, dist - next)
+    cam.updateMatrixWorld()
+    ctl.target.copy(cam.position).addScaledVector(new THREE.Vector3(0, 0, -1).transformDirection(cam.matrixWorld), next)
+  }
+  ctl.update()
+}
+
+/**
+ * View > Blender mouse controls (the store's `blenderMouse`): Blender's 3D viewport navigation in
+ * place of the orbit controls' mouse and wheel (touch screens keep theirs).
+ *   Mouse: middle drag orbits, Shift + middle drag pans, Ctrl + middle drag zooms (down: in);
+ *   the wheel zooms (a notch: 1.2 times), Ctrl + wheel pans sideways, Shift + wheel up or down.
+ *   Touchpad: two fingers orbit, Shift + two fingers pan, Ctrl (or Cmd) + two fingers and a
+ *   pinch zoom.
+ * Zooming goes toward the cursor, as the orbit controls do (Blender's Zoom to Mouse Position).
+ * The left button only selects, the right one only cancels.
+ */
+function useBlenderMouse(ctl: OrbitControlsImpl, el: HTMLElement, on: boolean) {
+  useEffect(() => {
+    if (!on) return
+    const saved = { ...ctl.mouseButtons }
+    const none = -1 as THREE.MOUSE
+    ctl.mouseButtons = { LEFT: none, MIDDLE: none, RIGHT: none }
+    // 'start' stops a move to a view (CameraRig) and starts watching for a turn (RotateWatch).
+    const events = ctl as unknown as THREE.EventDispatcher<{ start: object; end: object }>
+
+    let drag: { mode: 'orbit' | 'pan' | 'zoom'; id: number; x: number; y: number; x0: number; y0: number } | null = null
+    const onDown = (e: PointerEvent) => {
+      if (e.button !== 1 || e.pointerType === 'touch' || drag || !ctl.enabled) return
+      e.preventDefault() // no autoscroll
+      const mode = e.ctrlKey ? 'zoom' : e.shiftKey ? 'pan' : 'orbit'
+      drag = { mode, id: e.pointerId, x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY }
+      events.dispatchEvent({ type: 'start' })
+      window.addEventListener('pointermove', onMove)
+      window.addEventListener('pointerup', onUp)
+    }
+    const onMove = (e: PointerEvent) => {
+      if (!drag || e.pointerId !== drag.id) return
+      const dx = e.clientX - drag.x
+      const dy = e.clientY - drag.y
+      drag.x = e.clientX
+      drag.y = e.clientY
+      if (drag.mode === 'orbit') orbitBy(ctl, dx, dy)
+      else if (drag.mode === 'pan') panBy(ctl, el, dx, dy)
+      else zoomAt(ctl, el, drag.x0, drag.y0, Math.exp(-dy * BLENDER_DRAG_ZOOM))
+    }
+    const onUp = (e: PointerEvent) => {
+      if (!drag || e.pointerId !== drag.id) return
+      drag = null
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      events.dispatchEvent({ type: 'end' })
+    }
+    // Middle-button autoscroll starts from the mouse event.
+    const onMouseDown = (e: MouseEvent) => e.button === 1 && e.preventDefault()
+
+    let gesture: { touchpad: boolean; timer: number } | null = null
+    const onWheel = (e: WheelEvent) => {
+      // Ahead of the orbit controls (this listens on the canvas's parent, capturing): the
+      // page doesn't scroll or zoom either.
+      e.preventDefault()
+      e.stopPropagation()
+      if (!ctl.enabled) return
+      if (!gesture) {
+        gesture = { touchpad: fromTouchpad(e), timer: 0 }
+        events.dispatchEvent({ type: 'start' })
+      }
+      window.clearTimeout(gesture.timer)
+      gesture.timer = window.setTimeout(() => {
+        gesture = null
+        events.dispatchEvent({ type: 'end' })
+      }, WHEEL_GESTURE_MS)
+      if (gesture.touchpad) {
+        // The fingers drag the model the way they'd scroll a page.
+        if (e.ctrlKey || e.metaKey) zoomAt(ctl, el, e.clientX, e.clientY, Math.exp(e.deltaY * TOUCHPAD_ZOOM))
+        else if (e.shiftKey) panBy(ctl, el, -e.deltaX, -e.deltaY)
+        else orbitBy(ctl, -e.deltaX, -e.deltaY)
+        return
+      }
+      // A mouse wheel. Browsers turn Shift + wheel sideways (deltaX): still up or down here.
+      const d = e.deltaY || e.deltaX
+      if (!d) return
+      const steps = Math.sign(d) * wheelNotches(e) // up: negative
+      if (e.ctrlKey) panBy(ctl, el, -steps * BLENDER_PAN_STEP[0], 0)
+      else if (e.shiftKey) panBy(ctl, el, 0, -steps * BLENDER_PAN_STEP[1])
+      else if (e.deltaY) zoomAt(ctl, el, e.clientX, e.clientY, BLENDER_WHEEL_ZOOM ** steps)
+    }
+
+    // Safari's pinch: gesture events, not Ctrl + wheel.
+    let scale = 1
+    type Gesture = Event & { scale: number; clientX: number; clientY: number }
+    const onGestureStart = (e: Event) => {
+      e.preventDefault()
+      scale = 1
+      events.dispatchEvent({ type: 'start' })
+    }
+    const onGestureChange = (e: Event) => {
+      e.preventDefault()
+      const g = e as Gesture
+      if (!g.scale || !ctl.enabled) return
+      zoomAt(ctl, el, g.clientX, g.clientY, scale / g.scale)
+      scale = g.scale
+    }
+    const onGestureEnd = (e: Event) => {
+      e.preventDefault()
+      events.dispatchEvent({ type: 'end' })
+    }
+
+    const host = el.parentElement ?? el
+    el.addEventListener('pointerdown', onDown)
+    el.addEventListener('mousedown', onMouseDown)
+    host.addEventListener('wheel', onWheel, { capture: true, passive: false })
+    el.addEventListener('gesturestart', onGestureStart)
+    el.addEventListener('gesturechange', onGestureChange)
+    el.addEventListener('gestureend', onGestureEnd)
+    return () => {
+      ctl.mouseButtons = saved
+      el.removeEventListener('pointerdown', onDown)
+      el.removeEventListener('mousedown', onMouseDown)
+      host.removeEventListener('wheel', onWheel, { capture: true })
+      el.removeEventListener('gesturestart', onGestureStart)
+      el.removeEventListener('gesturechange', onGestureChange)
+      el.removeEventListener('gestureend', onGestureEnd)
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      if (gesture) window.clearTimeout(gesture.timer)
+    }
+  }, [ctl, el, on])
+}
+
 /**
  * The mouse controls (orbit, pan, zoom to cursor), kept for the life of the view: switching
  * between perspective and orthographic hands them the new camera instead of making new ones,
- * so a drag goes on across the switch (Blender's auto perspective switches mid-turn).
+ * so a drag goes on across the switch (Blender's auto perspective switches mid-turn). With
+ * View > Blender mouse controls on, Blender's bindings drive them instead (useBlenderMouse).
  */
 function StableOrbitControls() {
   const { camera, gl, set, get } = useThree()
@@ -398,6 +620,8 @@ function StableOrbitControls() {
     return c
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gl])
+  const blenderMouse = useStore((s) => s.blenderMouse)
+  useBlenderMouse(ctl, gl.domElement, blenderMouse)
   // The default controls, as drei's makeDefault would make them.
   useEffect(() => {
     const before = get().controls
