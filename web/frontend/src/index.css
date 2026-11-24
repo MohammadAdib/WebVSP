@@ -102,9 +102,26 @@ input:focus, select:focus, textarea:focus, button:focus-visible {
 /* The model's file name, bottom-left over the 3D view. */
 .viewer-file {
   position: absolute; left: 10px; bottom: 8px; z-index: 3; max-width: 50%;
+  display: flex; align-items: center; gap: 8px;
   font-size: 11px; color: var(--fg-2); pointer-events: none;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.viewer-file-name {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+/* "Saved" beside the file name for a moment (api/fileNote.ts sets the duration) */
+.file-note {
+  flex: none; display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px 1px 6px;
+  border-radius: 9px; white-space: nowrap; color: #8fc97a;
+  background: rgba(143, 201, 122, 0.12); border: 1px solid rgba(143, 201, 122, 0.35);
+  animation: file-note 2000ms ease-out forwards;
+}
+.file-note.failed { color: var(--danger); background: rgba(199, 106, 106, 0.12); border-color: rgba(199, 106, 106, 0.4); }
+@keyframes file-note {
+  0% { opacity: 0; transform: translateX(-4px); }
+  8% { opacity: 1; transform: none; }
+  80% { opacity: 1; }
+  100% { opacity: 0; }
 }
 
 .main { position: relative; display: flex; min-height: 0; overflow: hidden; }
@@ -166,6 +183,8 @@ input:focus, select:focus, textarea:focus, button:focus-visible {
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 1ms !important; transition-duration: 1ms !important; }
+  /* Its animation ends hidden: shown still instead, until it's taken away. */
+  .file-note { animation: none !important; }
 }
 
 .dock { display: flex; background: var(--bg-2); border-left: 1px solid var(--line); overflow: hidden; }

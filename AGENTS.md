@@ -79,6 +79,9 @@ the work lives in a handful of files.
 | `src/store.ts` | Model store (zustand): tree, `geomsById`, `meshRev` (bumped per geom on change → mesh refetch), `valuesRev`, view requests, ortho. |
 | `src/api/client.ts` | `api.*` (model, geomTypes, bbox, mesh, pick, geomOrigin, moveGeoms, rotateGeoms, scaleGeoms, duplicateGeoms, setDrawType) and `connectEvents`. |
 | `src/api/wasmEngine.ts` | The engine's page side: loads the module, `wasmRequest(method, path)` → `call`, a polling loop over `take()` delivering results/events/mirror output, file choosers via the browser's pickers, `runProgram` for VSPAERO, `openViewer` for the results viewer. `window.__webvspEngine.request(...)` is exposed for the console. |
+| `src/api/recentFiles.ts` | File > Open Recent's list (`useRecent`): the last 10 models opened or saved under a new name, with their file handles (Chrome/Edge) or contents (other browsers), kept in IndexedDB per site; `readRecent` reads one back (asking to allow it). |
+| `src/api/fileNote.ts` | The moment's note beside the file name (bottom left of the 3D view): "Saved" once a save is on disk, "Downloaded", or why a file couldn't be opened. |
+| `src/api/idb.ts` | The `webvsp` IndexedDB database and its object stores (`resultFolders`, `recentFiles`); raise its version to add one. |
 | `src/api/mesh.ts` | Decoder for the `VSPM` mesh payload; the format is documented at its top. |
 | `src/api/types.ts` | Model tree, events, bbox. |
 | `src/mirror/` | The GUI mirror client: `types.ts` (message shapes), `store.ts` (windows, widgets, overlay, dialogs), `Window.tsx` (floating windows, menus, keyboard shortcuts, z-order), `Dock.tsx` (side panels), `Widgets.tsx` (one component per FLTK widget kind), `Custom.tsx` (GL sub-views and images), `Dialogs.tsx` (choice/alert/message prompts), `DeleteConfirm.tsx` (X / Delete's "are you sure"), `blenderKeys.ts` (Blender's keys), `fltk.ts` (FLTK constants, symbol labels, shortcuts). |
@@ -202,7 +205,15 @@ choosers are answered by `answerFileDialog` (`wasmEngine.ts`) with the browser's
 files are copied in, and every opened or Save-As'd file is **linked** to the file on disk (its
 `FileSystemFileHandle` in Chrome/Edge). `watchLinked` notices whenever OpenVSP writes a linked
 file (Save, Save As, Ctrl+S) and, once it stops changing, writes it back through the handle
-(asking for readwrite permission, which Chrome grants per file) or downloads it.
+(asking for readwrite permission, which Chrome grants per file) or downloads it, then says so
+beside the file name (`fileNote`: "Saved" or "Downloaded").
+
+File > Open Recent: whenever the model's file changes (`GET /model`'s file name, so a model
+opened or saved under a new name) to a linked file, `noteModelFile` puts it at the top of
+`recentFiles.ts`'s list. Choosing one reads it (`readRecent`), copies it in and links it as a
+picked file would be (`queueOpen`), then picks OpenVSP's own File > Open, whose file chooser
+`answerFileDialog` answers with that file instead of the picker. So it opens exactly as
+File > Open does.
 
 ### Mesh payload (`VSPM`)
 
@@ -324,7 +335,9 @@ section then has one entry per surface written.
   out; red X / green Y axes; fades out from the model's footprint to `GRID_FADE_END` times it.
   The footprint is every geom's, hidden ones too (`api.bboxAll`, engine `bbox` with a="all").
 - **Menus**: `buildMenu` (`mirror/Window.tsx`) leaves out `HIDDEN_ITEMS` (File > Preferences:
-  the page always uses the browser's file pickers).
+  the page always uses the browser's file pickers), gives File > Open Ctrl+O, and adds the
+  page's own File > Open Recent submenu (`recentMenu`: items with negative indices and an
+  `action`, which `activate` runs instead of picking an FLTK item).
 
 ---
 
@@ -346,8 +359,8 @@ section then has one entry per surface written.
   to `api/solverResults.ts`. A file handle gives no access to its folder, so the first save asks
   for it (`ResultsSaveToast` → `showDirectoryPicker`, starting in the model's folder; it needs a
   click); the folder is kept per model and later runs write there directly. It's also stored in
-  IndexedDB (`webvsp` / `resultFolders`: the model's file handle with the folder's, matched by
-  `isSameEntry`), so it's found again after a reload; the browser then usually wants a click
+  IndexedDB (`api/idb.ts`, `webvsp` / `resultFolders`: the model's file handle with the
+  folder's, matched by `isSameEntry`), so it's found again after a reload; the browser then usually wants a click
   (`requestPermission`) before writing, so the toast asks again, without the picker.
   Without folder access (Firefox, Safari) the files are downloaded.
 - **Results viewer**: `vspviewer` launches are intercepted by `openViewer` in `wasmEngine.ts`,

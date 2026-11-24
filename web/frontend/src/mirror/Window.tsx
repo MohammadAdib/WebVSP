@@ -1,7 +1,9 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { clearRecent, readRecent, useRecent, type RecentFile } from '../api/recentFiles'
 import { setSolverRunning, useSolverRun } from '../api/solverRun'
+import { queueOpen } from '../api/wasmEngine'
 import { useStore, type ViewName } from '../store'
-import { MENU, labelText, shortcutOf, shortcutText } from './fltk'
+import { KEY, MENU, labelText, shortcutOf, shortcutText } from './fltk'
 import { sendMirror, useMirror } from './store'
 import type { MenuItem, MWidget, MWindow } from './types'
 import { Children, WindowContext } from './Widgets'
@@ -202,9 +204,12 @@ function formatDuration(ms: number) {
 interface MenuNode {
   item: MenuItem
   children: MenuNode[]
+  /** What choosing it does, for the page's own items (File > Open Recent's) */
+  action?: () => void
 }
 
-function buildMenu(items: MenuItem[]): MenuNode[] {
+function buildMenu(bar: MWidget | undefined, recent: RecentFile[]): MenuNode[] {
+  const items = (bar?.items ?? []) as MenuItem[]
   const root: MenuNode[] = []
   const stack: MenuNode[][] = [root]
   for (const item of items) {
@@ -219,12 +224,46 @@ function buildMenu(items: MenuItem[]): MenuNode[] {
     const parent = root.find((n) => labelText(n.item.label) === menu)
     if (parent) parent.children = parent.children.filter((n) => labelText(n.item.label) !== label)
   }
+  // File > Open gets Ctrl+O (OpenVSP has no shortcut for it), and Open Recent after it.
+  const file = root.find((n) => labelText(n.item.label) === 'File')
+  const open = file?.children.find((n) => labelText(n.item.label) === 'Open...')
+  if (bar && file && open) {
+    if (!open.item.sc) open.item = { ...open.item, sc: CTRL_O }
+    file.children.splice(file.children.indexOf(open) + 1, 0, recentMenu(recent, () => activate(bar, open, ['File'])))
+  }
   return root
 }
 
 /** OpenVSP menu items the page leaves out: File > Preferences only chooses between FLTK's and
  *  OpenVSP's file chooser, and the page always uses the browser's. */
 const HIDDEN_ITEMS: [string, string][] = [['File', 'Preferences...']]
+
+const CTRL_O = KEY.CTRL | 'o'.charCodeAt(0)
+
+/**
+ * File > Open Recent (api/recentFiles.ts), the page's own submenu: its items have negative
+ * indices, which no FLTK item has. A file is opened by OpenVSP's own File > Open, its file
+ * chooser answered with that file (queueOpen) instead of the browser's picker.
+ */
+function recentMenu(recent: RecentFile[], pickOpen: () => void): MenuNode {
+  const item = (i: number, label: string, flags = 0): MenuItem => ({ i, d: 0, label, flags, sc: 0 })
+  // As FLTK labels: '&' marks a shortcut letter and '@' starts a symbol.
+  const escape = (s: string) => s.replace(/&/g, '&&').replace(/@/g, '@@')
+  const children: MenuNode[] = recent.map((r, k) => ({
+    item: item(-10 - k, escape(r.name), k === recent.length - 1 ? MENU.DIVIDER : 0),
+    children: [],
+    action: () => void openRecent(r, pickOpen),
+  }))
+  children.push({ item: item(-2, 'Clear Recent'), children: [], action: () => void clearRecent() })
+  return { item: item(-1, 'Open Recent', MENU.SUBMENU | (recent.length ? 0 : MENU.INACTIVE)), children }
+}
+
+async function openRecent(r: RecentFile, pickOpen: () => void) {
+  const file = await readRecent(r)
+  if (!file) return
+  await queueOpen(file)
+  pickOpen()
+}
 
 // The 3D view is ours, so camera items in the View menu drive our viewport.
 const VIEW_ITEMS: Record<string, ViewName> = {
@@ -234,6 +273,7 @@ const VIEW_ITEMS: Record<string, ViewName> = {
 }
 
 function activate(bar: MWidget, node: MenuNode, path: string[]) {
+  if (node.action) return node.action()
   const label = labelText(node.item.label)
   if (path[0] === 'View' && VIEW_ITEMS[label]) {
     useStore.getState().requestView(VIEW_ITEMS[label])
@@ -252,7 +292,7 @@ function MenuList({ bar, nodes, path, close }: { bar: MWidget; nodes: MenuNode[]
         const isSub = (n.item.flags & MENU.SUBMENU) !== 0
         const toggle = (n.item.flags & (MENU.TOGGLE | MENU.RADIO)) !== 0
         return (
-          <div key={n.item.i} className="menu-entry" onMouseEnter={() => setSub(isSub ? n.item.i : null)}>
+          <div key={n.item.i} className="menu-entry" onMouseEnter={() => setSub(isSub && !inactive ? n.item.i : null)}>
             <button
               disabled={inactive}
               onClick={() => {
@@ -288,7 +328,8 @@ export function MirrorMenuBar() {
   })
   const [open, setOpen] = useState<number | null>(null)
   const ref = useRef<HTMLDivElement>(null)
-  const tree = useMemo(() => buildMenu((bar?.items ?? []) as MenuItem[]), [bar?.items])
+  const recent = useRecent((s) => s.list)
+  const tree = useMemo(() => buildMenu(bar, recent), [bar, recent])
 
   useEffect(() => {
     if (open === null) return

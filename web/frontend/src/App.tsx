@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { connectEvents } from './api/client'
+import { FAILED_NOTE_MS, NOTE_MS, useFileNote } from './api/fileNote'
 import type { ServerEvent } from './api/types'
 import { useBlenderKeys } from './mirror/blenderKeys'
 import { DeleteConfirm } from './mirror/DeleteConfirm'
@@ -41,10 +42,33 @@ function TopBarStatus() {
   )
 }
 
-/** The model's file name, in the bottom-left corner of the 3D view. */
+/** The model's file name, in the bottom-left corner of the 3D view, and beside it a moment's note
+ *  when a save is on disk (or why a file couldn't be saved or opened: api/fileNote.ts). */
 function FileName() {
   const name = useStore((s) => s.tree?.fileName)
-  return name ? <div className="viewer-file" title={name}>{name}</div> : null
+  const note = useFileNote((s) => s.note)
+  if (!name && !note) return null
+  return (
+    <div className="viewer-file">
+      {name && <span className="viewer-file-name">{name}</span>}
+      {note && (
+        <span
+          key={note.n}
+          className={'file-note' + (note.failed ? ' failed' : '')}
+          role="status"
+          style={{ animationDuration: `${note.failed ? FAILED_NOTE_MS : NOTE_MS}ms` }}
+        >
+          {!note.failed && (
+            <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
+              <path d="M1.5 5.2 4 7.6 8.6 2.4" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          )}
+          {/* The model's own file is named just before it. */}
+          {note.file && note.file !== name ? `${note.text} ${note.file}` : note.text}
+        </span>
+      )}
+    </div>
+  )
 }
 
 // The Geom Browser docks left and the geom editors right. Group Modifications (several geoms
