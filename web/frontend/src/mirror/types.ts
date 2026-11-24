@@ -75,6 +75,9 @@ export interface GlDrawObj {
   dash?: boolean
   /** A bounding box: 1 a geom's, 2 the active wing section's */
   box?: number
+  /** On a geom's surface (a sub-surface's outline, a control surface's hinge and arrow): hidden
+   *  behind the model's surfaces like its own lines, not drawn on top */
+  depth?: boolean
   /** blank: the geom's id, and whether it's selected */
   id?: string
   sel?: boolean

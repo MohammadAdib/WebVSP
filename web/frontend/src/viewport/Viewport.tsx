@@ -39,6 +39,13 @@ const SHADE_SEL = new THREE.Color('#dedede')
 const LINE_ON_SHADE = new THREE.Color('#202020')
 const LINE_WIRE = new THREE.Color('#8f8f8f')
 const LINE_SEL = new THREE.Color('#f2f2f2')
+const WHITE = new THREE.Color('#ffffff')
+/** A geom in a colour of its own (the Gen tab's Color or Material) lightens this much when
+ *  selected, as the greys do (SHADE to SHADE_SEL); its lines go this far towards LINE_SEL. */
+const SELECT_LIGHTEN = 0.35
+/** OpenVSP's default Color is blue: a geom left at it is drawn in the page's greys. */
+const isDefaultColor = (c: readonly number[]) => c[0] < 0.002 && c[1] < 0.002 && c[2] > 0.998
+const srgb = (c: readonly number[]) => new THREE.Color().setRGB(c[0], c[1], c[2], THREE.SRGBColorSpace)
 /** The outline (OpenVSP's feature lines): black and 1 px, like the desktop's. */
 export const OUTLINE_COLOR = '#000000'
 export const OUTLINE_WIDTH = 1
@@ -137,6 +144,12 @@ function GeomMesh({ id }: { id: string }) {
   const drawType = useStore((s) => s.geomsById[id]?.drawType ?? 2)
   const mode: 'wire' | 'hidden' | 'shaded' | 'none' =
     drawType === 0 ? 'wire' : drawType === 1 ? 'hidden' : drawType === 4 ? 'none' : 'shaded'
+  // The Gen tab's Color and Material, as the desktop draws them: lines in the colour (wire and
+  // hidden), surfaces in the Material; with OpenVSP's Default Material, in the colour too.
+  const color = useStore((s) => s.geomsById[id]?.color)
+  const material = useStore((s) => s.geomsById[id]?.material ?? null)
+  const ownLine = useMemo(() => (color && !isDefaultColor(color) ? srgb(color) : null), [color])
+  const ownShade = useMemo(() => (material ? srgb(material.diff) : ownLine), [material, ownLine])
   const [built, setBuilt] = useState<Built | null>(null)
   // Moved by the move gizmo or G / R: drawn moved until the moved geom's mesh arrives.
   const preview = usePreview((s) => (s.ids.includes(id) && (built?.rev ?? 0) <= (s.revs[id] ?? -1) ? s : null))
@@ -219,11 +232,28 @@ function GeomMesh({ id }: { id: string }) {
     // Hidden-line: surfaces in the background color occlude the lines behind them.
     shadeMat.color.set('#161616')
     shadeMat.emissive.set('#161616')
+  } else if (ownShade) {
+    shadeMat.color.copy(ownShade)
+    if (selected) shadeMat.color.lerp(WHITE, SELECT_LIGHTEN)
+    shadeMat.emissive.set(selected ? '#262626' : '#000000')
   } else {
     shadeMat.color.copy(selected ? SHADE_SEL : SHADE)
     shadeMat.emissive.set(selected ? '#262626' : '#000000')
   }
+  // A Material's shininess and see-through (the Glass ones); the page's own look otherwise.
+  shadeMat.roughness = material ? THREE.MathUtils.clamp(1 - material.shin / 128, 0.2, 0.9) : 0.65
+  const alpha = mode === 'shaded' && material ? material.diff[3] : 1
+  if (shadeMat.transparent !== alpha < 1) {
+    shadeMat.transparent = alpha < 1
+    shadeMat.depthWrite = alpha >= 1
+    shadeMat.needsUpdate = true
+  }
+  shadeMat.opacity = alpha
   lineMat.color.copy(selected ? LINE_SEL : mode === 'shaded' ? LINE_ON_SHADE : LINE_WIRE)
+  if (ownLine && mode !== 'shaded') {
+    lineMat.color.copy(ownLine)
+    if (selected) lineMat.color.lerp(LINE_SEL, SELECT_LIGHTEN)
+  }
   diskMat.color.copy(shadeMat.color)
   diskMat.emissive.copy(shadeMat.emissive)
   for (const m of tagMats) {
@@ -953,7 +983,8 @@ function segmentPoints(o: GlDrawObj): [number, number, number][] {
  * What the main 3D view shows besides the model, mirrored from OpenVSP: the screens' draw
  * objects (the CG from Mass Properties, measures, CFD sources, ...), blank and hinge geoms,
  * and the selected geom's boxes, cross sections and skinning/blending tangents. Drawn on top,
- * like a highlight, so a CG inside the model or a section on its surface still shows.
+ * like a highlight, so a CG inside the model or a section on its surface still shows. Sub-surfaces
+ * (control surfaces' outlines, hinges and arrows; `depth`) are hidden behind the surfaces instead.
  */
 function Overlay() {
   const objs = useMirror((s) => s.overlay)
@@ -994,7 +1025,7 @@ function Overlay() {
         if (o.t === 'tris')
           return (
             <mesh key={k} geometry={it.geo!} renderOrder={11}>
-              <meshBasicMaterial color={o.c} side={THREE.DoubleSide} depthTest={false} transparent />
+              <meshBasicMaterial color={o.c} side={THREE.DoubleSide} depthTest={!!o.depth} transparent />
             </mesh>
           )
         if (!it.seg?.length) return null
@@ -1009,7 +1040,7 @@ function Overlay() {
             opacity={o.box === 1 ? BBOX_ALPHA : o.box === 2 ? SECTION_BOX_ALPHA : 1}
             dashSize={it.dash}
             gapSize={it.dash}
-            depthTest={false}
+            depthTest={!!o.depth}
             transparent
             renderOrder={10}
           />

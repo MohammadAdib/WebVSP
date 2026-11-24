@@ -60,6 +60,12 @@ history is in [CHANGELOG.md](CHANGELOG.md).
 - Mesh and NGon Mesh geoms (CompGeom results, imported STL/TRI, NGon conversions, VSPAERO's
   geometry) are drawn, per tag in the desktop's colour-wheel colours, NGon meshes with their
   polygon edges.
+- Each geom drawn in its Gen tab Color and Material: wire and hidden-line drawing in the Color,
+  shading in the Material (see-through for the glass ones), or in the Color when the Material
+  is Default. Geoms left at OpenVSP's default blue keep the view's greys.
+- Sub-surfaces drawn on their geoms as on the desktop: their outlines, control surfaces with
+  their hinge lines and deflection arrows, black (the one being edited red), hidden behind
+  the surfaces.
 - Symmetry works on Mesh geoms (imported STL/TRI, CompGeom results), which OpenVSP ignored for
   them, desktop too: planar and rotational copies are drawn, included in the selection box,
   and seen by CompGeom and the other analyses, mirror images with their normals outward.

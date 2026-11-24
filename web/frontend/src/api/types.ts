@@ -7,8 +7,20 @@ export interface GeomNode {
   shown: boolean
   /** GEOM_DRAW_WIRE=0, HIDDEN=1, SHADE=2, TEXTURE=3, NONE=4 */
   drawType: number
+  /** The Gen tab's Color (0-1): its wire colour; OpenVSP's default is blue (0, 0, 1) */
   color: [number, number, number]
+  /** The Gen tab's Material (the desktop's shading), null for OpenVSP's Default */
+  material: GeomMaterial | null
   numXSecSurfs: number
+}
+
+export interface GeomMaterial {
+  name: string
+  /** Diffuse colour and alpha (0-1) */
+  diff: [number, number, number, number]
+  spec: [number, number, number]
+  /** OpenGL shininess, 0-128 */
+  shin: number
 }
 
 export interface UndoState {
